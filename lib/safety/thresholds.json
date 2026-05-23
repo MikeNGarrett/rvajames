@@ -1,0 +1,83 @@
+{
+  "_comment": "Single source of truth for safety thresholds. Imported by rules.ts and rendered into lib/ai/system-prompt.ts. Edit here, not in prose.",
+
+  "gage": {
+    "normal_max_ft": 4.0,
+    "elevated_max_ft": 5.5,
+    "high_max_ft": 8.0,
+    "very_high_max_ft": 10.0,
+    "station": "02037500",
+    "station_name": "Westham (upriver)"
+  },
+
+  "swim": {
+    "post_rain_hold_hours": 48,
+    "post_rain_trigger_in_24h": 0.5,
+    "ecoli_max_cfu_per_100ml": 235,
+    "ecoli_unsafe_cfu_per_100ml": 1000,
+    "cold_water_no_swim_f": 50,
+    "cold_water_caution_f": 60
+  },
+
+  "cso": {
+    "swim_hold_hours": 48
+  },
+
+  "activities": {
+    "swim": {
+      "gage_safe_max_ft": 4.0,
+      "gage_caution_max_ft": 5.5,
+      "gage_deny_above_ft": 8.0
+    },
+    "rock_hop": {
+      "gage_safe_max_ft": 4.0,
+      "gage_caution_max_ft": 5.5,
+      "gage_deny_above_ft": 5.5
+    },
+    "kayak": {
+      "gage_beginner_max_ft": 5.5,
+      "gage_expert_max_ft": 8.0
+    },
+    "bridge_crossing": {
+      "gage_deny_above_ft": 10.0
+    },
+    "beach_access": {
+      "gage_deny_above_ft": 8.0
+    }
+  },
+
+  "locations": {
+    "belle-isle": {
+      "notes": "South-channel crossing closes above 5.0 ft; north beach swimmable at normal flows",
+      "swim_safe_above_ft": null,
+      "south_channel_close_ft": 5.0
+    },
+    "pony-pasture": {
+      "notes": "Best family beach at normal flows; beach partially submerged above 6.0 ft",
+      "beach_submerge_ft": 6.0
+    },
+    "texas-beach": {
+      "notes": "Algae-slicked rocks; better for older kids. No sand."
+    },
+    "browns-island": {
+      "notes": "Floods when gage > 10 ft; Potterfield Bridge closes above 10 ft",
+      "flood_close_ft": 10.0
+    },
+    "mayo-island": {
+      "notes": "Primarily a kayak put-in/take-out; not for young children unaccompanied"
+    },
+    "shiplock-trail": {
+      "notes": "Floods when gage > 10 ft; stroller-friendly when accessible",
+      "flood_close_ft": 10.0
+    },
+    "north-bank-trail": {
+      "notes": "Not stroller-friendly; mountain bikes share trail"
+    },
+    "buttermilk-trail": {
+      "notes": "Moderate-difficult; appropriate for kids 8+ with adult"
+    },
+    "pump-house": {
+      "notes": "Sheltered cove stays calmer longer than open-channel locations; parking floods at high water"
+    }
+  }
+}

@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# OpenNext / Cloudflare build output
+.open-next/
+.vercel/
+
+# Wrangler
+.wrangler/
+worker-configuration.d.ts
+
+# Secrets — never commit
+.env.local
+.dev.vars
+
+# Supabase local state
+supabase/.branches/
+supabase/.temp/
+
+# OS
+.DS_Store
+
+
+lib/supabase/types.ts

@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+/* ─── Richmond City Brand Design Tokens ────────────────────────────────────
+   Source: https://www.rva.gov/strategic-communications/brand (fetched 2026-05-23)
+   See docs/brand-source-notes.md for provenance and raw extracted values.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+@theme {
+  /* === Primary Palette (City of Richmond official colors) === */
+  --color-rva-blue: #264677;        /* CoR Blue     — Pantone 7687 C */
+  --color-rva-red: #aa242a;         /* CoR Red      — Pantone 7621 C */
+  --color-rva-light-blue: #7fb1e5;  /* Light Blue   — Pantone 284 C  */
+  --color-rva-navy: #1e385f;        /* Navy Blue    — Pantone 534 C (from RGB 30,56,95) */
+
+  /* === Accent Palette (named after Richmond landmarks/neighborhoods) === */
+  --color-rva-gold: #ffe86b;        /* Capitol Gold      — Pantone 2003 C */
+  --color-rva-sunset: #e0a2d4;      /* Southside Sunset  — Pantone 2064 C */
+  --color-rva-coral: #ff8666;       /* Libby Sunrise     — Pantone 1635 C */
+  --color-rva-green: #a8dd83;       /* Walker Green      — Pantone 359 C  */
+
+  /* === Status / Semantic Colors (dashboard-specific, derived from brand) ===
+     Each has a bg (background chip/banner), fg (foreground text on bg),
+     and subtle (very light tint for card backgrounds).
+  */
+  --color-status-safe: #a8dd83;         /* Walker Green — safe river conditions */
+  --color-status-safe-fg: #1a5c28;      /* dark green text on safe-bg  — AA 5.3:1 */
+  --color-status-safe-subtle: #eaf5e2;  /* light tint for safe cards */
+
+  --color-status-caution: #ffe86b;        /* Capitol Gold — some concerns */
+  --color-status-caution-fg: #5a4000;     /* dark brown text on caution — AAA 7.9:1 */
+  --color-status-caution-subtle: #fffbe6; /* light tint for caution cards */
+
+  --color-status-danger: #aa242a;         /* CoR Red — high risk / active advisory */
+  --color-status-danger-fg: #ffffff;      /* white text on danger — AA 6.4:1 */
+  --color-status-danger-subtle: #fce8e9;  /* light tint for danger alerts */
+
+  --color-status-flood: #264677;          /* CoR Blue — flood advisory (overrides all) */
+  --color-status-flood-fg: #ffffff;       /* white text on flood — AAA 8.2:1 */
+
+  /* === Neutral / Surface Scale === */
+  --color-surface: #f8f9fc;
+  --color-surface-raised: #ffffff;
+  --color-border: #dde3ec;
+  --color-text: #1a1f2e;          /* near-black body — AAA on white */
+  --color-text-secondary: #4a5568;
+  --color-text-muted: #718096;
+
+  /* === Typography ===
+     Brand face: Nunito Sans (Google Fonts, self-hosted via next/font)
+     User/fallback face: Arial (system font per brand guide)
+  */
+  --font-sans: var(--font-nunito-sans), Arial, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
+
+  /* === Type Ramp (mobile-first scale) === */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: 2.25rem;
+  --text-4xl: 2.25rem;
+  --text-4xl--line-height: 2.5rem;
+}
+
+/* ─── 44 px minimum touch target ─────────────────────────────────────────── */
+@utility touch-target {
+  min-height: 2.75rem; /* 44px */
+  min-width: 2.75rem;
+}
+
+/* ─── Base layer ─────────────────────────────────────────────────────────── */
+@layer base {
+  /* Mobile-first: base layout assumes 375px viewport */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Interactive elements always meet 44px touch target */
+  button, a, [role="button"], input, select, textarea {
+    min-height: 2.75rem;
+  }
+}
