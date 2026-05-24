@@ -176,6 +176,7 @@ export function RiverSegmentPanel({ metroState }: Props) {
           <Sparkline
             points={recent72h}
             normalBand={normalBand}
+            height={125}
           />
         </div>
       )}
