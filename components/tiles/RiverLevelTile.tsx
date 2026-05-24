@@ -7,7 +7,7 @@ interface Props {
 }
 
 export function RiverLevelTile({ location }: Props) {
-  const { status, label, reason } = location.deterministicStatus;
+  const { status, reason } = location.deterministicStatus;
 
   const subtleClass = {
     safe:    'bg-status-safe-subtle border-status-safe',
@@ -20,7 +20,6 @@ export function RiverLevelTile({ location }: Props) {
     <Link
       href={`/locations/${location.slug}`}
       className={`block rounded-xl border p-4 ${subtleClass} touch-target`}
-      aria-label={`${location.name}: ${label}. ${reason}`}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <h3 className="text-base font-semibold text-text leading-tight">{location.name}</h3>

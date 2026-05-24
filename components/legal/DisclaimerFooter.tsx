@@ -43,7 +43,7 @@ export function DisclaimerFooter({ ageBucket }: Props = {}) {
           </>
         )}
       </p>
-      <p className="text-xs mt-3 text-text-muted/70">
+      <p className="text-xs mt-3 text-text-muted">
         Not affiliated with the City of Richmond or James River Association.
       </p>
     </footer>
