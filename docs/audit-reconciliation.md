@@ -2,7 +2,7 @@
 
 Cross-references each finding from `modern-web-evaluation-findings.md` against the staged plans, with **actual current state verified against the git history and codebase**.
 
-**Last reconciled: 2026-05-24** (after session that fixed cron, gauge, sparkline, admin UX, typography, and CSO ingest). Earlier versions of this doc significantly understated what had shipped — the team had been executing in parallel sessions faster than the doc was being updated. This version is built from `git log` and direct codebase inspection.
+**Last reconciled: 2026-05-24** (full pass — all 23 findings resolved except Finding 10 partial and Finding 13 deferred). Earlier versions of this doc significantly understated what had shipped — the team had been executing in parallel sessions faster than the doc was being updated. This version is built from `git log` and direct codebase inspection.
 
 ---
 
@@ -20,20 +20,20 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 | 8 | medium | Missing security headers (XFO, XCTO, Referrer-Policy, Permissions-Policy) | ✅ **DONE** — Round 6 (commit `dc16684`). |
 | 9 | medium | favicon.ico returns 404 | ✅ **DONE** — Round 5/6 (commits `581c4be`, `dc16684`). |
 | 10 | medium | Cloudflare beacon third-party request | ⚠️ **PARTIAL** — preconnect likely landed in Round 6; full self-host deferred. Verify via response headers. |
-| 12 | low | Legacy JS polyfills (~11 KB) | ⏳ **NOT STARTED** — Round 8 candidate. |
+| 12 | low | Legacy JS polyfills (~11 KB) | ✅ **DONE** — Round 8. `browserslist` targeting last 2 versions of Chrome/Firefox/Safari/Edge added to `package.json` (`4401179`). |
 | 13 | low | No dark mode support | ⏳ **DEFERRED** — own round if/when prioritized. |
-| 14 | low | Nunito Sans `display: swap` FOUT/CLS risk | ⏳ **NOT STARTED** — Round 8 candidate. |
-| 15 | low | `ConditionsForm` uses `router.push` instead of `nuqs` setters | ⏳ **NOT STARTED** — Round 7 candidate. |
-| 16 | low | View Transitions not used for filter navigation | ⏳ **NOT STARTED** — Round 7 candidate. |
-| 17 | low | No CSP — start with Report-Only | ⚠️ **VERIFY** — not in the Round 6 commit message (`dc16684` cited "Findings 3, 6–9"). Confirm via response headers. |
+| 14 | low | Nunito Sans `display: swap` FOUT/CLS risk | ✅ **DONE** — Round 8. Switched to `display: 'optional'`; eliminates FOUT and CLS entirely (`4401179`). |
+| 15 | low | `ConditionsForm` uses `router.push` instead of `nuqs` setters | ✅ **DONE** — Round 7. `useQueryStates` with `shallow:false` replaces `router.push` (`eebf1a3`). |
+| 16 | low | View Transitions not used for filter navigation | ✅ **DONE** — Round 7. `document.startViewTransition()` wraps param update; `view-transition-name` on RiverSegmentPanel + MetroSummaryPanel (`eebf1a3`). |
+| 17 | low | No CSP — start with Report-Only | ✅ **DONE** — `Content-Security-Policy-Report-Only` deployed (`0723474`). Verified live on rvajames.org via curl. |
 | 18 | low | `withIngestionRun` swallows INSERT errors | ✅ **DONE** — verified in `lib/ingest/run.ts` with explicit `// (Finding 18)` comment. |
 | 19 | low | Flat heading hierarchy (all `<h2>`) | ✅ **DONE** — Round 3 sub-goal 38 (commit `d722386`). |
-| 20 | low | No OG image defined | ⏳ **NOT STARTED** — Round 8 candidate. Depends on Finding 3 (done). |
+| 20 | low | No OG image defined | ✅ **DONE** — Round 8. `app/opengraph-image.tsx` deployed; auto-wires `og:image` + `twitter:image`; no `runtime='edge'` export (breaks OpenNext) (`5a48abb`). |
 | 21 | nit | Speculation rules are CDN-default | ✅ **DONE** — Round 3 sub-goal 38 (commit `d722386`). |
 | 22 | nit | `color-mix()` not used for subtle variants | ✅ **DONE** — Round 5 (commit `581c4be`). |
 | 23 | nit | Container queries not used for activity grid | ✅ **DONE** — Round 9 sub-goal 51. `RiverWideActivityGrid` uses `@container` + `@md:grid-cols-4`. |
 
-**Summary:** 16 ✅ done · 2 ⚠️ partial/verify · 5 ⏳ pending.
+**Summary:** 21 ✅ done · 1 ⚠️ partial/verify · 1 ⏳ pending (dark mode — explicitly deferred).
 
 ---
 
@@ -76,8 +76,11 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 | Hotfix: CSO ingest dead URLs | Original rva.gov CSO URLs (both 404); switched to DPU news RSS feed + wastewater page scrape with proper source-unavailable vs. no-advisory distinction | ✅ COMPLETE | `e48c05e` |
 | Sub-goals 53–57: Admin safety & a11y | Native `<dialog>` confirm modal, type-to-confirm for Discard, Expire undo toast, visual safe/destructive separation, a11y audit (`scope="col"`, `aria-errormessage`) | ✅ COMPLETE | `a1c71a5`–`dc12e7e` |
 | Round 9 sub-goals 49–52 | Responsive application across routes/components/container queries/visual regression | ✅ COMPLETE | `ef33f83`–`9973852` |
-| Round 7 (Findings 15, 16) | ConditionsForm modernization (nuqs setters + View Transitions) | ⏳ NOT STARTED |
-| Round 8 (Findings 12, 14, 20) | Polish — legacy JS, font display, OG images | ⏳ NOT STARTED |
+| Round 7 (Findings 15, 16) | ConditionsForm modernization (nuqs setters + View Transitions) | ✅ COMPLETE | `eebf1a3` |
+| Round 8 (Findings 12, 14, 20) | Polish — browserslist, font display:optional, OG image route | ✅ COMPLETE | `4401179`, `5a48abb` |
+| Round 9+ hotfix: Sparkline dot shape | SVG `preserveAspectRatio="none"` made circle elliptical — rewrote dot as CSS `div` outside SVG with % positioning | ✅ COMPLETE | `2cbba8b` |
+| Round 9+ hotfix: Sparkline height | Callsite lacked explicit `height` prop; defaulted to 40 px — set to 125 px | ✅ COMPLETE | `e0e9d72` |
+| Round 9+ hotfix: CSP Report-Only (Finding 17) | `Content-Security-Policy-Report-Only` added to `middleware.ts` | ✅ COMPLETE | `0723474` |
 | Deferred | Finding 13 — dark mode | ⏳ DEFERRED |
 
 ---
@@ -85,20 +88,26 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 ## Remaining work — recommended execution order
 
 ```
-NOW    Round 9 sub-goals 49–52 — responsive application
-              Apply the foundation from sub-goal 48 across all routes and
-              components; convert relocatable components to container queries
-              (resolves Finding 23); visual regression sweep at 375 → 1920px.
+DONE   Round 9 sub-goals 49–52 — responsive application (complete as of 9973852)
+DONE   Round 7 — Findings 15, 16 (nuqs + View Transitions, eebf1a3)
+DONE   Round 8 — Findings 12, 14, 20 (browserslist, font, OG image, 4401179/5a48abb)
+DONE   Finding 17 — CSP Report-Only deployed to prod (0723474, verified live)
+DONE   Sparkline dot round + height fixes (2cbba8b, e0e9d72)
 
-LATER  Round 17 verify — confirm CSP report-only is actually deployed
-              The Round 6 commit said "Findings 3, 6–9" — Finding 17 (CSP)
-              may or may not have landed. Curl the live URL to confirm.
+OPEN   Finding 10 partial — Cloudflare beacon self-host or disable
+              Preconnect likely in place from Round 6; full self-host deferred.
+              Low-impact: reduces one 3rd-party request.
 
-LATER  Round 7 — Findings 15, 16 (filter UX modernization)
-LATER  Round 8 — Findings 12, 14, 20 (polish: legacy JS, font, OG images)
-LATER  Cloudflare beacon — self-host or disable (Finding 10 partial)
-LATER  water_temp_f investigation
-DEFER  Finding 13 — dark mode
+OPEN   water_temp_f null for both gauges
+              Both USGS gauge queries return null for water temperature.
+              Likely a USGS API parameter issue. Has not been investigated.
+
+DEFER  Finding 13 — dark mode (own round if/when prioritized)
+
+SEPARATE PLAN  Sub-goals 58–62 — closure sources expansion
+              Multi-source registry refactor, Venture Richmond + JRPS scrapers,
+              Pipeline Trail as 10th location, backfill known closures.
+              Tracked in docs/closure-sources-expansion-plan.md.
 ```
 
 ---
