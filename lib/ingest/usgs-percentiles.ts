@@ -19,11 +19,19 @@ const STATIONS = ['02037500'];
 
 /**
  * Convert (month, day) to 1-based day-of-year using a fixed non-leap year.
- * Feb 29 → 60 (treated as belonging to the leap-year slot; rare but safe to upsert
- * with day_of_year=60 rather than silently dropping the row).
+ *
+ * Feb 29 MUST be handled explicitly: passing it to `new Date(2001, 1, 29)`
+ * (2001 = non-leap year) causes JavaScript to overflow to March 1, which returns
+ * day 60 — the same value as the real March 1 entry. Two rows in the same upsert
+ * batch with the same (station_id, parameter_cd, day_of_year) trigger Postgres:
+ * "ON CONFLICT DO UPDATE command cannot affect row a second time".
+ *
+ * Fix: assign Feb 29 its natural leap-year slot, day 366. No other calendar date
+ * in a 365-day year produces 366, so there is no collision.
  */
 function dayOfYear(month: number, day: number): number {
-  const d = new Date(2001, month - 1, day); // 2001 = non-leap year
+  if (month === 2 && day === 29) return 366; // leap-day slot — avoids March 1 collision
+  const d = new Date(2001, month - 1, day);  // 2001 = non-leap year (safe for all other dates)
   const start = new Date(2001, 0, 1);
   return Math.floor((d.getTime() - start.getTime()) / 86_400_000) + 1;
 }
@@ -138,10 +146,25 @@ export async function runUsgsPercentilesIngestion(): Promise<RunResult> {
       continue;
     }
 
+    // Deduplicate by conflict key before batching. USGS may include both a
+    // Feb 29 row and a March 1 row; after dayOfYear() they should now have
+    // distinct values (366 vs 60), but this guard catches any future collisions
+    // that would otherwise cause "ON CONFLICT DO UPDATE … affect row a second time".
+    const seen = new Set<string>();
+    const dedupedRows = rows.filter((r) => {
+      const key = `${r.parameter_cd}|${r.day_of_year}`;
+      if (seen.has(key)) {
+        console.warn(`[usgs-percentiles] Dropping duplicate key: station=${stationId} ${key}`);
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+
     // Upsert in batches of 200 to stay within Supabase payload limits.
     const BATCH = 200;
-    for (let i = 0; i < rows.length; i += BATCH) {
-      const batch = rows.slice(i, i + BATCH).map((r) => ({
+    for (let i = 0; i < dedupedRows.length; i += BATCH) {
+      const batch = dedupedRows.slice(i, i + BATCH).map((r) => ({
         station_id:   stationId,
         parameter_cd: r.parameter_cd,
         day_of_year:  r.day_of_year,
@@ -170,6 +193,8 @@ export async function runUsgsPercentilesIngestion(): Promise<RunResult> {
 
       rowsWritten += batch.length;
     }
+
+    console.log(`[usgs-percentiles] ${stationId}: wrote ${rowsWritten} rows (${dedupedRows.length} after dedup from ${rows.length} raw)`);
   }
 
   return { ok: true, rowsWritten };
