@@ -26,7 +26,7 @@ export async function MetroSummaryPanel({ date, ageBucket }: Props) {
   }
 
   return (
-    <section aria-label="River conditions summary" className="rounded-xl border border-border bg-surface-raised p-4 mb-4">
+    <section aria-label="River conditions summary" className="rounded-xl border border-border bg-surface-raised p-4 mb-4" style={{ viewTransitionName: 'metro-summary' }}>
       <p className="text-base font-semibold text-text mb-2">{summary.headline}</p>
 
       {/* Body markdown rendered as plain text (strips Markdown syntax) */}

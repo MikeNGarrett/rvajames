@@ -127,3 +127,26 @@ dialog.confirm-dialog::backdrop {
   h1, h2, h3 { text-wrap: balance; }
   p { text-wrap: pretty; }
 }
+
+/* ── View Transitions (Finding 16) ──────────────────────────────────────────
+   Named elements (river-conditions, metro-summary) morph in-place when the
+   user changes the date/age filter. The browser default is a cross-fade;
+   these rules make the duration explicit and shorter (150ms vs the 250ms
+   browser default) so it feels snappy rather than sluggish.
+   prefers-reduced-motion: skip the animation entirely — the DOM update still
+   happens, just without the visual transition. */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(river-conditions),
+  ::view-transition-new(river-conditions),
+  ::view-transition-old(metro-summary),
+  ::view-transition-new(metro-summary) {
+    animation-duration: 150ms;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

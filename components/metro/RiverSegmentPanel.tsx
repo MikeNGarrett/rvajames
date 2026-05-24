@@ -84,6 +84,7 @@ export function RiverSegmentPanel({ metroState }: Props) {
     <section
       aria-labelledby="river-conditions-heading"
       className="rounded-xl border border-border bg-surface-raised p-4 mb-4"
+      style={{ viewTransitionName: 'river-conditions' }}
     >
       {/* ── Header row ── */}
       <div className="flex items-center justify-between mb-3">

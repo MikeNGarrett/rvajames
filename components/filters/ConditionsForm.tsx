@@ -1,7 +1,23 @@
 'use client';
 
+/**
+ * ConditionsForm — Round 7 rewrite.
+ *
+ * Finding 15 — nuqs setters instead of router.push:
+ *   useQueryStates({ date, age }) with shallow:false so the RSC re-render
+ *   is triggered via nuqs's built-in history integration. This replaces the
+ *   manual router.push() call and removes the `useRouter` import entirely.
+ *   nuqs batches both params into a single history update.
+ *
+ * Finding 16 — View Transitions for filter navigation:
+ *   On submit, if the browser supports document.startViewTransition(), the
+ *   param update is wrapped in a transition so shared elements (river panel,
+ *   summary) morph in place instead of abruptly replacing.
+ *   Pure progressive enhancement — falls back gracefully on older browsers.
+ */
+
 import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useQueryStates, parseAsString } from 'nuqs';
 import { AGE_BUCKETS, AGE_BUCKET_LABELS, formatDateParam, type AgeBucket } from '@/lib/url-state';
 
 interface Props {
@@ -11,7 +27,11 @@ interface Props {
 }
 
 export function ConditionsForm({ currentDate, currentAge }: Props) {
-  const router = useRouter();
+  // nuqs manages the URL params; shallow:false triggers RSC re-render.
+  const [, setParams] = useQueryStates(
+    { date: parseAsString, age: parseAsString },
+    { shallow: false },
+  );
   const [isPending, startTransition] = useTransition();
 
   const [localDate, setLocalDate] = useState(currentDate);
@@ -26,9 +46,25 @@ export function ConditionsForm({ currentDate, currentAge }: Props) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!hasChanged) return;
-    startTransition(() => {
-      router.push(`/?date=${localDate}&age=${localAge}`);
-    });
+
+    const doUpdate = () => {
+      startTransition(() => {
+        setParams({ date: localDate, age: localAge });
+      });
+    };
+
+    // Finding 16: progressive-enhancement View Transition.
+    // startViewTransition captures the current DOM state, fires doUpdate()
+    // (which triggers the RSC re-render via nuqs), then morphs to the new DOM.
+    if (
+      typeof document !== 'undefined' &&
+      'startViewTransition' in document
+    ) {
+      (document as Document & { startViewTransition(cb: () => void): unknown })
+        .startViewTransition(doUpdate);
+    } else {
+      doUpdate();
+    }
   }
 
   return (
