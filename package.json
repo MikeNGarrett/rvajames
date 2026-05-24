@@ -7,9 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "build:cf": "opennextjs-cloudflare build",
+    "build:cf": "opennextjs-cloudflare build && node scripts/patch-worker.mjs",
     "preview": "opennextjs-cloudflare preview",
-    "deploy:cf": "opennextjs-cloudflare deploy",
+    "deploy:cf": "node scripts/patch-worker.mjs && opennextjs-cloudflare deploy",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv env.d.ts",
     "test": "vitest run"
   },

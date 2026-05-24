@@ -16,6 +16,7 @@ interface Props {
   /**
    * Optional shaded normal band at fixed low/high values
    * (e.g., p25 and p75 from USGS percentile data).
+   * Only the portion overlapping the visible data range is shaded.
    */
   normalBand?: { low: number; high: number };
   /** Tailwind color class for the line, e.g. "stroke-rva-blue". */
@@ -45,23 +46,33 @@ export function Sparkline({
   const tMin = Math.min(...points.map((p) => p.t));
   const tMax = Math.max(...points.map((p) => p.t));
 
-  const vMin = Math.min(...points.map((p) => p.v), normalBand?.low ?? Infinity);
-  const vMax = Math.max(...points.map((p) => p.v), normalBand?.high ?? -Infinity);
-  const vPad = (vMax - vMin) * 0.1 || 1;
+  // Y range is derived from data only — not from normalBand.
+  // Including normalBand.low/high in the range (e.g., 0–4 ft) would collapse a
+  // small variation like 3.69–3.90 ft into a nearly-flat line.
+  const dataMin = Math.min(...points.map((p) => p.v));
+  const dataMax = Math.max(...points.map((p) => p.v));
+  const vPad    = (dataMax - dataMin) * 0.15 || 0.5;
+  const vLo     = dataMin - vPad;    // bottom of chart coordinate space
+  const vHi     = dataMax + vPad;    // top of chart coordinate space
 
   const xScale = (t: number) =>
     PAD + ((t - tMin) / (tMax - tMin || 1)) * (W - PAD * 2);
+
+  // SVG Y axis is top-down: higher values → smaller Y pixel.
   const yScale = (v: number) =>
-    H - PAD - ((v - (vMin - vPad)) / (vMax - vMin + vPad * 2)) * (H - PAD * 2);
+    H - PAD - ((v - vLo) / (vHi - vLo)) * (H - PAD * 2);
 
   const linePath = buildPath(points, xScale, yScale);
 
-  // Normal band as a filled rect spanning full width
-  const bandY1 = normalBand ? yScale(normalBand.high) : 0;
-  const bandY2 = normalBand ? yScale(normalBand.low)  : 0;
+  // Only shade the portion of normalBand that overlaps the visible range.
+  const bandLo   = normalBand ? Math.max(vLo, normalBand.low)  : 0;
+  const bandHi   = normalBand ? Math.min(vHi, normalBand.high) : 0;
+  const showBand = normalBand != null && bandHi > bandLo;
+  const bandY1   = showBand ? yScale(bandHi) : 0;  // top of band in SVG px
+  const bandY2   = showBand ? yScale(bandLo) : 0;  // bottom of band in SVG px
 
   // Current-value marker (last point)
-  const last = points[points.length - 1];
+  const last    = points[points.length - 1];
   const markerX = xScale(last.t);
   const markerY = yScale(last.v);
 
@@ -73,8 +84,8 @@ export function Sparkline({
       className="w-full"
       style={{ height: `${H}px` }}
     >
-      {/* Normal band shading */}
-      {normalBand && (
+      {/* Normal band shading — only the visible portion */}
+      {showBand && (
         <rect
           x={PAD}
           y={bandY1}

@@ -7,6 +7,7 @@ import {
   approveDraft,
   discardDraft,
 } from './actions';
+import { ConfirmActionButton } from './ConfirmActionButton';
 
 type Row = {
   id: string;
@@ -235,28 +236,26 @@ export default async function ClosuresAdminPage() {
                           </form>
 
                           {/* Discard draft — hard delete; no undo */}
-                          <form action={discardDraft.bind(null, row.id)}>
-                            <button
-                              type="submit"
-                              className="text-xs text-status-danger hover:underline font-medium"
-                            >
-                              Discard
-                            </button>
-                          </form>
+                          <ConfirmActionButton
+                            action={discardDraft.bind(null, row.id)}
+                            confirmMessage={`Discard this draft for "${row.locations?.name ?? 'unknown location'}"?\n\nThis permanently deletes it with no undo.`}
+                            className="text-xs text-status-danger hover:underline font-medium"
+                          >
+                            Discard
+                          </ConfirmActionButton>
                         </>
                       )}
 
                       {row.state === 'active' && (
                         <>
                           {/* Expire */}
-                          <form action={expireClosure.bind(null, row.id)}>
-                            <button
-                              type="submit"
-                              className="text-xs text-text-muted hover:underline font-medium"
-                            >
-                              Expire
-                            </button>
-                          </form>
+                          <ConfirmActionButton
+                            action={expireClosure.bind(null, row.id)}
+                            confirmMessage={`Expire the closure for "${row.locations?.name ?? 'this location'}"?\n\nThis sets effective_to to now and marks it expired.`}
+                            className="text-xs text-text-muted hover:underline font-medium"
+                          >
+                            Expire
+                          </ConfirmActionButton>
 
                           {/* Duplicate */}
                           <form action={duplicateClosure.bind(null, row.id)}>
