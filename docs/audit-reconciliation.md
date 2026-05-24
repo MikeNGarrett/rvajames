@@ -63,8 +63,8 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 | Round 4 sub-goal 43 | Operational status schema + rules override + 'closed' status | ✅ COMPLETE | `eaffe00` |
 | Round 4 sub-goal 44 | Admin UI for closures (`/admin/closures`) | ✅ COMPLETE | `581c4be` |
 | Round 4 sub-goal 45 | rva.gov closure scraper + review queue | ✅ COMPLETE | `86e70e2` |
-| Round 4 sub-goal 46 | Surface closures across the app | ⚠️ **PARTIAL** — data + AI integration done in `cef2111`; LocationCard + detail-page banners still pending |
-| Round 4 sub-goal 47 | A11y + perf verification + modern-web pass | ⏳ NOT STARTED |
+| Round 4 sub-goal 46 | Surface closures across the app | ✅ COMPLETE | `cef2111` + follow-up |
+| Round 4 sub-goal 47 | A11y + perf verification + modern-web pass | ✅ COMPLETE — Lighthouse mobile Performance 100, Accessibility 100 (up from 97/96), all CWV green (LCP 0.6s, CLS 0, FCP 0.3s) | `9015985` |
 | Round 5 (Items 1–9) | Audit quick wins | ✅ COMPLETE | `581c4be` |
 | Round 6 (Findings 3, 6–9) | Headers, caching, BF-Cache, security | ✅ COMPLETE | `dc16684` |
 | Round 9 sub-goal 48 | Responsive foundation + `docs/responsive-guidelines.md` | ✅ COMPLETE | `581c4be` |
@@ -78,14 +78,7 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 ## Remaining work — recommended execution order
 
 ```
-NOW    Round 4 sub-goal 46 — finish surfacing closures
-              LocationCard renders 'closed' treatment; detail page shows banner
-              with source attribution; activity matrix forced to 'deny' when
-              location is closed. AI data/prompt integration is already done.
-
-NEXT   Round 4 sub-goal 47 — a11y + perf verification for closure UI
-
-THEN   Round 9 sub-goals 49–52 — responsive application
+NOW    Round 9 sub-goals 49–52 — responsive application
               Apply the foundation from sub-goal 48 across all routes and
               components; convert relocatable components to container queries
               (resolves Finding 23); visual regression sweep at 375 → 1920px.

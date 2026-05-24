@@ -74,34 +74,16 @@ The app shows nine specific access points — Belle Isle, Pony Pasture, Texas Be
 
 ## Decisions and references
 
-The full decision trail lives in `docs/`. Highlights:
+Highlights:
 
-- **Mobile-first, always.** Families check on the way to the river. Touch targets ≥44px, single-column at 375px viewport, no hover-only affordances. Desktop is responsive (capped at ~896px in the main column) but the design language is mobile. See `docs/responsive-guidelines.md` (after Round 9 sub-goal 48).
+- **Mobile-first, always.** Families check on the way to the river. Touch targets ≥44px, single-column at 375px viewport, no hover-only affordances. Desktop is responsive (capped at ~896px in the main column) but the design language is mobile.
 - **Two USGS gages, different datums, never compared numerically.** Westham (02037500) for safety thresholds (gage height in feet, established normal range). City Locks (02037705) for downriver tidal context (NAVD 1988 elevation). The system prompt and rules engine explicitly know they're not comparable.
 - **Lazy AI, not cron.** Original plan generated 45+ interpretations daily on a cron. That's pure waste at low traffic. Switched to on-demand generation with `lib/ai/get-or-generate.ts` cached in Supabase by prompt hash. UNIQUE constraint handles concurrent-write races. Net cost at current traffic: pennies per month.
 - **Rules engine + AI hybrid, not pure AI.** The homepage location cards are deterministic — a status pill computed from `lib/safety/rules.ts`. AI narration only appears in the metro summary at top and on per-location detail pages, where its voice and nuance earn their keep. Avoids 9 AI calls per homepage visit.
 - **Prompt caching is critical.** The cached system prompt (~6200 tokens) holds brand voice, location encyclopedia, activity matrix, age-band reference (AAP/NPS/USCG-grounded), and safety thresholds. Per-call input is just today's conditions + advisories + age bucket. First call of the day pays cache-create; everything else reads cache.
-- **Modern web platform over polyfills.** Native `<dialog>` with `closedby="any"`. Container queries via Tailwind v4 `@container`. `text-wrap: balance` and `pretty`. Speculation Rules for prefetch. The [GoogleChrome/modern-web-guidance](https://github.com/GoogleChrome/modern-web-guidance) skill (installed via `skills-lock.json`) informs component-level decisions; see `docs/modern-web-evaluation-findings.md`.
+- **Modern web platform over polyfills.** Native `<dialog>` with `closedby="any"`. Container queries via Tailwind v4 `@container`. `text-wrap: balance` and `pretty`. Speculation Rules for prefetch. The [GoogleChrome/modern-web-guidance](https://github.com/GoogleChrome/modern-web-guidance) skill (installed via `skills-lock.json`) informs component-level decisions.
 - **Closures are operational state, not weather advisories.** Stored in a separate `location_status` table with `kind` enum (`open` / `restricted` / `closed` / `closed_indefinite`). A closed location overrides weather-based status entirely.
 - **Manual admin entry for closures; rva.gov scrape produces drafts for review.** No automated Facebook/Instagram ingest — ToS and brittleness. Admin route at `/admin/closures` (Cloudflare Access-gated).
-
-### Plans, audits, and historical context
-
-Everything is in `docs/`:
-
-| File | What it covers |
-|---|---|
-| `audit-reconciliation.md` | Live execution queue across all rounds + plans |
-| `feedback-round-1-plan.md` | Initial 28-sub-goal foundation build |
-| `deploy-hardening-plan.md` | RLS, hosted Supabase, first deploy |
-| `homepage-rapids-redesign-plan.md` | Rapids class + river-wide activity grid |
-| `river-conditions-redesign-plan.md` | Gauge bar, sparkline, detail modal |
-| `closures-and-forecast-plan.md` | NOAA forecast + operational status + admin UI |
-| `modern-web-evaluation-plan.md` + `…-findings.md` | Modern web audit and 23 findings |
-| `round-5-quick-wins-plan.md` | Audit follow-ups — small fixes |
-| `responsive-scaffolding-plan.md` | Mobile-first → desktop responsive (in flight) |
-| `howsthejamesrva-investigation.md` | Competitive landscape investigation |
-| `brand.md` + `brand-source-notes.md` | Richmond brand voice + color tokens |
 
 ## Running locally
 
@@ -222,7 +204,6 @@ lib/
                                  of truth shared with the AI prompt)
   supabase/                      Server + browser clients, generated types
 supabase/migrations/             0001..0009 schema evolution
-docs/                            Plans, audits, decision history
 ```
 
 ## Adapting this to your own river / city / location
@@ -266,7 +247,7 @@ Note: the AI is told to derive nothing it shouldn't — every safety claim is gr
 
 ### 5. Replace brand tokens
 
-`app/globals.css` `@theme` block defines colors. Replace Richmond's `rva-blue` etc. with your city's brand or an independent palette. AA contrast verified programmatically in `docs/brand.md`.
+`app/globals.css` `@theme` block defines colors. Replace Richmond's `rva-blue` etc. with your city's brand or an independent palette. Verify AA contrast programmatically (e.g. via `wcag-contrast`) on every foreground/background pair.
 
 ### 6. Replace per-location resource links
 
