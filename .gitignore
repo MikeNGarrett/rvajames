@@ -29,3 +29,6 @@ lib/supabase/types.ts
 
 # Local agent instructions
 .agents
+
+#lighthouse testing
+.lighthouseci
