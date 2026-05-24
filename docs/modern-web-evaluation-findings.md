@@ -2,29 +2,31 @@
 
 Evaluated: 2026-05-24  
 URLs: `https://rvajames.org/` (primary), `/locations/belle-isle`, `/safety`, `/status`  
-Tools: Lighthouse 13.3 mobile (simulated throttle), `modern-web-guidance` CLI (GoogleChrome), curl header inspection, Supabase query, manual code review.
+Tools: **lhci 0.15.1**, 3-run median (correct baseline); also single-run `npx lighthouse` to capture cache-miss worst case. `modern-web-guidance` CLI (GoogleChrome), curl header inspection, Supabase query, manual code review.
 
 ---
 
 ## Summary
 
-**Overall posture**: The app is architecturally clean — Server Components, thin client bundle, self-hosted fonts, no third-party requests in the critical JS path. The core problem is that the **LCP element lives inside a React `<Suspense>` boundary** that waits for a lazy AI generation, which under Lighthouse's mobile simulation takes 9.4 s. This alone drags Performance from a likely 90+ to **69**. CLS (0.15) is slightly above the "good" threshold, caused by the same skeleton-to-content swap. Everything else — TBT (20 ms), FCP (1.4 s), total JS weight (175 KB gzipped) — is healthy.
+**Overall posture**: The app is architecturally clean — Server Components, thin client bundle, self-hosted fonts, no third-party requests in the critical JS path. **On warm cache (typical returning visitor) the performance posture is excellent: Performance 99, LCP 1.6 s, CLS ~0.** The risk is the cache-miss worst case: when the AI generates fresh (new date/age bucket or expired row), LCP reaches 9.4 s and CLS rises to 0.15. The lhci 3-run spread exposes this: two runs hit the cache (LCP 1.5–1.6 s, CLS ≈ 0) and one did not (LCP 1.9 s, CLS 0.15). The single-run `npx lighthouse` baseline was captured on a cold cache and showed the worst case.
 
-**Lighthouse before-snapshot (homepage, mobile)**
+**lhci baseline (3-run median, homepage, mobile)**
 
-| Category | Score |
-|---|---|
-| Performance | 69 |
-| Accessibility | 96 |
-| Best Practices | 96 |
-| SEO | 100 |
+| Category | Median score | Run range |
+|---|---|---|
+| Performance | 99 | 93–100 |
+| Accessibility | 96 | 96–96 |
+| Best Practices | 96 | 96–96 |
+| SEO | 100 | 100–100 |
 
-CWV: LCP 9,451 ms · CLS 0.1457 · TBT 20 ms · FCP 1,410 ms · Speed Index 2,398 ms
+Median CWV: LCP 1,623 ms · CLS 0.0004 · TBT 24 ms · FCP 1,623 ms · Speed Index 2,258 ms
+
+Cache-miss worst case (single `npx lighthouse` run, cold generation): LCP 9,451 ms · CLS 0.1457 · Performance 69
 
 **Top 3 wins to ship in the next round**
-1. **Move LCP element above the Suspense boundary** — the `RiverSegmentPanel` headline or the page `<h1>` is visible immediately; the `MetroSummaryPanel` headline (the current LCP candidate) is hidden until AI resolves. Reversing that hierarchy or caching the summary more aggressively would reclaim ~7–8 s of LCP.
-2. **Reserve space for the Suspense skeleton** — Fix CLS by giving the `MetroSummaryPanelSkeleton` the same computed height as the filled panel, so no layout shift occurs at stream-in.
-3. **Fix `metadataBase` to `https://rvajames.org`** — OG images and canonical links are currently pointing at the wrong domain, breaking social sharing.
+1. **Harden the cache-miss path** — ensure `metro_summaries` is always warm (background revalidation or a tighter stale-while-revalidate TTL). If a generation takes 8 s, the first visitor on a new date sees a degraded experience even though cached users see Performance 99.
+2. **Fix `metadataBase` to `https://rvajames.org`** — OG images and canonical links are currently pointing at the wrong domain, breaking social sharing.
+3. **Add security response headers** — no CSP, no `X-Frame-Options`, no `X-Content-Type-Options` at the app level.
 
 **Top 3 follow-up investigations**
 1. Cloudflare Worker response headers — add security layer (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS).
@@ -35,22 +37,22 @@ CWV: LCP 9,451 ms · CLS 0.1457 · TBT 20 ms · FCP 1,410 ms · Speed Index 2,39
 
 ## Findings
 
-### Finding 1 — LCP inside Suspense boundary inflates to ~9.5 s
-- **Severity**: high
-- **Scope**: `app/page.tsx`, `components/metro/MetroSummaryPanel.tsx`
-- **Evidence**: Lighthouse LCP 9,451 ms, Performance 69. The `<Suspense>` wrapping `MetroSummaryPanel` renders a skeleton first; the real headline appears only after server-side AI generation resolves. On a cache miss the Anthropic call takes 3–8 s; even on a cache hit the RSC stream introduces latency. The LCP element (`<p class="text-base font-semibold…">`) is inside that boundary and does not paint until the boundary resolves.
-- **modern-web-guidance recommendation** (guide `performance`): "DO declare the LCP element in standard HTML… Avoid relying on JavaScript to mount the LCP element." The corollary for RSC streaming: ensure the largest visible element in the initial viewport is delivered in the first RSC chunk, not deferred by a `<Suspense>` boundary.
-- **Suggested resolution**: Promote `RiverSegmentPanel`'s `<h2>River conditions</h2>` or the page `<h1>RVA James</h1>` to be the dominant visual by sizing it to be the LCP element, so the deterministic content resolves LCP. Or, serve a stale-while-revalidate metro summary from a separate cached RSC segment so it renders in the first flush.
+### Finding 1 — Cache-miss LCP reaches 9.5 s; warm-cache LCP is 1.6 s
+- **Severity**: medium (warm cache is excellent; risk is first-visit or expired cache)
+- **Scope**: `app/page.tsx`, `components/metro/MetroSummaryPanel.tsx`, `lib/queries/metro-summary.ts`
+- **Evidence**: lhci 3-run spread: Run 1 LCP 1,623 ms (Performance 99), Run 2 LCP 1,918 ms (Performance 93, CLS 0.1457), Run 3 LCP 1,496 ms (Performance 100). Single `npx lighthouse` cold-cache run: LCP 9,451 ms, Performance 69. The `<Suspense>` wrapping `MetroSummaryPanel` renders a skeleton first; on a cache miss the Anthropic call takes 3–8 s, pushing LCP and CLS to bad territory. On cache hit, the RSC chunk resolves quickly and LCP stays ~1.6 s. Run 2's elevated CLS (0.1457) coincided with a cache miss — the skeleton→content swap fired mid-measurement.
+- **modern-web-guidance recommendation** (guide `performance`): "DO declare the LCP element in standard HTML… Avoid relying on JavaScript to mount the LCP element." For RSC streaming: the deterministic content above the Suspense fold should be sized to be the LCP candidate.
+- **Suggested resolution**: (a) Keep the Suspense pattern but guarantee the cache is always warm — add a background revalidation cron that pre-generates `metro_summaries` for the current date × all 6 age buckets before users visit. (b) As a fallback, set a skeleton `min-height` matching the filled panel height to eliminate CLS on cache miss.
 - **Effort**: 4h–1d
 
 ---
 
-### Finding 2 — CLS 0.15: Suspense skeleton ≠ panel height
-- **Severity**: high
+### Finding 2 — CLS 0.15 on cache miss: Suspense skeleton ≠ panel height
+- **Severity**: medium (only manifests on cache miss; warm-cache CLS 0.0004)
 - **Scope**: `components/metro/MetroSummaryPanel.tsx` (`MetroSummaryPanelSkeleton`)
-- **Evidence**: Lighthouse CLS 0.1457 (good ≤ 0.10, needs improvement ≤ 0.25). The skeleton is a fixed short stub; the real `MetroSummaryPanel` with body text, activity grid, and best bets is taller. The shift at stream-in pushes all location cards down.
+- **Evidence**: lhci Run 2 (cache-miss run): CLS 0.1457. Runs 1 and 3 (cache hits): CLS 0.0004 and 0.0000. The skeleton is a fixed short stub; the filled `MetroSummaryPanel` with body text, activity grid, and best bets is ~3× taller. When the Suspense resolves late, the shift pushes all location cards down.
 - **modern-web-guidance recommendation** (guide `performance`): "DO pair `content-visibility` with `contain-intrinsic-size`: Prevent layout shifts and scrollbar jumping by providing a placeholder height/width."
-- **Suggested resolution**: Either (a) give `MetroSummaryPanelSkeleton` a `min-height` equal to the approximate filled height (~200–260 px, measured), or (b) use `contain-intrinsic-size` on the Suspense wrapper so the browser reserves space. A skeleton that matches the actual content shape eliminates the shift.
+- **Suggested resolution**: Give `MetroSummaryPanelSkeleton` `min-height: 16rem` (measured against the filled panel at ~256 px). This reserves space so the shift amplitude is zero even when the boundary resolves late.
 - **Effort**: 1–4h
 
 ---

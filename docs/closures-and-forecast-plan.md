@@ -84,7 +84,7 @@ This round runs **after** the Round 3 river-conditions redesign (sub-goals 35–
 **Why:** Establishes the data shape closures live in, plus the override semantics in the rules engine. Foundation for sub-goals 44, 45, 46.
 
 **Deliverables**
-- `supabase/migrations/0008_location_status.sql`:
+- `supabase/migrations/0009_location_status.sql`:
   ```sql
   create type location_status_kind as enum ('open', 'restricted', 'closed', 'closed_indefinite');
   create type location_status_state as enum ('draft', 'active', 'expired');
@@ -252,7 +252,7 @@ This round runs **after** the Round 3 river-conditions redesign (sub-goals 35–
 - `lib/ingest/noaa-ahps.ts` — sub-goal 42
 - `app/api/cron/noaa-ahps/route.ts` — sub-goal 42
 - `lib/queries/forecast.ts` — sub-goal 42
-- `supabase/migrations/0008_location_status.sql` — sub-goal 43
+- `supabase/migrations/0009_location_status.sql` — sub-goal 43
 - `lib/queries/location-status.ts` — sub-goal 43
 - `lib/safety/rules.ts` — sub-goal 43 (override logic) and 46 (closure surfacing)
 - `app/admin/closures/page.tsx`, `new/page.tsx`, `[id]/page.tsx` — sub-goal 44 (new)

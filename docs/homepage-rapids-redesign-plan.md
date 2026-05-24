@@ -1,5 +1,7 @@
 # RVA James — Homepage Activity Grid + Rapids Class Redesign
 
+> **STATUS: COMPLETE** as of commit `84f42cd` ("Homepage rapids redesign"). All six sub-goals (29–34) shipped. Verified 2026-05-24 against the codebase: migration `0007_metro_activities_rapids.sql` applied, `rapidsClass` and `riverWideActivityStatuses` present in `lib/safety/rules.ts`, `RiverWideActivityGrid.tsx` exists, `RiverLevelTile.tsx` simplified to 32 lines with no gage/temp references. Plan retained for historical reference; do not re-execute.
+
 ## Context
 
 After Feedback Round 1, the homepage has a metro AI summary plus 9 deterministic location cards. The AI summary today provides headline, body, top concerns, and best bets — good prose, but the user has to read paragraphs to answer the immediate question: *"what can we actually do at the river today?"*

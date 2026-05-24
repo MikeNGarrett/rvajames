@@ -47,7 +47,7 @@ Adapted to a river-conditions context: the headline rating answers "is the river
 **Why:** Unlocks every visual on the new panel — the "current vs. normal" delta, the gauge band markers, the sparkline overlay, the translation sentence's "above/below seasonal average" language.
 
 **Deliverables**
-- `supabase/migrations/0007_usgs_percentiles.sql`:
+- `supabase/migrations/0008_usgs_percentiles.sql`:
   ```sql
   create table usgs_percentiles (
     id uuid primary key default gen_random_uuid(),
@@ -223,6 +223,9 @@ At `md:` breakpoint, the secondary-stat chips can wrap to a single row, and the 
   - `summary`: result of `riverConditionSummary(...)` precomputed server-side
 - Each secondary chip uses a lucide-react icon already in the project — no new icon dependency.
 - The "More detail →" trigger is a button that invokes the modal from sub-goal 39 via the `popovertarget` / `commandfor` invoker pattern from `declarative-dialog-popover-control` if browser support is acceptable, otherwise a small JS `dialog.showModal()` handler.
+- **LCP requirement (addresses audit Finding 1):** The deterministic hero (headline rating + big gage value) must be sized to be the dominant visible element in the viewport at 375px so it becomes the LCP element. The Suspense-bounded `MetroSummaryPanel` must NOT contain the LCP. Verify with Lighthouse mobile that the LCP element is inside `RiverSegmentPanel`, not inside any `<Suspense>` boundary. This is the primary lever for moving Performance score from 69 to ≥90.
+- **Heading hierarchy + accessible names (addresses audit Findings 5, 11, 19):** Demote `RiverSegmentPanel`'s `<h2>` to `<h3>` if a higher-level wrapper exists, OR wrap the location grid in `<section aria-labelledby="locations-heading"><h2 id="locations-heading">Locations</h2>…` and demote each `RiverLevelTile`'s heading to `<h3>`. Pick whichever yields a sensible doc outline. On location card links, the `aria-label` must contain ALL visible text in the card (badge text + location name + reason) — do not use the rules-engine's hidden `label` field in the aria-label.
+- **App-controlled speculation rules (addresses audit Finding 21):** In the Suspense-resolved content of `MetroSummaryPanel` (where `best_bets_today` is available), emit a `<script type="speculationrules">` JSON block targeting those slugs with `"eagerness": "moderate"`. Replaces Cloudflare's generic CDN-level prefetch with a precise prerender of the 3 most likely next-navigation targets. Falls back silently on browsers without speculation-rules support.
 
 **Success**
 - `pnpm dev` → `/` renders the new panel instantly (no Suspense wait — all data is deterministic).
@@ -274,14 +277,16 @@ At `md:` breakpoint, the secondary-stat chips can wrap to a single row, and the 
 - Run `npx -y modern-web-guidance@latest search "..."` for any pattern used (gauge meter, sparkline, dialog, etc.) and confirm we matched its current recommendations. Update if drift detected.
 - Run `lhci autorun --collect.url=https://rvajames.org/` against the live URL post-deploy. Confirm:
   - LCP < 2.5s
-  - CLS < 0.05 (no new layout shift from the gauge / sparkline / chip row)
+  - **LCP element is inside `RiverSegmentPanel`, not inside any `<Suspense>` boundary** (addresses audit Finding 1)
+  - CLS < 0.05 — no shift on metro summary stream-in (addresses audit Finding 2 if Round 5 hasn't already)
   - Accessibility ≥ 90 (the panel introduced new interactive elements — meter, dialog, button)
 - Keyboard-only walkthrough of `/` and the open detail modal. No focus traps lost, no inaccessible interactive elements.
-- Screen reader pass (VoiceOver on macOS, TalkBack on Android if available): the rating, hero number, trend, and translation sentence are all announced in a sensible order.
+- Screen reader pass (VoiceOver on macOS, TalkBack on Android if available): the rating, hero number, trend, and translation sentence are all announced in a sensible order. Location card links announce their visible text (addresses audit Findings 5, 11).
 - AA contrast verified programmatically on every new color × background pair.
+- Confirm app-controlled speculation rules from sub-goal 38 are emitted on `/` and reference `best_bets_today` slugs (addresses audit Finding 21).
 
 **Success**
-- All four checks pass. Any failure becomes its own follow-up sub-goal, not a band-aid here.
+- All checks pass. Any failure becomes its own follow-up sub-goal, not a band-aid here.
 
 ---
 
@@ -298,7 +303,7 @@ At `md:` breakpoint, the secondary-stat chips can wrap to a single row, and the 
 
 ## Critical files
 
-- `supabase/migrations/0007_usgs_percentiles.sql` — sub-goal 35
+- `supabase/migrations/0008_usgs_percentiles.sql` — sub-goal 35
 - `lib/ingest/usgs-percentiles.ts` — sub-goal 35
 - `app/api/cron/usgs-percentiles/route.ts` — sub-goal 35
 - `wrangler.jsonc` — sub-goal 35 (new cron)
