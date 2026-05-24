@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   title: 'RVA James — James River Family Dashboard',
   description:
     'Richmond family guide to the James River: conditions, access points, and activity recommendations.',
-  metadataBase: new URL('https://rva-james.workers.dev'),
+  metadataBase: new URL('https://rvajames.org'),
   openGraph: {
     siteName: 'RVA James',
     type: 'website',
