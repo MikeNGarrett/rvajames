@@ -28,7 +28,7 @@ supabase/.temp/
 lib/supabase/types.ts
 
 # Local agent instructions
-.agents
+.agents/
 
 #lighthouse testing
-.lighthouseci
+.lighthouseci/
