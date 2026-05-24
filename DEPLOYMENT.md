@@ -15,6 +15,49 @@ Production domain: https://rvajames.org (custom domain via Cloudflare)
 - **First deploy:** 2026-05-23
 - **Version ID:** `f08c5d38-5b23-4769-8054-7289103fb658`
 
+## Admin route
+
+`/admin/*` is protected by two layers:
+
+1. **Cloudflare Access** (edge) — set up a Self-hosted Application in the Cloudflare Access
+   dashboard (Zero Trust → Access → Applications → Add an application → Self-hosted).
+   - Application name: `RVA James Admin`
+   - Application domain: `rvajames.org/admin`
+   - Policy: allow the email addresses you want to grant access to.
+   Cloudflare Access sets the `cf-access-authenticated-user-email` header on authenticated
+   requests.
+
+2. **Allowlist check** (defence-in-depth, in code) — `lib/admin/auth.ts` reads that header
+   and verifies the email is in the `ALLOWED_ADMIN_EMAILS` env var (comma-separated list).
+
+### Required env var
+
+```
+ALLOWED_ADMIN_EMAILS=you@example.com,colleague@example.com
+```
+
+Set this as a Cloudflare Workers secret:
+
+```bash
+echo "you@example.com" | wrangler secret put ALLOWED_ADMIN_EMAILS
+```
+
+### Local testing
+
+In `.dev.vars`, set:
+
+```
+ALLOWED_ADMIN_EMAILS=your.email@example.com
+```
+
+Then pass the header manually (e.g. with curl or a browser extension):
+
+```
+cf-access-authenticated-user-email: your.email@example.com
+```
+
+See `SECURITY.md` for the full admin auth posture.
+
 ## Secrets (names only — values in Cloudflare Workers dashboard)
 
 Set via `wrangler secret put`:
@@ -22,6 +65,7 @@ Set via `wrangler secret put`:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `ANTHROPIC_API_KEY`
 - `CRON_SECRET`
+- `ALLOWED_ADMIN_EMAILS`
 
 Public vars in `wrangler.jsonc`:
 - `NEXT_PUBLIC_SUPABASE_URL`

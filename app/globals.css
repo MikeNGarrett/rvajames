@@ -24,22 +24,22 @@
   */
   --color-status-safe: #a8dd83;         /* Walker Green — safe river conditions */
   --color-status-safe-fg: #1a5c28;      /* dark green text on safe-bg  — AA 5.3:1 */
-  --color-status-safe-subtle: #eaf5e2;  /* light tint for safe cards */
+  --color-status-safe-subtle: color-mix(in srgb, var(--color-status-safe) 15%, white);
 
   --color-status-caution: #ffe86b;        /* Capitol Gold — some concerns */
   --color-status-caution-fg: #5a4000;     /* dark brown text on caution — AAA 7.9:1 */
-  --color-status-caution-subtle: #fffbe6; /* light tint for caution cards */
+  --color-status-caution-subtle: color-mix(in srgb, var(--color-status-caution) 15%, white);
 
   --color-status-danger: #aa242a;         /* CoR Red — high risk / active advisory */
   --color-status-danger-fg: #ffffff;      /* white text on danger — AA 6.4:1 */
-  --color-status-danger-subtle: #fce8e9;  /* light tint for danger alerts */
+  --color-status-danger-subtle: color-mix(in srgb, var(--color-status-danger) 15%, white);
 
   --color-status-flood: #264677;          /* CoR Blue — flood advisory (overrides all) */
   --color-status-flood-fg: #ffffff;       /* white text on flood — AAA 8.2:1 */
 
   --color-status-closed: #6b7280;         /* Neutral gray — operationally unavailable */
   --color-status-closed-fg: #ffffff;      /* white text on closed — AA 5.3:1 */
-  --color-status-closed-subtle: #f3f4f6;  /* light tint for closed cards */
+  --color-status-closed-subtle: color-mix(in srgb, var(--color-status-closed) 15%, white);
 
   /* === Neutral / Surface Scale === */
   --color-surface: #f8f9fc;
@@ -47,7 +47,13 @@
   --color-border: #dde3ec;
   --color-text: #1a1f2e;          /* near-black body — AAA on white */
   --color-text-secondary: #4a5568;
-  --color-text-muted: #718096;
+  --color-text-muted: #5d6b82;      /* darkened from #718096 for WCAG AA on white (≈4.7:1) */
+  --color-text-subtle: #8a96a6;     /* large-text-only decorative secondary (≥3:1 at text-lg+) */
+
+  /* === Reading-width cap ===
+     Applied to all body-text regions (AI narration, advisory copy, safety prose, footers).
+     Prevents eye-strain on wide viewports. max-w-prose Tailwind utility consumes 65ch. */
+  --reading-width: 65ch;
 
   /* === Typography ===
      Brand face: Nunito Sans (Google Fonts, self-hosted via next/font)
@@ -104,4 +110,12 @@
   button, a, [role="button"], input, select, textarea {
     min-height: 2.75rem;
   }
+
+  /* Text-wrap polish (progressive enhancement — ignored in unsupported browsers).
+     text-wrap: balance — symmetric line lengths for headings (up to 6–10 lines).
+     text-wrap: pretty  — reduces orphans in body paragraphs.
+     Per improve-text-layout-and-legibility guide: apply to specific elements only,
+     NOT globally (*) — the balance algorithm has a per-element CPU cost. */
+  h1, h2, h3 { text-wrap: balance; }
+  p { text-wrap: pretty; }
 }

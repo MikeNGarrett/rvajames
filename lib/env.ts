@@ -57,6 +57,19 @@ export async function getAnthropicApiKey(): Promise<string> {
   return val;
 }
 
+/**
+ * Returns the comma-separated list of allowed admin email addresses.
+ * Whitespace-trimmed. Returns empty array if not set (blocks all access).
+ */
+export async function getAllowedAdminEmails(): Promise<string[]> {
+  const env = await getEnv();
+  const val = env['ALLOWED_ADMIN_EMAILS'] ?? '';
+  return val
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 export async function getCronSecret(): Promise<string> {
   const env = await getEnv();
   const val = env['CRON_SECRET'];

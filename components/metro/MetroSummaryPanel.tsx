@@ -30,7 +30,7 @@ export async function MetroSummaryPanel({ date, ageBucket }: Props) {
       <p className="text-base font-semibold text-text mb-2">{summary.headline}</p>
 
       {/* Body markdown rendered as plain text (strips Markdown syntax) */}
-      <p className="text-sm text-text-secondary leading-relaxed mb-3">
+      <p className="text-sm text-text-secondary leading-relaxed mb-3 max-w-prose">
         {summary.body_md.replace(/[*#`]/g, '').replace(/\n+/g, ' ').trim()}
       </p>
 
@@ -109,7 +109,7 @@ export async function MetroSummaryPanel({ date, ageBucket }: Props) {
 /** Skeleton shown while MetroSummaryPanel is generating */
 export function MetroSummaryPanelSkeleton() {
   return (
-    <div className="rounded-xl border border-border bg-surface-raised p-4 mb-4 animate-pulse">
+    <div className="rounded-xl border border-border bg-surface-raised p-4 mb-4 animate-pulse motion-reduce:animate-none min-h-[300px]">
       <div className="h-4 bg-surface rounded w-3/4 mb-3" />
       <div className="space-y-2 mb-3">
         <div className="h-3 bg-surface rounded w-full" />

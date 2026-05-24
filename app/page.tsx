@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/states/Empty';
 import { StaleState } from '@/components/states/Stale';
 import { RiverSegmentPanel } from '@/components/metro/RiverSegmentPanel';
 import { MetroSummaryPanel, MetroSummaryPanelSkeleton } from '@/components/metro/MetroSummaryPanel';
+import { PageContainer } from '@/components/ui/PageContainer';
 import { isStale } from '@/lib/freshness';
 
 interface Props {
@@ -44,7 +45,8 @@ export default async function Home({ searchParams }: Props) {
       {hasFlood && <FloodBanner />}
       <FirstVisitModal />
 
-      <main className="max-w-lg mx-auto px-4 py-5">
+      <main>
+      <PageContainer className="py-5">
         <header className="mb-5">
           <h1 className="text-2xl font-extrabold text-rva-blue leading-tight">RVA James</h1>
           <p className="text-sm text-text-secondary mt-0.5">
@@ -103,6 +105,7 @@ export default async function Home({ searchParams }: Props) {
         </section>
 
         <DisclaimerFooter ageBucket={ageBucket} />
+      </PageContainer>
       </main>
     </NuqsAdapter>
   );

@@ -28,8 +28,13 @@ const STATUS_STYLES: Record<Activity['status'], { badge: string; label: string }
 
 export function RiverWideActivityGrid({ activities }: Props) {
   return (
+    /* @container on the wrapper; grid queries the container width, not the viewport.
+       This makes the grid relocatable — it works in any context (sidebar, narrow column, etc.)
+       and correctly responds to the wider page layout introduced by sub-goal 48.
+       guide: size-aware-styling, fluid-scaling (Finding 23) */
+    <div className="@container mb-3">
     <div
-      className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3"
+      className="grid grid-cols-2 @md:grid-cols-4 gap-2"
       aria-label="River-wide activity status"
     >
       {activities.map((activity) => {
@@ -56,6 +61,7 @@ export function RiverWideActivityGrid({ activities }: Props) {
           </div>
         );
       })}
+    </div>
     </div>
   );
 }
