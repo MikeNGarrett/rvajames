@@ -6,10 +6,13 @@
  * Points are {t, v} where t is a Unix timestamp in ms and v is the value.
  *
  * Desktop note: the SVG uses preserveAspectRatio="none" so it fills its
- * container width regardless of aspect ratio. A plain SVG <circle> deforms
- * into a wide flat ellipse at extreme widths (e.g. 1024px × 40px).
- * The current-value marker is therefore rendered via <foreignObject> so the
- * dot stays a true circle at any container width.
+ * container width regardless of aspect ratio. An SVG <circle> (or a
+ * <foreignObject> div) both inherit the non-uniform scale and deform into
+ * an ellipse at extreme aspect ratios (e.g. 1536px × 40px).
+ * The current-value marker is therefore rendered as an absolutely-positioned
+ * CSS div layered on top of the SVG, positioned via percentage coordinates
+ * derived from the SVG user-space coordinates. CSS border-radius:50% on a
+ * fixed-pixel square is always a perfect circle regardless of the SVG scale.
  */
 
 interface Point {
@@ -82,64 +85,63 @@ export function Sparkline({
   const markerX = xScale(last.t);
   const markerY = yScale(last.v);
 
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="none"
-      className="w-full block"
-      style={{ height: `${H}px` }}
-    >
-      {/* Normal band shading — only the visible portion */}
-      {showBand && (
-        <rect
-          x={PAD}
-          y={bandY1}
-          width={W - PAD * 2}
-          height={Math.max(0, bandY2 - bandY1)}
-          className="fill-rva-blue/10"
-        />
-      )}
+  // Express the marker position as percentages of the SVG viewBox so the
+  // CSS div (which is NOT inside the SVG) aligns perfectly at any width.
+  const markerLeftPct = (markerX / W) * 100;
+  const markerTopPct  = (markerY / H) * 100;
 
-      {/* Trend line — vectorEffect keeps stroke width consistent at any aspect ratio */}
-      <path
-        d={linePath}
-        fill="none"
-        className={lineClass}
-        strokeWidth={1.5}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-        vectorEffect="non-scaling-stroke"
-      />
+  return (
+    <div className="relative w-full" style={{ height: `${H}px` }}>
+      <svg
+        aria-hidden="true"
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        className="w-full h-full block"
+      >
+        {/* Normal band shading — only the visible portion */}
+        {showBand && (
+          <rect
+            x={PAD}
+            y={bandY1}
+            width={W - PAD * 2}
+            height={Math.max(0, bandY2 - bandY1)}
+            className="fill-rva-blue/10"
+          />
+        )}
+
+        {/* Trend line — vectorEffect keeps stroke width consistent at any aspect ratio */}
+        <path
+          d={linePath}
+          fill="none"
+          className={lineClass}
+          strokeWidth={1.5}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
 
       {/*
-       * Current-value marker rendered via foreignObject so the dot stays a
-       * true CSS circle regardless of the SVG's horizontal stretch.
-       *
-       * The foreignObject x/y are in SVG user-space (correctly positioned by
-       * the transform), while the div inside renders at screen pixels (no
-       * distortion). width="0" height="0" + overflow="visible" avoids any
-       * clipping from the foreignObject bounding box.
+       * Current-value marker: absolutely positioned CSS div, NOT inside the SVG.
+       * Because this element lives in CSS pixel space (not SVG user space), its
+       * border-radius:50% always produces a perfect circle at any container width.
+       * left/top are percentages matching the SVG viewBox position of the last point.
        */}
-      <foreignObject
-        x={markerX}
-        y={markerY}
-        width="0"
-        height="0"
-        overflow="visible"
-      >
-        <div
-          style={{
-            position:     'absolute',
-            width:        '10px',
-            height:       '10px',
-            borderRadius: '50%',
-            backgroundColor: 'var(--color-rva-blue, #264677)',
-            border:       '2px solid var(--color-surface, white)',
-            transform:    'translate(-50%, -50%)',
-          }}
-        />
-      </foreignObject>
-    </svg>
+      <div
+        aria-hidden="true"
+        style={{
+          position:        'absolute',
+          left:            `${markerLeftPct}%`,
+          top:             `${markerTopPct}%`,
+          width:           '10px',
+          height:          '10px',
+          borderRadius:    '50%',
+          backgroundColor: 'var(--color-rva-blue, #264677)',
+          border:          '2px solid var(--color-surface, white)',
+          transform:       'translate(-50%, -50%)',
+          pointerEvents:   'none',
+        }}
+      />
+    </div>
   );
 }
