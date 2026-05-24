@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { requireAdminEmail } from '@/lib/admin/auth';
+import { ToastProvider } from '@/components/admin/ToastProvider';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,7 +32,9 @@ export default async function AdminLayout({
           ← Back to site
         </Link>
       </header>
-      <main className="max-w-3xl mx-auto px-4 py-6">{children}</main>
+      <ToastProvider>
+        <main className="max-w-3xl mx-auto px-4 py-6">{children}</main>
+      </ToastProvider>
     </div>
   );
 }

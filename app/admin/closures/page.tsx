@@ -2,12 +2,12 @@ import Link from 'next/link';
 import { requireAdminEmail } from '@/lib/admin/auth';
 import { createServerClient } from '@/lib/supabase/server';
 import {
-  expireClosure,
   duplicateClosure,
   approveDraft,
   discardDraft,
 } from './actions';
 import { ConfirmActionButton } from './ConfirmActionButton';
+import { ExpireButton } from './ExpireButton';
 
 type Row = {
   id: string;
@@ -249,15 +249,11 @@ export default async function ClosuresAdminPage() {
 
                       {row.state === 'active' && (
                         <>
-                          {/* Expire — recoverable, so caution (not danger) variant */}
-                          <ConfirmActionButton
-                            action={expireClosure.bind(null, row.id)}
-                            confirmMessage={`Expire the closure for "${row.locations?.name ?? 'this location'}"?\n\nThis sets effective_to to now and marks it expired. You can re-create it if needed.`}
-                            confirmVariant="caution"
-                            className="text-xs text-text-muted hover:underline font-medium"
-                          >
-                            Expire
-                          </ConfirmActionButton>
+                          {/* Expire — ExpireButton shows undo toast after success */}
+                          <ExpireButton
+                            id={row.id}
+                            locationName={row.locations?.name ?? 'this location'}
+                          />
 
                           {/* Duplicate */}
                           <form action={duplicateClosure.bind(null, row.id)}>

@@ -196,7 +196,7 @@ export function ConfirmDialog({
               role="alert"
               className="text-xs text-status-danger"
             >
-              Doesn't match — type exactly as shown.
+              Doesn&apos;t match — type exactly as shown.
             </p>
           )}
         </div>

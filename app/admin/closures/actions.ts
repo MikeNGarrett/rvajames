@@ -175,6 +175,49 @@ export async function approveDraft(id: string, data: FormData) {
   revalidatePath('/');
 }
 
+/**
+ * Undo an expire — restore a closure to active.
+ *
+ * Only valid within a 60-second freshness window after the closure was expired.
+ * Beyond that, the admin should re-create the closure to avoid accidentally
+ * un-expiring something that was intentionally let lapse.
+ *
+ * Sub-goal 55.
+ */
+export async function unexpireClosure(id: string) {
+  await requireAdminEmail();
+  const supabase = await createServerClient('service');
+
+  const { data: row, error: fetchError } = await supabase
+    .from('location_status')
+    .select('state, effective_to')
+    .eq('id', id)
+    .single();
+
+  if (fetchError || !row) throw new Error('Closure not found');
+  if (row.state !== 'expired') throw new Error('Closure is not in expired state');
+
+  // Enforce the 60-second freshness window against the effective_to timestamp
+  // (set to now() by expireClosure).
+  const expiredAt = row.effective_to ? new Date(row.effective_to).getTime() : 0;
+  const ageSeconds = (Date.now() - expiredAt) / 1000;
+  if (ageSeconds > 60) {
+    throw new Error(
+      'Undo window has closed (>60 s since expire). Re-create the closure if needed.',
+    );
+  }
+
+  const { error } = await supabase
+    .from('location_status')
+    .update({ state: 'active', effective_to: null })
+    .eq('id', id);
+
+  if (error) throw new Error(`Failed to unexpire closure: ${error.message}`);
+
+  revalidatePath('/admin/closures');
+  revalidatePath('/');
+}
+
 /** Discard a draft (hard delete — drafts are not meaningful audit trail). */
 export async function discardDraft(id: string) {
   await requireAdminEmail();
