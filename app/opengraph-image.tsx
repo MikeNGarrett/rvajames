@@ -7,7 +7,8 @@
 
 import { ImageResponse } from 'next/og';
 
-export const runtime = 'edge';
+// Note: no runtime export needed — OpenNext/Cloudflare runs all routes on
+// Workers by default. Adding runtime='edge' here breaks the OpenNext build.
 export const alt = 'RVA James — James River Family Dashboard';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
