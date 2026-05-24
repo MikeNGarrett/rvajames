@@ -81,6 +81,27 @@ export async function MetroSummaryPanel({ date, ageBucket }: Props) {
       <p className="text-xs text-text-muted italic mt-3">
         AI-generated from USGS sensor data · use your own judgment on the water
       </p>
+
+      {/* Speculation rules — prefetch + prerender the best-bet location pages
+          so they load instantly when the user taps a best-bet link.
+          guide: improve-next-page-load-performance */}
+      {summary.best_bets_today.length > 0 && (
+        <script
+          type="speculationrules"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              prefetch: [{
+                urls: summary.best_bets_today.map((b) => `/locations/${b.location_slug}`),
+                eagerness: 'eager',
+              }],
+              prerender: [{
+                urls: summary.best_bets_today.map((b) => `/locations/${b.location_slug}`),
+                eagerness: 'moderate',
+              }],
+            }),
+          }}
+        />
+      )}
     </section>
   );
 }

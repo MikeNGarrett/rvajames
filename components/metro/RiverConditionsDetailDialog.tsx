@@ -23,6 +23,13 @@ import { useEffect, useRef } from 'react';
 import type { MetroRiverState } from '@/lib/queries/river-segment';
 import { Sparkline } from '@/components/ui/Sparkline';
 
+// Invoker Commands polyfill — loaded only when native support is absent.
+// Baseline since 2025-12-12 (Chrome/Edge 135, Firefox 144, Safari 26.2).
+// guide: declarative-dialog-popover-control
+if (typeof window !== 'undefined' && !('commandForElement' in HTMLButtonElement.prototype)) {
+  import('invokers-polyfill').catch(() => {});
+}
+
 interface Props {
   metroState: MetroRiverState;
 }
@@ -229,7 +236,7 @@ export function RiverConditionsDetailDialog({ metroState }: Props) {
         <button
           commandfor="river-detail-dialog"
           command="close"
-          className="w-full text-sm font-medium text-text-secondary bg-surface-raised rounded-lg py-2 border border-border hover:bg-surface-accent focus-visible:ring-2 focus-visible:ring-rva-blue focus-visible:outline-none"
+          className="w-full text-sm font-medium text-text-secondary bg-surface-raised rounded-lg py-2 border border-border hover:bg-surface focus-visible:ring-2 focus-visible:ring-rva-blue focus-visible:outline-none"
         >
           Close
         </button>

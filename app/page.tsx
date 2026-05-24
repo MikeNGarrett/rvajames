@@ -75,24 +75,32 @@ export default async function Home({ searchParams }: Props) {
         )}
 
         {/* ── Locations region ── 9 deterministic cards */}
-        {isFuture ? (
-          <EmptyState message="No forecast data yet for future dates. Check back on the day of your visit." />
-        ) : !data.hasConditions ? (
-          <>
-            <EmptyState message="No gauge data yet — USGS updates every 15 minutes." />
-            <div className="mt-4 grid gap-3">
+        <section aria-labelledby="locations-heading">
+          <h2
+            id="locations-heading"
+            className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2"
+          >
+            Locations
+          </h2>
+          {isFuture ? (
+            <EmptyState message="No forecast data yet for future dates. Check back on the day of your visit." />
+          ) : !data.hasConditions ? (
+            <>
+              <EmptyState message="No gauge data yet — USGS updates every 15 minutes." />
+              <div className="mt-4 grid gap-3">
+                {data.locations.map((loc) => (
+                  <RiverLevelTile key={loc.id} location={loc} />
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="grid gap-3">
               {data.locations.map((loc) => (
                 <RiverLevelTile key={loc.id} location={loc} />
               ))}
             </div>
-          </>
-        ) : (
-          <div className="grid gap-3">
-            {data.locations.map((loc) => (
-              <RiverLevelTile key={loc.id} location={loc} />
-            ))}
-          </div>
-        )}
+          )}
+        </section>
 
         <DisclaimerFooter ageBucket={ageBucket} />
       </main>

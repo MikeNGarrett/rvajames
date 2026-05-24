@@ -17,6 +17,7 @@
     "@anthropic-ai/sdk": "^0.98.0",
     "@supabase/supabase-js": "^2.106.1",
     "@tailwindcss/postcss": "^4.3.0",
+    "invokers-polyfill": "^1.0.3",
     "next": "^15",
     "nuqs": "^2.8.9",
     "react": "^19",
