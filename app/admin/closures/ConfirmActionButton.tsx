@@ -30,6 +30,11 @@ interface Props {
   confirmLabel?: string;
   /** Visual variant for the Confirm button. Defaults to 'danger'. */
   confirmVariant?: ConfirmDialogProps['confirmVariant'];
+  /**
+   * Sub-goal 54: when set, the user must type this phrase exactly before
+   * Confirm enables.  Pass the location name for hard-delete (Discard).
+   */
+  typeToConfirm?: string;
   className?: string;
   children: React.ReactNode;
 }
@@ -39,6 +44,7 @@ export function ConfirmActionButton({
   confirmMessage,
   confirmLabel,
   confirmVariant = 'danger',
+  typeToConfirm,
   className,
   children,
 }: Props) {
@@ -77,6 +83,7 @@ export function ConfirmActionButton({
         description={description}
         confirmLabel={resolvedLabel}
         confirmVariant={confirmVariant}
+        typeToConfirm={typeToConfirm}
         isPending={isPending}
         onConfirm={handleConfirm}
         onCancel={() => setOpen(false)}

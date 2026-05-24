@@ -235,10 +235,11 @@ export default async function ClosuresAdminPage() {
                             </button>
                           </form>
 
-                          {/* Discard draft — hard delete; no undo */}
+                          {/* Discard draft — hard delete, no undo; requires typing location name */}
                           <ConfirmActionButton
                             action={discardDraft.bind(null, row.id)}
-                            confirmMessage={`Discard this draft for "${row.locations?.name ?? 'unknown location'}"?\n\nThis permanently deletes it with no undo.`}
+                            confirmMessage={`Permanently delete this draft?\n\nThis cannot be undone. The draft will be gone with no way to recover it.`}
+                            typeToConfirm={row.locations?.name ?? 'unknown location'}
                             className="text-xs text-status-danger hover:underline font-medium"
                           >
                             Discard
