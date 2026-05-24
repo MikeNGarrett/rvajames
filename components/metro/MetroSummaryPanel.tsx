@@ -6,6 +6,7 @@
 
 import Link from 'next/link';
 import { getMetroSummary } from '@/lib/queries/metro-summary';
+import { RiverWideActivityGrid } from './RiverWideActivityGrid';
 import type { AgeBucket } from '@/lib/url-state';
 
 interface Props {
@@ -32,6 +33,11 @@ export async function MetroSummaryPanel({ date, ageBucket }: Props) {
       <p className="text-sm text-text-secondary leading-relaxed mb-3">
         {summary.body_md.replace(/[*#`]/g, '').replace(/\n+/g, ' ').trim()}
       </p>
+
+      {/* River-wide activity grid — only present on b2+ rows */}
+      {summary.activities?.length ? (
+        <RiverWideActivityGrid activities={summary.activities} />
+      ) : null}
 
       {/* Top concerns */}
       {summary.top_concerns.length > 0 && (

@@ -24,5 +24,8 @@ supabase/.temp/
 # OS
 .DS_Store
 
-
+# Supabase schema
 lib/supabase/types.ts
+
+# Local agent instructions
+.agents

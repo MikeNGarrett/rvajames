@@ -1,39 +1,106 @@
 import { z } from 'zod';
 import type { AgeBucket } from '@/lib/url-state';
 import type { MetroRiverState } from '@/lib/queries/river-segment';
+import { rapidsClass, riverWideActivityStatuses } from '@/lib/safety/rules';
 
-// ─── Output schema ────────────────────────────────────────────────────────────
+// ─── Activity grid schema ─────────────────────────────────────────────────────
 
-export const BestBetSchema = z.object({
-  location_slug: z.string(),
-  reason: z.string(), // ≤ 12 words
+export const ACTIVITY_SLUGS_RIVERWIDE = [
+  'swimming',
+  'rock-hopping',
+  'kayaking-whitewater',
+  'hiking',
+] as const;
+
+export type RiverwideActivitySlug = (typeof ACTIVITY_SLUGS_RIVERWIDE)[number];
+
+const ActivityStatusSchema = z.object({
+  slug:   z.enum(ACTIVITY_SLUGS_RIVERWIDE),
+  status: z.enum(['safe', 'caution', 'deny']),
+  note:   z.string().max(120), // ≤ 12 words in plain language
 });
 
-export const MetroSummarySchema = z.object({
-  headline: z.string(),         // 1 sentence, ≤ 90 chars
-  body_md: z.string(),          // 2–3 paragraphs, brand voice, Markdown
-  top_concerns: z.array(z.string()).max(3),  // ≤ 3 brief concerns; empty if none
-  best_bets_today: z.array(BestBetSchema).max(3),  // ≤ 3 top locations
+// ─── Rapids class schema ──────────────────────────────────────────────────────
+
+export const RAPIDS_CLASSES = ['I-II', 'II-III', 'III-IV', 'IV-V'] as const;
+export type RapidsClass = (typeof RAPIDS_CLASSES)[number];
+
+// ─── Shared fields (both schemas) ────────────────────────────────────────────
+
+const BaseMetroSummarySchema = z.object({
+  headline:      z.string(),                    // 1 sentence, ≤ 90 chars
+  body_md:       z.string(),                    // 2–3 paragraphs, brand voice, Markdown
+  top_concerns:  z.array(z.string()).max(3),    // ≤ 3 brief concerns; empty if none
+  best_bets_today: z.array(
+    z.object({ location_slug: z.string(), reason: z.string() }),
+  ).max(3),
   disclaimer_kind: z.enum(['standard', 'children', 'general_audience']),
 });
 
-export type MetroSummary = z.infer<typeof MetroSummarySchema>;
+// ─── Write schema (strict) — used to validate fresh AI output ────────────────
+// All three new fields are REQUIRED. If the AI omits them, validation throws.
+
+export const MetroSummaryWriteSchema = BaseMetroSummarySchema.extend({
+  activities:   z.array(ActivityStatusSchema).length(4),
+  rapids_class: z.enum(RAPIDS_CLASSES),
+  rapids_note:  z.string().max(150), // ≤ 15 words
+});
+
+// ─── Read schema (lenient) — used when reading cached rows ───────────────────
+// Pre-b2 rows have NULL for these columns; treat them as absent.
+
+export const MetroSummaryReadSchema = BaseMetroSummarySchema.extend({
+  activities:   z.array(ActivityStatusSchema).length(4).optional(),
+  rapids_class: z.enum(RAPIDS_CLASSES).optional(),
+  rapids_note:  z.string().max(150).optional(),
+});
+
+// Backward-compat alias
+export const MetroSummarySchema = MetroSummaryReadSchema;
+
+export type MetroSummary = z.infer<typeof MetroSummaryReadSchema>;
+
+// ─── Prompt version ───────────────────────────────────────────────────────────
+// Bump this constant whenever Schema B changes. It enters the prompt_hash so that
+// all pre-existing metro_summaries rows are orphaned (hash never matches again).
+
+export const PROMPT_VERSION = 'b2' as const;
 
 // ─── Input / user message builder ────────────────────────────────────────────
 
 export interface MetroSummaryInput {
-  date: string;         // YYYY-MM-DD
-  ageBucket: AgeBucket;
-  metroState: MetroRiverState;
+  date:                    string;       // YYYY-MM-DD
+  ageBucket:               AgeBucket;
+  metroState:              MetroRiverState;
   activeAdvisoryHeadlines: string[];
-  airTempF: number | null;
+  airTempF:                number | null;
+  // Optional: pre-computed deterministic signals (injected in sub-goal 31)
+  rain48hIn?:              number;
+  activeCSOAdvisory?:      boolean;
+  hasHighSeverityAdvisory?: boolean;
 }
 
 export function buildMetroUserMessage(input: MetroSummaryInput): string {
   const { upriver, downriver } = input.metroState;
 
+  // Compute deterministic baselines from rules engine
+  const upriverGageFt   = upriver.gageFt ?? 3.0;   // fallback to normal if unknown
+  const rain48hIn       = input.rain48hIn ?? 0;
+  const activeCSOAdvisory      = input.activeCSOAdvisory ?? false;
+  const hasHighSeverityAdvisory = input.hasHighSeverityAdvisory ?? false;
+
+  const classResult    = rapidsClass(upriverGageFt);
+  const activityBaseline = riverWideActivityStatuses({
+    upriverGageFt,
+    waterTempF:             upriver.waterTempF ?? null,
+    rain48hIn,
+    activeCSOAdvisory,
+    hasHighSeverityAdvisory,
+  });
+
   const lines: string[] = [
     `Date: ${input.date}`,
+    `Prompt version: ${PROMPT_VERSION}`,
     `Age context: ${
       input.ageBucket === 'none'
         ? 'General audience — adult visitors, no children specified'
@@ -61,14 +128,25 @@ export function buildMetroUserMessage(input: MetroSummaryInput): string {
     '',
     '--- Weather ---',
     `Air temperature: ${input.airTempF !== null ? `${input.airTempF}°F` : 'unavailable'}`,
+    `Rain last 48h: ${rain48hIn > 0 ? `${rain48hIn.toFixed(2)}"` : 'none reported'}`,
+    `Active CSO overflow advisory: ${activeCSOAdvisory ? 'YES' : 'no'}`,
     '',
     '--- Active advisories ---',
     input.activeAdvisoryHeadlines.length
       ? input.activeAdvisoryHeadlines.map((h) => `• ${h}`).join('\n')
       : 'None',
     '',
+    '--- Deterministic baselines (copy slug + status verbatim; write note in your own words) ---',
+    `rapids_class: ${classResult.class}  (rules engine: ${classResult.label})`,
+    'riverwide_activity_baseline:',
+    ...activityBaseline.map(
+      (a) => `  { slug: "${a.slug}", status: "${a.status}", baseReason: "${a.baseReason}" }`,
+    ),
+    '',
     'Produce a metro-level river summary for Richmond families planning a James River visit today.',
-    'Respond with a single JSON object matching the metro summary schema in the system prompt.',
+    'Respond with a single JSON object matching SCHEMA B (prompt version b2) in the system prompt.',
+    'The activities[] array must have EXACTLY 4 entries (same order as the baseline above).',
+    `Copy rapids_class: "${classResult.class}" verbatim. Do not derive your own class.`,
   ];
 
   return lines.join('\n');

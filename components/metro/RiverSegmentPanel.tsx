@@ -1,9 +1,12 @@
 /**
  * Deterministic — renders instantly without AI.
- * Shows both gauge readings with clear datum labeling.
+ * Shows both gauge readings with clear datum labeling,
+ * plus a deterministic rapids class badge.
  */
 
 import type { MetroRiverState } from '@/lib/queries/river-segment';
+import { rapidsClass } from '@/lib/safety/rules';
+import type { RapidsClassValue } from '@/lib/safety/rules';
 
 interface Props {
   metroState: MetroRiverState;
@@ -16,8 +19,16 @@ function ageLabel(fetchedAt: string | null): string {
   return `${Math.floor(m / 60)}h ago`;
 }
 
+const RAPIDS_BADGE_STYLES: Record<RapidsClassValue, string> = {
+  'I-II':   'bg-status-safe text-status-safe-fg',
+  'II-III': 'bg-status-safe text-status-safe-fg',
+  'III-IV': 'bg-status-caution text-status-caution-fg',
+  'IV-V':   'bg-status-danger text-status-danger-fg',
+};
+
 export function RiverSegmentPanel({ metroState }: Props) {
   const { upriver, downriver, lastUpdatedAt } = metroState;
+  const classResult = upriver.gageFt !== null ? rapidsClass(upriver.gageFt) : null;
 
   return (
     <section aria-label="River gauge readings" className="rounded-xl border border-border bg-surface-raised p-4 mb-4">
@@ -35,12 +46,25 @@ export function RiverSegmentPanel({ metroState }: Props) {
         <div>
           <p className="text-xs text-text-muted mb-1">Westham gauge (upriver)</p>
           {upriver.gageFt !== null ? (
-            <p className="text-3xl font-extrabold text-rva-blue">
-              {upriver.gageFt.toFixed(2)}
-              <span className="text-sm font-medium ml-1 text-text-secondary">ft</span>
-            </p>
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <p className="text-3xl font-extrabold text-rva-blue">
+                {upriver.gageFt.toFixed(2)}
+                <span className="text-sm font-medium ml-1 text-text-secondary">ft</span>
+              </p>
+              {classResult && (
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${RAPIDS_BADGE_STYLES[classResult.class]}`}
+                  title={classResult.label}
+                >
+                  Class {classResult.class}
+                </span>
+              )}
+            </div>
           ) : (
             <p className="text-lg font-medium text-text-muted">—</p>
+          )}
+          {classResult && (
+            <p className="text-xs text-text-muted mt-0.5">{classResult.label}</p>
           )}
           {upriver.dischargeCfs !== null && (
             <p className="text-xs text-text-muted mt-0.5">

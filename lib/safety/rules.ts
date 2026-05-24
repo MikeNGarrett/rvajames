@@ -72,6 +72,130 @@ export function waterTempStatus(waterTempF: number | null): SafetyStatus | 'unkn
   return 'safe';
 }
 
+// ─── Rapids class ────────────────────────────────────────────────────────────
+
+export type RapidsClassValue = 'I-II' | 'II-III' | 'III-IV' | 'IV-V';
+
+export interface RapidsClassResult {
+  class:  RapidsClassValue;
+  label:  string;
+}
+
+/**
+ * Returns the whitewater rapids class for the Richmond urban reach
+ * based on the upriver USGS gauge (02037500, arbitrary datum).
+ */
+export function rapidsClass(upriverGageFt: number): RapidsClassResult {
+  for (const band of thresholds.rapidsClass.bands) {
+    if (band.maxGageFt === null || upriverGageFt <= band.maxGageFt) {
+      return { class: band.class as RapidsClassValue, label: band.label };
+    }
+  }
+  // Fallback (should never reach — last band has maxGageFt: null)
+  return { class: 'IV-V', label: 'Expert only / avoid' };
+}
+
+// ─── River-wide activity statuses ────────────────────────────────────────────
+
+export type RiverwideActivitySlug =
+  | 'swimming'
+  | 'rock-hopping'
+  | 'kayaking-whitewater'
+  | 'hiking';
+
+export interface RiverwideActivityStatus {
+  slug:        RiverwideActivitySlug;
+  status:      'safe' | 'caution' | 'deny';
+  baseReason:  string; // deterministic reason; AI rewrites as a friendly note
+}
+
+export interface RiverwideInput {
+  upriverGageFt:          number;
+  waterTempF:             number | null;
+  rain48hIn:              number;
+  activeCSOAdvisory:      boolean;
+  hasHighSeverityAdvisory: boolean;
+}
+
+/**
+ * Returns exactly 4 river-wide activity statuses in canonical order:
+ * swimming → rock-hopping → kayaking-whitewater → hiking.
+ *
+ * Thresholds key to USGS 02037500 (Westham upriver gauge).
+ * The AI copies slug + status verbatim and writes a note field; it does not derive them.
+ */
+export function riverWideActivityStatuses(input: RiverwideInput): RiverwideActivityStatus[] {
+  const { upriverGageFt, waterTempF, rain48hIn, activeCSOAdvisory } = input;
+  const rw = thresholds.riverWideActivities;
+
+  // ── Swimming ──────────────────────────────────────────────────────────────
+  let swimStatus: 'safe' | 'caution' | 'deny' = 'safe';
+  let swimReason = `Gage ${upriverGageFt} ft — normal range`;
+
+  if (activeCSOAdvisory) {
+    swimStatus = 'deny';
+    swimReason = 'Active CSO overflow advisory — no swimming for 48 h';
+  } else if (rain48hIn >= rw.swimming.rain48hTriggerIn) {
+    swimStatus = 'deny';
+    swimReason = `${rain48hIn.toFixed(1)}" rain in 48 h — bacterial contamination risk`;
+  } else if (upriverGageFt > rw.swimming.denyMinGageFt) {
+    swimStatus = 'deny';
+    swimReason = `Gage ${upriverGageFt} ft — above ${rw.swimming.denyMinGageFt} ft swim deny threshold`;
+  } else if (waterTempF !== null && waterTempF < rw.swimming.tempMinF) {
+    swimStatus = 'caution';
+    swimReason = `Water temp ${waterTempF}°F — below ${rw.swimming.tempMinF}°F cold threshold`;
+  } else if (upriverGageFt > rw.swimming.safeMaxGageFt) {
+    swimStatus = 'caution';
+    swimReason = `Gage ${upriverGageFt} ft — elevated, strong swimmers only`;
+  }
+
+  // ── Rock-hopping ─────────────────────────────────────────────────────────
+  let rockStatus: 'safe' | 'caution' | 'deny' = 'safe';
+  let rockReason = `Gage ${upriverGageFt} ft — rocks well exposed`;
+
+  if (upriverGageFt >= rw['rock-hopping'].denyMinGageFt) {
+    rockStatus = 'deny';
+    rockReason = `Gage ${upriverGageFt} ft — rocks submerged above ${rw['rock-hopping'].denyMinGageFt} ft`;
+  } else if (upriverGageFt > rw['rock-hopping'].safeMaxGageFt) {
+    rockStatus = 'caution';
+    rockReason = `Gage ${upriverGageFt} ft — reduced rock exposure, slippery surfaces`;
+  }
+
+  // ── Kayaking / whitewater ─────────────────────────────────────────────────
+  let kayakStatus: 'safe' | 'caution' | 'deny' = 'safe';
+  let kayakReason = `Gage ${upriverGageFt} ft — Class ${rapidsClass(upriverGageFt).class} conditions`;
+
+  if (upriverGageFt > rw['kayaking-whitewater'].denyMinGageFt) {
+    kayakStatus = 'deny';
+    kayakReason = `Gage ${upriverGageFt} ft — Class IV–V, expert or avoid`;
+  } else if (upriverGageFt < rw['kayaking-whitewater'].safeMinGageFt) {
+    kayakStatus = 'caution';
+    kayakReason = `Gage ${upriverGageFt} ft — low flow, rocky hazards for paddlers`;
+  } else if (upriverGageFt > rw['kayaking-whitewater'].safeMaxGageFt) {
+    kayakStatus = 'caution';
+    kayakReason = `Gage ${upriverGageFt} ft — Class III–IV, experienced paddlers only`;
+  }
+
+  // ── Hiking ────────────────────────────────────────────────────────────────
+  let hikeStatus: 'safe' | 'caution' | 'deny' = 'safe';
+  let hikeReason = 'All riverside trails open';
+
+  if (upriverGageFt > rw.hiking.denyMinGageFt) {
+    hikeStatus = 'deny';
+    hikeReason = `Gage ${upriverGageFt} ft — flood stage, riverside trails closed`;
+  } else if (input.hasHighSeverityAdvisory) {
+    hikeStatus = 'caution';
+    hikeReason = 'Active high-severity advisory — check trail conditions';
+  }
+
+  return [
+    { slug: 'swimming',            status: swimStatus,  baseReason: swimReason },
+    { slug: 'rock-hopping',        status: rockStatus,  baseReason: rockReason },
+    { slug: 'kayaking-whitewater', status: kayakStatus, baseReason: kayakReason },
+    { slug: 'hiking',              status: hikeStatus,  baseReason: hikeReason },
+  ];
+}
+
 // ─── Combined status ──────────────────────────────────────────────────────────
 
 export interface CombinedStatus {

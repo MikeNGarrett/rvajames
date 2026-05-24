@@ -8,6 +8,7 @@ import { getOrGenerateMetro } from '@/lib/ai/get-or-generate';
 import { getMetroRiverState } from './river-segment';
 import type { AgeBucket } from '@/lib/url-state';
 import type { MetroSummary } from '@/lib/ai/prompts/summarize-metro';
+import { csoAdvisoryStatus } from '@/lib/safety/rules';
 
 export type { MetroSummary };
 
@@ -39,13 +40,16 @@ export async function getMetroSummary(
   ]);
 
   const advisories = advisoriesResult.data ?? [];
-  const activeHeadlines = advisories
-    .filter((a) => a.location_ids.length === 0) // metro-wide advisories
-    .map((a) => a.headline);
+  const metroAdvisories = advisories.filter((a) => a.location_ids.length === 0);
+  const activeHeadlines = metroAdvisories.map((a) => a.headline);
 
   const hasHighSeverity = advisories.some(
     (a) => a.severity === 'high' || a.severity === 'extreme',
   );
+
+  const activeCSOAdvisory =
+    csoAdvisoryStatus(metroAdvisories.map((a) => ({ kind: a.severity }))) === 'danger' ||
+    metroAdvisories.some((a) => (a as { kind?: string }).kind === 'cso_overflow');
 
   const result = await getOrGenerateMetro(
     {
@@ -53,7 +57,10 @@ export async function getMetroSummary(
       ageBucket,
       metroState,
       activeAdvisoryHeadlines: activeHeadlines,
-      airTempF: nwsSnap.data?.air_temp_f ?? null,
+      airTempF:              nwsSnap.data?.air_temp_f ?? null,
+      rain48hIn:             0,           // TODO: wire actual precip when NWS provides it
+      activeCSOAdvisory,
+      hasHighSeverityAdvisory: hasHighSeverity,
     },
     hasHighSeverity,
   );

@@ -18,28 +18,9 @@ export function RiverLevelTile({ location }: Props) {
   return (
     <Link href={`/locations/${location.slug}`} className={`block rounded-xl border p-4 ${subtleClass} touch-target`} aria-label={`${location.name} — ${label}`}>
       <div className="flex items-start justify-between gap-2 mb-2">
-        <h2 className="text-lg font-semibold text-text leading-tight">{location.name}</h2>
+        <h2 className="text-base font-semibold text-text leading-tight">{location.name}</h2>
         <StatusBadge status={status} />
       </div>
-
-      {location.latestGageFt !== null && (
-        <div className="mb-2">
-          <span className="text-3xl font-extrabold text-rva-blue">
-            {location.latestGageFt.toFixed(1)}
-          </span>
-          <span className="text-sm font-medium text-text-secondary ml-1">ft</span>
-          <span className="text-sm text-text-muted ml-2">— {label}</span>
-        </div>
-      )}
-
-      {location.latestWaterTempF !== null && (
-        <p className="text-sm text-text-secondary mb-2">
-          Water {location.latestWaterTempF.toFixed(0)}°F
-          {location.snapshotAge !== null && (
-            <span className="text-text-muted"> · updated {location.snapshotAge}m ago</span>
-          )}
-        </p>
-      )}
 
       <p className="text-sm text-text leading-snug">{reason}</p>
 

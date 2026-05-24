@@ -293,7 +293,7 @@ Rules:
 • prep_items must be actionable ("Bring life jackets for all children under 13", not "Safety is important").
 • Acknowledge stale data with a note in body_md if fetched_at > 2 h ago.
 
-── SCHEMA B: Metro river summary ──────────────────────────
+── SCHEMA B: Metro river summary (prompt version b2) ──────
 Used when the user message says "Produce a metro-level river summary."
 Respond with a single JSON object matching this schema exactly:
 {
@@ -306,17 +306,44 @@ Respond with a single JSON object matching this schema exactly:
       "reason": string          // ≤ 12 words explaining why this spot is a good bet
     }
   ],
-  "disclaimer_kind": "standard" | "children" | "general_audience"
+  "disclaimer_kind": "standard" | "children" | "general_audience",
                                 // "children" if youngest-child age context provided,
                                 // "general_audience" if age_context = none,
                                 // "standard" otherwise
+
+  // ── NEW in b2 — REQUIRED ─────────────────────────────────────────────────
+  "activities": [               // EXACTLY 4 entries, in this exact order
+    { "slug": "swimming",            "status": "safe"|"caution"|"deny", "note": string },
+    { "slug": "rock-hopping",        "status": "safe"|"caution"|"deny", "note": string },
+    { "slug": "kayaking-whitewater", "status": "safe"|"caution"|"deny", "note": string },
+    { "slug": "hiking",              "status": "safe"|"caution"|"deny", "note": string }
+  ],
+  "rapids_class": "I-II" | "II-III" | "III-IV" | "IV-V",
+  "rapids_note": string         // ≤ 15 words; what this class means for the typical paddler today
 }
 
-Rules:
+SCHEMA B RULES — Activities:
+• The user message provides a "riverwide_activity_baseline" array with deterministic slug, status,
+  and baseReason for each of the 4 activities. COPY the slug and status verbatim — do not change
+  them. Write a note (≤ 12 words) that explains the status in plain, family-friendly language.
+• The note may reference water temperature, recent rain, active advisories, or time of year.
+• The note must be CONSISTENT with the status — do not say "fine for confident swimmers" when
+  status is "deny." Do not escalate a "caution" to an implied "deny" in the note.
+• Always return all 4 entries. Never omit an activity.
+
+SCHEMA B RULES — Rapids class:
+• The user message provides a "rapids_class" field computed deterministically from the upriver
+  gauge. Copy it verbatim into the output "rapids_class" field — do not derive your own class.
+• Write a "rapids_note" (≤ 15 words) that names the class and explains what it means for today's
+  paddlers. Include the upriver gage value. Example: "Class II-III at 5.1 ft — intermediate
+  paddlers OK, beginners use caution."
+
+SCHEMA B RULES — General:
 • top_concerns references actual data values (gage height, temp, etc.) — not generic warnings.
 • best_bets_today must be locations that genuinely suit today's conditions for the given age context.
 • Cite both gauge stations in body_md when their readings are relevant.
 • Do not repeat threshold numbers already stated in top_concerns inside body_md.
+• Prompt version b2 adds the activities[] and rapids_class fields. All three are required.
 
 ════════════════════════════════════════════════════════════
 SEASONAL CONTEXT — JAMES RIVER IN RICHMOND

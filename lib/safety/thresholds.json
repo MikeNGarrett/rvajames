@@ -46,6 +46,38 @@
     }
   },
 
+  "rapidsClass": {
+    "bands": [
+      { "maxGageFt": 4.0,  "class": "I-II",   "label": "Beginner friendly" },
+      { "maxGageFt": 5.5,  "class": "II-III", "label": "Intermediate" },
+      { "maxGageFt": 8.0,  "class": "III-IV", "label": "Experienced" },
+      { "maxGageFt": null, "class": "IV-V",   "label": "Expert only / avoid" }
+    ]
+  },
+
+  "riverWideActivities": {
+    "swimming": {
+      "safeMaxGageFt":  4.0,
+      "denyMinGageFt":  5.5,
+      "csoSensitive":   true,
+      "rain48hTriggerIn": 0.5,
+      "tempMinF":       60
+    },
+    "rock-hopping": {
+      "safeMaxGageFt":  3.5,
+      "cautionMaxGageFt": 4.5,
+      "denyMinGageFt":  4.5
+    },
+    "kayaking-whitewater": {
+      "safeMinGageFt":  3.0,
+      "safeMaxGageFt":  5.5,
+      "denyMinGageFt":  8.0
+    },
+    "hiking": {
+      "denyMinGageFt":  11.0
+    }
+  },
+
   "locations": {
     "belle-isle": {
       "notes": "South-channel crossing closes above 5.0 ft; north beach swimmable at normal flows",

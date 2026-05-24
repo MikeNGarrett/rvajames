@@ -20,7 +20,8 @@ import {
 } from './prompts/interpret-location';
 import {
   buildMetroUserMessage,
-  MetroSummarySchema,
+  MetroSummaryWriteSchema,
+  PROMPT_VERSION,
   type MetroSummaryInput,
   type MetroSummary,
 } from './prompts/summarize-metro';
@@ -80,6 +81,7 @@ function computeLocationHash(input: InterpretLocationInput): string {
 
 function computeMetroHash(input: MetroSummaryInput): string {
   return computeHash(JSON.stringify({
+    promptVersion: PROMPT_VERSION,        // bump orphans all pre-b2 cached rows
     date: input.date,
     ageBucket: input.ageBucket,
     upriverGageFt: input.metroState.upriver.gageFt,
@@ -87,6 +89,8 @@ function computeMetroHash(input: MetroSummaryInput): string {
     upriverWaterTempF: input.metroState.upriver.waterTempF,
     downriverGageFt: input.metroState.downriver.gageFt,
     airTempF: input.airTempF,
+    rain48hIn: input.rain48hIn ?? 0,
+    activeCSOAdvisory: input.activeCSOAdvisory ?? false,
     advisories: [...input.activeAdvisoryHeadlines].sort(),
   }));
 }
@@ -269,22 +273,25 @@ export async function getOrGenerateMetro(
   // ── 1. Cache hit ─────────────────────────────────────────────────────────
   const { data: exact } = await supabase
     .from('metro_summaries')
-    .select('body_md, headline, top_concerns, best_bets, tokens_in, tokens_out, cost_usd, model')
+    .select('body_md, headline, top_concerns, best_bets, activities, rapids_class, rapids_note, tokens_in, tokens_out, cost_usd, model')
     .eq('date', input.date)
     .eq('age_bucket', input.ageBucket)
     .eq('prompt_hash', promptHash)
     .maybeSingle();
 
   if (exact) {
-    // metro summary is stored as structured columns (not raw body_md JSON),
-    // so no parse can fail here — but guard for safety anyway.
+    // metro_summaries stores structured columns; spread new b2 fields only when non-null.
     try {
       const summary: MetroSummary = {
-        headline: exact.headline,
-        body_md: exact.body_md,
-        top_concerns: exact.top_concerns as string[],
+        headline:        exact.headline,
+        body_md:         exact.body_md,
+        top_concerns:    exact.top_concerns as string[],
         best_bets_today: exact.best_bets as MetroSummary['best_bets_today'],
         disclaimer_kind: 'standard',
+        // New b2 fields — null for pre-b2 rows, treated as absent by MetroSummaryReadSchema
+        ...(exact.activities   != null && { activities:   exact.activities   as MetroSummary['activities'] }),
+        ...(exact.rapids_class != null && { rapids_class: exact.rapids_class as MetroSummary['rapids_class'] }),
+        ...(exact.rapids_note  != null && { rapids_note:  exact.rapids_note }),
       };
       return {
         kind: 'metro',
@@ -314,7 +321,9 @@ export async function getOrGenerateMetro(
     });
 
     const rawText = response.content[0]?.type === 'text' ? response.content[0].text : '';
-    const summary = MetroSummarySchema.parse(parseJson(rawText));
+    // Strict validation — all b2 fields (activities, rapids_class, rapids_note) are required.
+    // If the AI omits them, this throws and the page renders without a metro summary.
+    const summary = MetroSummaryWriteSchema.parse(parseJson(rawText));
     const usage = response.usage as {
       input_tokens: number; output_tokens: number;
       cache_creation_input_tokens?: number; cache_read_input_tokens?: number;
@@ -327,23 +336,27 @@ export async function getOrGenerateMetro(
 
     // ── 3. Persist with race handling ────────────────────────────────────
     const { error: insertErr } = await supabase.from('metro_summaries').insert({
-      date: input.date,
-      age_bucket: input.ageBucket,
+      date:         input.date,
+      age_bucket:   input.ageBucket,
       model,
-      prompt_hash: promptHash,
-      headline: summary.headline,
-      body_md: summary.body_md,
+      prompt_hash:  promptHash,
+      headline:     summary.headline,
+      body_md:      summary.body_md,
       top_concerns: summary.top_concerns as unknown as string[],
-      best_bets: summary.best_bets_today as unknown as string[],
-      tokens_in: tokensIn,
-      tokens_out: tokensOut,
-      cost_usd: costUsd,
+      best_bets:    summary.best_bets_today as unknown as string[],
+      // b2 fields (null until sub-goal 31 switches to MetroSummaryWriteSchema)
+      activities:   summary.activities   as unknown as string[],
+      rapids_class: summary.rapids_class,
+      rapids_note:  summary.rapids_note,
+      tokens_in:    tokensIn,
+      tokens_out:   tokensOut,
+      cost_usd:     costUsd,
     });
 
     if (insertErr) {
       const { data: winner } = await supabase
         .from('metro_summaries')
-        .select('body_md, headline, top_concerns, best_bets, tokens_in, tokens_out, cost_usd, model')
+        .select('body_md, headline, top_concerns, best_bets, activities, rapids_class, rapids_note, tokens_in, tokens_out, cost_usd, model')
         .eq('date', input.date)
         .eq('age_bucket', input.ageBucket)
         .eq('prompt_hash', promptHash)
@@ -352,11 +365,14 @@ export async function getOrGenerateMetro(
         return {
           kind: 'metro',
           summary: {
-            headline: winner.headline,
-            body_md: winner.body_md,
-            top_concerns: winner.top_concerns as string[],
+            headline:        winner.headline,
+            body_md:         winner.body_md,
+            top_concerns:    winner.top_concerns as string[],
             best_bets_today: winner.best_bets as MetroSummary['best_bets_today'],
             disclaimer_kind: 'standard',
+            ...(winner.activities   != null && { activities:   winner.activities   as MetroSummary['activities'] }),
+            ...(winner.rapids_class != null && { rapids_class: winner.rapids_class as MetroSummary['rapids_class'] }),
+            ...(winner.rapids_note  != null && { rapids_note:  winner.rapids_note }),
           },
           source: 'cache',
           tokensIn: winner.tokens_in,
@@ -374,21 +390,23 @@ export async function getOrGenerateMetro(
     // ── 4. Stale-while-revalidate ────────────────────────────────────────
     const { data: stale } = await supabase
       .from('metro_summaries')
-      .select('body_md, headline, top_concerns, best_bets, tokens_in, tokens_out, cost_usd, model')
+      .select('body_md, headline, top_concerns, best_bets, activities, rapids_class, rapids_note, tokens_in, tokens_out, cost_usd, model')
       .eq('age_bucket', input.ageBucket)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
     if (stale) {
-      // metro_summaries columns are structured (not raw JSON body_md), always safe to return
       return {
         kind: 'metro',
         summary: {
-          headline: stale.headline,
-          body_md: stale.body_md,
-          top_concerns: stale.top_concerns as string[],
+          headline:        stale.headline,
+          body_md:         stale.body_md,
+          top_concerns:    stale.top_concerns as string[],
           best_bets_today: stale.best_bets as MetroSummary['best_bets_today'],
           disclaimer_kind: 'standard',
+          ...(stale.activities   != null && { activities:   stale.activities   as MetroSummary['activities'] }),
+          ...(stale.rapids_class != null && { rapids_class: stale.rapids_class as MetroSummary['rapids_class'] }),
+          ...(stale.rapids_note  != null && { rapids_note:  stale.rapids_note }),
         },
         source: 'stale',
         tokensIn: stale.tokens_in,

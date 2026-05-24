@@ -6,6 +6,8 @@ import {
   bacterialStatus,
   waterTempStatus,
   combinedLocationStatus,
+  rapidsClass,
+  riverWideActivityStatuses,
 } from './rules';
 
 // ─── gageHeightStatus ─────────────────────────────────────────────────────────
@@ -132,6 +134,151 @@ describe('waterTempStatus', () => {
 
   it('returns unknown for null', () => {
     expect(waterTempStatus(null)).toBe('unknown');
+  });
+});
+
+// ─── rapidsClass ──────────────────────────────────────────────────────────────
+
+describe('rapidsClass', () => {
+  // Band 1: ≤ 4.0 → I-II
+  it('returns I-II at low-normal gage (2.5 ft)', () => {
+    expect(rapidsClass(2.5)).toMatchObject({ class: 'I-II', label: 'Beginner friendly' });
+  });
+  it('returns I-II at exactly 4.0 ft (boundary)', () => {
+    expect(rapidsClass(4.0).class).toBe('I-II');
+  });
+  it('returns II-III just above 4.0 ft (4.1)', () => {
+    expect(rapidsClass(4.1).class).toBe('II-III');
+  });
+
+  // Band 2: 4.1–5.5 → II-III
+  it('returns II-III at 5.0 ft (mid-elevated)', () => {
+    expect(rapidsClass(5.0)).toMatchObject({ class: 'II-III', label: 'Intermediate' });
+  });
+  it('returns II-III at exactly 5.5 ft (boundary)', () => {
+    expect(rapidsClass(5.5).class).toBe('II-III');
+  });
+  it('returns III-IV just above 5.5 ft (5.6)', () => {
+    expect(rapidsClass(5.6).class).toBe('III-IV');
+  });
+
+  // Band 3: 5.6–8.0 → III-IV
+  it('returns III-IV at 7.0 ft', () => {
+    expect(rapidsClass(7.0)).toMatchObject({ class: 'III-IV', label: 'Experienced' });
+  });
+  it('returns III-IV at exactly 8.0 ft (boundary)', () => {
+    expect(rapidsClass(8.0).class).toBe('III-IV');
+  });
+  it('returns IV-V just above 8.0 ft (8.1)', () => {
+    expect(rapidsClass(8.1).class).toBe('IV-V');
+  });
+
+  // Band 4: > 8.0 → IV-V
+  it('returns IV-V at 12 ft (flood stage)', () => {
+    expect(rapidsClass(12.0)).toMatchObject({ class: 'IV-V', label: 'Expert only / avoid' });
+  });
+  it('returns IV-V at extreme flood (25 ft)', () => {
+    expect(rapidsClass(25.0).class).toBe('IV-V');
+  });
+});
+
+// ─── riverWideActivityStatuses ────────────────────────────────────────────────
+
+const baseInput = {
+  waterTempF: 74,
+  rain48hIn: 0,
+  activeCSOAdvisory: false,
+  hasHighSeverityAdvisory: false,
+};
+
+describe('riverWideActivityStatuses', () => {
+  it('returns exactly 4 entries in canonical order', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 3.1 });
+    expect(result).toHaveLength(4);
+    expect(result.map((r) => r.slug)).toEqual([
+      'swimming', 'rock-hopping', 'kayaking-whitewater', 'hiking',
+    ]);
+  });
+
+  // ── Swimming ──
+  it('swimming: safe at normal gage with warm water', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 3.5 });
+    expect(result.find((r) => r.slug === 'swimming')?.status).toBe('safe');
+  });
+  it('swimming: caution when water temp below 60°F', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 3.5, waterTempF: 55 });
+    expect(result.find((r) => r.slug === 'swimming')?.status).toBe('caution');
+  });
+  it('swimming: caution at elevated gage (4.1–5.5 ft)', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 5.0 });
+    expect(result.find((r) => r.slug === 'swimming')?.status).toBe('caution');
+  });
+  it('swimming: deny above 5.5 ft', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 6.0 });
+    expect(result.find((r) => r.slug === 'swimming')?.status).toBe('deny');
+  });
+  it('swimming: deny on active CSO advisory', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 3.0, activeCSOAdvisory: true });
+    expect(result.find((r) => r.slug === 'swimming')?.status).toBe('deny');
+  });
+  it('swimming: deny after rain 0.5+ in 48h', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 3.0, rain48hIn: 0.6 });
+    expect(result.find((r) => r.slug === 'swimming')?.status).toBe('deny');
+  });
+
+  // ── Rock-hopping ──
+  it('rock-hopping: safe at low gage (≤ 3.5 ft)', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 3.0 });
+    expect(result.find((r) => r.slug === 'rock-hopping')?.status).toBe('safe');
+  });
+  it('rock-hopping: caution between 3.5 and 4.5 ft', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 4.0 });
+    expect(result.find((r) => r.slug === 'rock-hopping')?.status).toBe('caution');
+  });
+  it('rock-hopping: deny at 4.5 ft (rocks submerged)', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 4.5 });
+    expect(result.find((r) => r.slug === 'rock-hopping')?.status).toBe('deny');
+  });
+
+  // ── Kayaking ──
+  it('kayaking: caution when gage < 3.0 ft (low flow)', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 2.0 });
+    expect(result.find((r) => r.slug === 'kayaking-whitewater')?.status).toBe('caution');
+  });
+  it('kayaking: safe at normal flow (3.0–5.5 ft)', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 4.0 });
+    expect(result.find((r) => r.slug === 'kayaking-whitewater')?.status).toBe('safe');
+  });
+  it('kayaking: caution at Class III range (5.6–8.0 ft)', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 6.0 });
+    expect(result.find((r) => r.slug === 'kayaking-whitewater')?.status).toBe('caution');
+  });
+  it('kayaking: deny above 8.0 ft', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 9.0 });
+    expect(result.find((r) => r.slug === 'kayaking-whitewater')?.status).toBe('deny');
+  });
+
+  // ── Hiking ──
+  it('hiking: safe at normal gage', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 3.5 });
+    expect(result.find((r) => r.slug === 'hiking')?.status).toBe('safe');
+  });
+  it('hiking: caution on high-severity advisory', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 3.5, hasHighSeverityAdvisory: true });
+    expect(result.find((r) => r.slug === 'hiking')?.status).toBe('caution');
+  });
+  it('hiking: deny above flood threshold (> 11 ft)', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 12.0 });
+    expect(result.find((r) => r.slug === 'hiking')?.status).toBe('deny');
+  });
+
+  // ── Canonical smoke test ──
+  it('gage 6.0: swimming deny, rock-hopping deny, kayaking caution, hiking safe', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 6.0 });
+    expect(result.find((r) => r.slug === 'swimming')?.status).toBe('deny');
+    expect(result.find((r) => r.slug === 'rock-hopping')?.status).toBe('deny');
+    expect(result.find((r) => r.slug === 'kayaking-whitewater')?.status).toBe('caution');
+    expect(result.find((r) => r.slug === 'hiking')?.status).toBe('safe');
   });
 });
 
