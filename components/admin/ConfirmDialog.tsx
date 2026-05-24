@@ -141,6 +141,15 @@ export function ConfirmDialog({
   const inputMismatch = typeToConfirm && typeInput.length > 0 && typeInput !== typeToConfirm;
 
   return (
+    /*
+     * IMPORTANT: do NOT apply display-altering utilities (flex, grid, block, etc.)
+     * directly to the <dialog> element. The browser UA stylesheet uses
+     * `dialog:not([open]) { display: none }` to hide closed dialogs, but author
+     * CSS overrides the UA stylesheet — so `display: flex` would make every
+     * ConfirmDialog visible on page load even when isOpen=false.
+     *
+     * Layout (flex-col gap-4) lives on the inner wrapper <div> instead.
+     */
     <dialog
       ref={dialogRef}
       closedby="any"
@@ -148,81 +157,83 @@ export function ConfirmDialog({
       aria-labelledby="confirm-dialog-title"
       aria-describedby={description ? 'confirm-dialog-desc' : undefined}
       aria-modal="true"
-      className="confirm-dialog m-auto w-full max-w-sm rounded-xl border border-border bg-surface-raised p-6 shadow-2xl flex flex-col gap-4 text-left"
+      className="confirm-dialog m-auto w-full max-w-sm rounded-xl border border-border bg-surface-raised p-0 shadow-2xl text-left"
     >
-      <h2
-        id="confirm-dialog-title"
-        className="text-base font-semibold text-text leading-snug"
-      >
-        {title}
-      </h2>
+      <div className="flex flex-col gap-4 p-6">
+        <h2
+          id="confirm-dialog-title"
+          className="text-base font-semibold text-text leading-snug"
+        >
+          {title}
+        </h2>
 
-      {description && (
-        <p id="confirm-dialog-desc" className="text-sm text-text-secondary leading-relaxed">
-          {description}
-        </p>
-      )}
+        {description && (
+          <p id="confirm-dialog-desc" className="text-sm text-text-secondary leading-relaxed">
+            {description}
+          </p>
+        )}
 
-      {/* Sub-goal 54: type-to-confirm input ─────────────────────────────── */}
-      {typeToConfirm && (
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="type-confirm-input" className="text-sm text-text-secondary">
-            Type{' '}
-            <strong className="font-semibold text-text select-all">
-              {typeToConfirm}
-            </strong>{' '}
-            to confirm
-          </label>
-          <input
-            ref={inputRef}
-            id="type-confirm-input"
-            type="text"
-            value={typeInput}
-            onChange={(e) => setTypeInput(e.target.value)}
-            placeholder={typeToConfirm}
-            autoComplete="off"
-            spellCheck={false}
-            aria-invalid={inputMismatch ? 'true' : undefined}
-            aria-errormessage={inputMismatch ? 'type-confirm-error' : undefined}
-            className={`touch-target rounded-lg border px-3 text-sm text-text bg-surface focus:outline-none focus:ring-2 transition-colors ${
-              inputMismatch
-                ? 'border-status-danger focus:ring-status-danger'
-                : 'border-border focus:ring-rva-blue'
-            }`}
-          />
-          {inputMismatch && (
-            <p
-              id="type-confirm-error"
-              role="alert"
-              className="text-xs text-status-danger"
-            >
-              Doesn&apos;t match — type exactly as shown.
-            </p>
-          )}
+        {/* Sub-goal 54: type-to-confirm input ────────────────────────────── */}
+        {typeToConfirm && (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="type-confirm-input" className="text-sm text-text-secondary">
+              Type{' '}
+              <strong className="font-semibold text-text select-all">
+                {typeToConfirm}
+              </strong>{' '}
+              to confirm
+            </label>
+            <input
+              ref={inputRef}
+              id="type-confirm-input"
+              type="text"
+              value={typeInput}
+              onChange={(e) => setTypeInput(e.target.value)}
+              placeholder={typeToConfirm}
+              autoComplete="off"
+              spellCheck={false}
+              aria-invalid={inputMismatch ? 'true' : undefined}
+              aria-errormessage={inputMismatch ? 'type-confirm-error' : undefined}
+              className={`touch-target rounded-lg border px-3 text-sm text-text bg-surface focus:outline-none focus:ring-2 transition-colors ${
+                inputMismatch
+                  ? 'border-status-danger focus:ring-status-danger'
+                  : 'border-border focus:ring-rva-blue'
+              }`}
+            />
+            {inputMismatch && (
+              <p
+                id="type-confirm-error"
+                role="alert"
+                className="text-xs text-status-danger"
+              >
+                Doesn&apos;t match — type exactly as shown.
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-3 pt-1">
+          {/* Cancel — dominant safe action, default focus (when no typeToConfirm) */}
+          <button
+            ref={cancelRef}
+            type="button"
+            disabled={isPending}
+            onClick={onCancel}
+            className="touch-target rounded-lg px-4 text-sm font-semibold bg-surface-raised border border-border text-text hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rva-blue disabled:opacity-50 transition-colors"
+          >
+            Cancel
+          </button>
+
+          {/* Confirm — outlined, color signals risk level, gated by typeToConfirm */}
+          <button
+            type="button"
+            disabled={!confirmEnabled}
+            onClick={onConfirm}
+            className={`touch-target rounded-lg px-4 text-sm font-semibold bg-transparent focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${CONFIRM_STYLES[confirmVariant]}`}
+          >
+            {isPending ? 'Working…' : confirmLabel}
+          </button>
         </div>
-      )}
-
-      <div className="flex items-center justify-end gap-3 pt-1">
-        {/* Cancel — dominant safe action, default focus (when no typeToConfirm) */}
-        <button
-          ref={cancelRef}
-          type="button"
-          disabled={isPending}
-          onClick={onCancel}
-          className="touch-target rounded-lg px-4 text-sm font-semibold bg-surface-raised border border-border text-text hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rva-blue disabled:opacity-50 transition-colors"
-        >
-          Cancel
-        </button>
-
-        {/* Confirm — outlined, color signals risk level, gated by typeToConfirm */}
-        <button
-          type="button"
-          disabled={!confirmEnabled}
-          onClick={onConfirm}
-          className={`touch-target rounded-lg px-4 text-sm font-semibold bg-transparent focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${CONFIRM_STYLES[confirmVariant]}`}
-        >
-          {isPending ? 'Working…' : confirmLabel}
-        </button>
       </div>
     </dialog>
   );
