@@ -1,7 +1,8 @@
 import { Suspense } from 'react';
+import { redirect } from 'next/navigation';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { searchParamsCache, isValidAgeBucket, formatDateParam, type AgeBucket } from '@/lib/url-state';
-import { getTodayData } from '@/lib/queries/today';
+import { getTodayData, OutOfWindowError } from '@/lib/queries/today';
 import { getMetroRiverState } from '@/lib/queries/river-segment';
 import { RiverLevelTile } from '@/components/tiles/RiverLevelTile';
 import { AdvisoriesBanner } from '@/components/tiles/AdvisoriesBanner';
@@ -26,19 +27,28 @@ export default async function Home({ searchParams }: Props) {
   const ageBucket: AgeBucket = isValidAgeBucket(age) ? age : '6-9';
   const dateStr = formatDateParam(date);
 
-  // Fetch deterministic data in parallel — these render immediately
-  const [data, metroState] = await Promise.all([
-    getTodayData(dateStr, ageBucket),
-    getMetroRiverState(ageBucket),
-  ]);
+  // Fetch deterministic data in parallel — these render immediately.
+  // OutOfWindowError is thrown for past/beyond-window dates; redirect to today.
+  let data: Awaited<ReturnType<typeof getTodayData>>;
+  let metroState: Awaited<ReturnType<typeof getMetroRiverState>>;
+  try {
+    [data, metroState] = await Promise.all([
+      getTodayData(dateStr, ageBucket),
+      getMetroRiverState(ageBucket),
+    ]);
+  } catch (err) {
+    if (err instanceof OutOfWindowError) {
+      redirect('/');
+    }
+    throw err;
+  }
 
   const hasFlood = data.activeAdvisories.some((a) => a.kind === 'flood_warning');
 
   const staleSnapshotAge = data.locations[0]?.snapshotAge ?? null;
   const showStaleWarning = staleSnapshotAge !== null && isStale('usgs', staleSnapshotAge);
 
-  const todayStr = formatDateParam(new Date());
-  const isFuture = dateStr > todayStr;
+  const isForecast = data.mode === 'forecast';
 
   return (
     <NuqsAdapter>
@@ -70,7 +80,7 @@ export default async function Home({ searchParams }: Props) {
         <RiverSegmentPanel metroState={metroState} />
 
         {/* ── Metro AI summary ── Suspense boundary so cards below render immediately */}
-        {!isFuture && (
+        {!isForecast && (
           <Suspense fallback={<MetroSummaryPanelSkeleton />}>
             <MetroSummaryPanel date={dateStr} ageBucket={ageBucket} />
           </Suspense>
@@ -84,9 +94,7 @@ export default async function Home({ searchParams }: Props) {
           >
             Locations
           </h2>
-          {isFuture ? (
-            <EmptyState message="No forecast data yet for future dates. Check back on the day of your visit." />
-          ) : !data.hasConditions ? (
+          {!data.hasConditions ? (
             <>
               <EmptyState message="No gauge data yet — USGS updates every 15 minutes." />
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 auto-rows-fr">

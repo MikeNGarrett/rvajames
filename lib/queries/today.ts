@@ -2,7 +2,11 @@ import { createServerClient } from '@/lib/supabase/server';
 import type { AgeBucket } from '@/lib/url-state';
 import { getMetroRiverState } from './river-segment';
 import { getActiveStatusMap } from './location-status';
+import { getForecast } from './forecast';
+import type { NoaaAhpsForecastPoint, NoaaAhpsPayload } from '@/lib/ingest/noaa-ahps';
 import { combinedLocationStatus, type SafetyStatus } from '@/lib/safety/rules';
+import { formatRichmondDate } from '@/lib/utils/date-tz';
+import { isInWindow } from '@/lib/queries/date-range';
 
 export interface DeterministicStatus {
   status: SafetyStatus;
@@ -27,6 +31,10 @@ export interface LocationSummary {
 export interface TodayData {
   date: string;
   ageBucket: AgeBucket;
+  /** 'observed' for today; 'forecast' for the next 3 days (AHPS data). */
+  mode: 'observed' | 'forecast';
+  /** null for observed; high/medium/low for forecast days +1/+2/+3. */
+  forecastConfidence: 'high' | 'medium' | 'low' | null;
   locations: LocationSummary[];
   activeAdvisories: {
     id: string;
@@ -35,14 +43,93 @@ export interface TodayData {
     headline: string;
     body: string;
   }[];
-  /** True when we have upriver gauge data to base status on */
+  /** True when we have upriver gauge data (observed or forecast) to base status on */
   hasConditions: boolean;
 }
 
-export async function getTodayData(date: string, ageBucket: AgeBucket): Promise<TodayData> {
-  const supabase = await createServerClient('anon');
+/**
+ * Thrown by getTodayData when the requested date falls outside the 4-day
+ * forecast window (i.e., it is in the past or beyond day +3).
+ *
+ * Callers (page handlers) should catch this and redirect to today.
+ */
+export class OutOfWindowError extends Error {
+  constructor(public readonly date: string) {
+    super(`Date ${date} is outside the 4-day forecast window (today..today+3)`);
+    this.name = 'OutOfWindowError';
+  }
+}
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Number of calendar days between two ISO dates (positive = target is in the future). */
+function daysFromToday(todayIso: string, targetIso: string): number {
+  const [ty, tm, td] = todayIso.split('-').map(Number);
+  const [dy, dm, dd] = targetIso.split('-').map(Number);
+  return Math.round(
+    (Date.UTC(dy, dm - 1, dd) - Date.UTC(ty, tm - 1, td)) / 86_400_000,
+  );
+}
+
+function computeConfidence(
+  dateIso: string,
+  todayIso: string,
+): 'high' | 'medium' | 'low' | null {
+  const d = daysFromToday(todayIso, dateIso);
+  if (d <= 0) return null;
+  if (d === 1) return 'high';
+  if (d === 2) return 'medium';
+  return 'low';
+}
+
+/**
+ * Picks the AHPS forecast point whose timestamp is closest to noon on
+ * `targetDateIso` in Richmond (ET) time.
+ *
+ * Strategy:
+ *   1. Find all points whose Richmond-time date matches targetDateIso.
+ *   2. If any exist, pick the one closest to 16:00 UTC (noon EDT / ≈noon ET).
+ *   3. If none are on that date (beyond the forecast window), fall back to the
+ *      overall point closest to the target's midday — gives a best-effort
+ *      reading rather than null.
+ */
+function pickForecastPoint(
+  forecast: NoaaAhpsPayload,
+  targetDateIso: string,
+): NoaaAhpsForecastPoint | null {
+  if (!forecast.forecast.length) return null;
+
+  const [y, m, d] = targetDateIso.split('-').map(Number);
+  // Noon EDT = 16:00 UTC (May–November); noon EST = 17:00 UTC (Nov–Mar).
+  // 16:00 UTC is a good-enough approximation for the summer boating season.
+  const noonApproxMs = Date.UTC(y, m - 1, d, 16, 0, 0);
+
+  const pointsOnDay = forecast.forecast.filter(
+    (pt) => formatRichmondDate(new Date(pt.t)) === targetDateIso,
+  );
+
+  const pool = pointsOnDay.length ? pointsOnDay : forecast.forecast;
+  return pool.reduce((best, pt) =>
+    Math.abs(pt.t - noonApproxMs) < Math.abs(best.t - noonApproxMs) ? pt : best,
+  );
+}
+
+const STATUS_SORT_ORDER: Record<SafetyStatus, number> = {
+  closed:  0,
+  danger:  1,
+  caution: 2,
+  safe:    3,
+};
+
+// ── Observed path (today) ─────────────────────────────────────────────────────
+
+async function getObservedTodayData(
+  date: string,
+  ageBucket: AgeBucket,
+): Promise<TodayData> {
+  const supabase = await createServerClient('anon');
   const now = new Date();
+
   const [{ data: locations }, { data: advisories }, metroState, statusMap] = await Promise.all([
     supabase
       .from('locations')
@@ -59,25 +146,21 @@ export async function getTodayData(date: string, ageBucket: AgeBucket): Promise<
   ]);
 
   if (!locations?.length) {
-    return { date, ageBucket, locations: [], activeAdvisories: [], hasConditions: false };
+    return {
+      date, ageBucket,
+      mode: 'observed', forecastConfidence: null,
+      locations: [], activeAdvisories: [], hasConditions: false,
+    };
   }
 
-  // Advisories for the rules engine (typed with severity + headline)
   const activeAdvisoryList = (advisories ?? []).map((a) => ({
-    id: a.id,
-    kind: a.kind,
-    severity: a.severity,
-    headline: a.headline,
-    body: a.body,
+    id: a.id, kind: a.kind, severity: a.severity, headline: a.headline, body: a.body,
   }));
   const advisoriesForRules = activeAdvisoryList.map((a) => ({
-    kind: a.kind,
-    severity: a.severity,
-    headline: a.headline,
+    kind: a.kind, severity: a.severity, headline: a.headline,
   }));
 
-  // Metro state from the upriver gauge (02037500)
-  const upriverGageFt = metroState.upriver.gageFt;
+  const upriverGageFt   = metroState.upriver.gageFt;
   const upriverWaterTempF = metroState.upriver.waterTempF;
   const upriverFetchedAt = metroState.upriver.fetchedAt;
   const snapshotAge = upriverFetchedAt
@@ -85,7 +168,91 @@ export async function getTodayData(date: string, ageBucket: AgeBucket): Promise<
     : null;
 
   const summarized: LocationSummary[] = locations.map((loc) => {
-    // Look up any active operational closure / restriction for this location
+    const opStatus = statusMap.get(loc.id) ?? null;
+    const operationalOverride = opStatus
+      ? { kind: opStatus.kind, reason: opStatus.reason, affects: opStatus.affects }
+      : null;
+
+    const combined = combinedLocationStatus(
+      { gageFt: upriverGageFt, waterTempF: upriverWaterTempF },
+      advisoriesForRules,
+      loc.slug,
+      operationalOverride,
+    );
+
+    return {
+      id: loc.id, slug: loc.slug, name: loc.name, tags: loc.tags,
+      latestGageFt: upriverGageFt,
+      latestWaterTempF: upriverWaterTempF,
+      deterministicStatus: { status: combined.status, label: combined.label, reason: combined.reason },
+      snapshotAge,
+    };
+  });
+
+  summarized.sort((a, b) => {
+    const diff = (STATUS_SORT_ORDER[a.deterministicStatus.status] ?? 99)
+               - (STATUS_SORT_ORDER[b.deterministicStatus.status] ?? 99);
+    return diff !== 0 ? diff : a.name.localeCompare(b.name);
+  });
+
+  return {
+    date, ageBucket,
+    mode: 'observed', forecastConfidence: null,
+    locations: summarized,
+    activeAdvisories: activeAdvisoryList,
+    hasConditions: upriverGageFt !== null,
+  };
+}
+
+// ── Forecast path (days +1..+3) ───────────────────────────────────────────────
+
+async function getForecastTodayData(
+  date: string,
+  ageBucket: AgeBucket,
+  todayIso: string,
+): Promise<TodayData> {
+  const supabase = await createServerClient('anon');
+  const now = new Date();
+
+  const [{ data: locations }, { data: advisories }, forecast, statusMap] = await Promise.all([
+    supabase
+      .from('locations')
+      .select('id, slug, name, tags')
+      .eq('kind', 'access_point')
+      .order('name'),
+    // Advisories that are currently active; any still-active advisory is relevant
+    // for a near-future date too (they rarely resolve within 72 h).
+    supabase
+      .from('advisories')
+      .select('id, kind, severity, headline, body')
+      .or(`effective_to.is.null,effective_to.gte.${now.toISOString()}`)
+      .order('severity', { ascending: false }),
+    getForecast(),
+    getActiveStatusMap(now),
+  ]);
+
+  const forecastConfidence = computeConfidence(date, todayIso);
+
+  if (!locations?.length) {
+    return {
+      date, ageBucket,
+      mode: 'forecast', forecastConfidence,
+      locations: [], activeAdvisories: [], hasConditions: false,
+    };
+  }
+
+  // Pick the AHPS forecast point closest to noon on the target date
+  const forecastPoint = forecast ? pickForecastPoint(forecast, date) : null;
+  const upriverGageFt = forecastPoint?.stage_ft ?? null;
+
+  const activeAdvisoryList = (advisories ?? []).map((a) => ({
+    id: a.id, kind: a.kind, severity: a.severity, headline: a.headline, body: a.body,
+  }));
+  const advisoriesForRules = activeAdvisoryList.map((a) => ({
+    kind: a.kind, severity: a.severity, headline: a.headline,
+  }));
+
+  const summarized: LocationSummary[] = locations.map((loc) => {
     const opStatus = statusMap.get(loc.id) ?? null;
     const operationalOverride = opStatus
       ? { kind: opStatus.kind, reason: opStatus.reason, affects: opStatus.affects }
@@ -94,9 +261,8 @@ export async function getTodayData(date: string, ageBucket: AgeBucket): Promise<
     const combined = combinedLocationStatus(
       {
         gageFt: upriverGageFt,
-        waterTempF: upriverWaterTempF,
-        // precip48hIn omitted — we don't have reliable measured precip yet;
-        // postRainSwimStatus returns 'safe' when undefined (conservative default)
+        // Water temperature not available in the AHPS forecast — omitted so the
+        // rules engine uses its safe-default (unknown / not a disqualifying factor).
       },
       advisoriesForRules,
       loc.slug,
@@ -104,41 +270,48 @@ export async function getTodayData(date: string, ageBucket: AgeBucket): Promise<
     );
 
     return {
-      id: loc.id,
-      slug: loc.slug,
-      name: loc.name,
-      tags: loc.tags,
+      id: loc.id, slug: loc.slug, name: loc.name, tags: loc.tags,
       latestGageFt: upriverGageFt,
-      latestWaterTempF: upriverWaterTempF,
-      deterministicStatus: {
-        status: combined.status,
-        label: combined.label,
-        reason: combined.reason,
-      },
-      snapshotAge,
+      latestWaterTempF: null, // not available in AHPS forecast
+      deterministicStatus: { status: combined.status, label: combined.label, reason: combined.reason },
+      snapshotAge: null, // forecast data has no snapshot age
     };
   });
 
-  // Sort: operationally closed/restricted locations first (most actionable info
-  // at top), then by natural name order within each group.
-  const STATUS_SORT_ORDER: Record<SafetyStatus, number> = {
-    closed:  0,
-    danger:  1,
-    caution: 2,
-    safe:    3,
-  };
   summarized.sort((a, b) => {
-    const aOrder = STATUS_SORT_ORDER[a.deterministicStatus.status] ?? 99;
-    const bOrder = STATUS_SORT_ORDER[b.deterministicStatus.status] ?? 99;
-    if (aOrder !== bOrder) return aOrder - bOrder;
-    return a.name.localeCompare(b.name);
+    const diff = (STATUS_SORT_ORDER[a.deterministicStatus.status] ?? 99)
+               - (STATUS_SORT_ORDER[b.deterministicStatus.status] ?? 99);
+    return diff !== 0 ? diff : a.name.localeCompare(b.name);
   });
 
   return {
-    date,
-    ageBucket,
+    date, ageBucket,
+    mode: 'forecast', forecastConfidence,
     locations: summarized,
     activeAdvisories: activeAdvisoryList,
     hasConditions: upriverGageFt !== null,
   };
+}
+
+// ── Public entry point ────────────────────────────────────────────────────────
+
+/**
+ * Returns today's river conditions (observed) or a forecast-based snapshot
+ * (forecast) for any of the 3 forward days in the data window.
+ *
+ * Throws OutOfWindowError for past dates or dates beyond today+3.
+ * Page handlers should catch and redirect to '/'.
+ */
+export async function getTodayData(date: string, ageBucket: AgeBucket): Promise<TodayData> {
+  const todayIso = formatRichmondDate(new Date());
+
+  if (date === todayIso) {
+    return getObservedTodayData(date, ageBucket);
+  }
+  if (date > todayIso && isInWindow(date)) {
+    return getForecastTodayData(date, ageBucket, todayIso);
+  }
+
+  // Past date or beyond the +3 day window — caller redirects.
+  throw new OutOfWindowError(date);
 }
