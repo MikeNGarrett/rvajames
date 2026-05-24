@@ -43,6 +43,17 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={nunitoSans.variable}>
+      <head>
+        {/*
+         * Finding 10 — Cloudflare Web Analytics beacon preconnect.
+         * Cloudflare injects beacon.min.js from static.cloudflareinsights.com at
+         * the edge. The preconnect hint opens the TCP+TLS connection early so the
+         * script load doesn't pay a full round-trip penalty on first render.
+         * The RUM endpoint is on cloudflareinsights.com (no "static." subdomain).
+         */}
+        <link rel="preconnect" href="https://static.cloudflareinsights.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://cloudflareinsights.com" />
+      </head>
       <body>{children}</body>
     </html>
   );

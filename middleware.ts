@@ -44,11 +44,14 @@ export function middleware(request: NextRequest) {
     'Content-Security-Policy-Report-Only',
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      // Cloudflare Web Analytics beacon is injected by Cloudflare edge (Finding 10).
+      // Include its CDN in script-src and its reporting endpoint in connect-src so
+      // these don't generate violations when we eventually enforce the policy.
+      "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com",
       "style-src 'self' 'unsafe-inline'",
       "font-src 'self'",
       "img-src 'self' data: blob:",
-      "connect-src 'self' https://buokjdntsitjpqfjxano.supabase.co wss://buokjdntsitjpqfjxano.supabase.co",
+      "connect-src 'self' https://buokjdntsitjpqfjxano.supabase.co wss://buokjdntsitjpqfjxano.supabase.co https://cloudflareinsights.com",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",

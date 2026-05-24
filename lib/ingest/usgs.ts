@@ -9,6 +9,26 @@ const PARAM_DISCHARGE = '00060';     // Discharge, cfs
 const PARAM_WATER_TEMP = '00010';    // Water temperature, °C
 const PARAM_TIDAL_ELEV = '62620';    // Estuary water surface elevation above NAVD 1988, ft — 02037705 City Locks
 
+/**
+ * Temperature proxy — neither Richmond gauge has an active water temp sensor:
+ *   02037500 (Westham) reports only 00060 + 00065
+ *   02037705 (City Locks) reports only 62620 (tidal elevation)
+ *
+ * USGS 02035000 (James River at Cartersville, VA) is ~40 mi upstream and has a
+ * live 00010 sensor. Water temperature changes slowly over river distance, so
+ * this gives a reasonable ±2–4 °F ballpark for the Richmond reach — good enough
+ * for family swim/paddle safety guidance.
+ *
+ * We include this station in the API request but do NOT write a conditions_snapshot
+ * row for it (no matching location in the DB). It is used only as a fallback value
+ * for stations that lack their own temp reading.
+ */
+const TEMP_PROXY_STATION = '02035000'; // James River at Cartersville, VA
+const TEMP_PROXY_FOR: Record<string, string> = {
+  '02037500': TEMP_PROXY_STATION,
+  '02037705': TEMP_PROXY_STATION,
+};
+
 const ValueSchema = z.object({
   value: z.string(),
   dateTime: z.string(),
@@ -60,10 +80,11 @@ export async function runUsgsIngestion(): Promise<RunResult> {
       .filter((id): id is string => Boolean(id))
   )];
 
-  // Request standard river params + tidal elevation (62620) for the City Locks station.
-  // 02037705 only has 62620; 02037500 has 00065/00060/00010. Requesting all four is harmless —
-  // USGS returns only the params that exist for each site.
-  const url = `https://waterservices.usgs.gov/nwis/iv/?format=json&sites=${stationIds.join(',')}&parameterCd=${PARAM_GAGE_HT},${PARAM_DISCHARGE},${PARAM_WATER_TEMP},${PARAM_TIDAL_ELEV}&period=P1D`;
+  // Include the temperature proxy station alongside the gauge stations.
+  // USGS returns only the params that exist for each site, so requesting all four
+  // param codes for all three stations is harmless — no error if a param is absent.
+  const allFetchStations = [...new Set([...stationIds, TEMP_PROXY_STATION])];
+  const url = `https://waterservices.usgs.gov/nwis/iv/?format=json&sites=${allFetchStations.join(',')}&parameterCd=${PARAM_GAGE_HT},${PARAM_DISCHARGE},${PARAM_WATER_TEMP},${PARAM_TIDAL_ELEV}&period=P1D`;
 
   const resp = await fetch(url, {
     headers: { Accept: 'application/json' },
@@ -105,6 +126,15 @@ export async function runUsgsIngestion(): Promise<RunResult> {
       stationData[stationId].dischargeCfs = val;
     } else if (paramCode === PARAM_WATER_TEMP && val !== null) {
       stationData[stationId].waterTempF = Math.round((val * 9 / 5 + 32) * 10) / 10;
+    }
+  }
+
+  // Apply temperature proxy fallback: if a Richmond gauge station has null waterTempF
+  // (no sensor), substitute the value from the designated proxy station (Cartersville).
+  for (const [stationId, proxyId] of Object.entries(TEMP_PROXY_FOR)) {
+    const gauge = stationData[stationId];
+    if (gauge && gauge.waterTempF === null) {
+      gauge.waterTempF = stationData[proxyId]?.waterTempF ?? null;
     }
   }
 
