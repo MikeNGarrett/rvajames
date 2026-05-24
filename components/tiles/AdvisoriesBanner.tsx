@@ -20,16 +20,18 @@ export function AdvisoriesBanner({ advisories }: { advisories: Advisory[] }) {
 
   return (
     <div className={`rounded-xl p-4 mb-4 ${bannerClass}`} role="alert">
-      <p className="font-semibold text-base mb-1">
-        {advisories.length === 1 ? 'Active Advisory' : `${advisories.length} Active Advisories`}
-      </p>
-      <ul className="space-y-1">
-        {advisories.map((a) => (
-          <li key={a.id} className="text-sm">
-            {a.headline}
-          </li>
-        ))}
-      </ul>
+      <div className="max-w-prose">
+        <p className="font-semibold text-base mb-1">
+          {advisories.length === 1 ? 'Active Advisory' : `${advisories.length} Active Advisories`}
+        </p>
+        <ul className="space-y-1">
+          {advisories.map((a) => (
+            <li key={a.id} className="text-sm">
+              {a.headline}
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

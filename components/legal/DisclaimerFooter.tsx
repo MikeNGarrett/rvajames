@@ -9,7 +9,7 @@ export function DisclaimerFooter({ ageBucket }: Props = {}) {
   const showKidsMicrocopy = ageBucket !== 'none';
 
   return (
-    <footer className="mt-8 border-t border-border pt-6 pb-8 px-4 text-sm text-text-muted">
+    <footer className="mt-8 border-t border-border pt-6 pb-8 px-4 text-sm text-text-muted max-w-prose">
       <p className="mb-2">
         <strong className="text-text-secondary">RVA James</strong> is an independent informational tool.
         River conditions change rapidly — always use your own judgment.

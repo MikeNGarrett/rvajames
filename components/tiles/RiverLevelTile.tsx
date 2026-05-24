@@ -19,16 +19,16 @@ export function RiverLevelTile({ location }: Props) {
   return (
     <Link
       href={`/locations/${location.slug}`}
-      className={`block rounded-xl border p-4 ${subtleClass} touch-target`}
+      className={`flex flex-col gap-2 rounded-xl border p-4 ${subtleClass} touch-target`}
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
+      <div className="flex items-start justify-between gap-2">
         <h3 className="text-base font-semibold text-text leading-tight">{location.name}</h3>
         <StatusBadge status={status} />
       </div>
 
       <p className="text-sm text-text leading-snug">{reason}</p>
 
-      <p className="text-xs text-rva-blue mt-2">
+      <p className="text-xs text-rva-blue mt-auto">
         Details &amp; resources →
       </p>
     </Link>

@@ -181,7 +181,7 @@ export function RiverSegmentPanel({ metroState }: Props) {
       )}
 
       {/* ── Translation sentence ── */}
-      <p className="text-sm text-text leading-snug mb-3">{summary.translation}</p>
+      <p className="text-sm text-text leading-snug mb-3 max-w-prose">{summary.translation}</p>
 
       {/* ── Secondary stat chips ── */}
       <div className="flex flex-wrap gap-x-4 gap-y-1 mb-3 text-xs text-text-muted">
