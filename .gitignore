@@ -32,3 +32,4 @@ lib/supabase/types.ts
 
 #lighthouse testing
 .lighthouseci/
+tsconfig.tsbuildinfo
