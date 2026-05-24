@@ -337,6 +337,84 @@ describe('combinedLocationStatus', () => {
     );
     expect(result.status).toBe('caution');
   });
+
+  // ── Operational status overrides (sub-goal 43) ─────────────────────────────
+
+  it('closed kind → status=closed, overrides good weather', () => {
+    const result = combinedLocationStatus(
+      { gageFt: 3.5 },
+      noAdvisories,
+      'belle-isle',
+      { kind: 'closed', reason: 'Bridge washed out', affects: null },
+    );
+    expect(result.status).toBe('closed');
+    expect(result.label).toBe('Access closed');
+    expect(result.reason).toContain('Bridge washed out');
+  });
+
+  it('closed_indefinite kind → status=closed, includes affects scope', () => {
+    const result = combinedLocationStatus(
+      { gageFt: 3.5 },
+      noAdvisories,
+      'texas-beach',
+      { kind: 'closed_indefinite', reason: 'RVA.gov advisory 2026-05-22', affects: 'Pedestrian bridge' },
+    );
+    expect(result.status).toBe('closed');
+    expect(result.reason).toContain('Pedestrian bridge');
+    expect(result.reason).toContain('RVA.gov advisory 2026-05-22');
+  });
+
+  it('closed kind → overrides danger weather status', () => {
+    const result = combinedLocationStatus(
+      { gageFt: 9.5 },   // above flood_close threshold for most locations
+      noAdvisories,
+      'belle-isle',
+      { kind: 'closed', reason: 'Maintenance closure', affects: null },
+    );
+    expect(result.status).toBe('closed');
+  });
+
+  it('restricted kind → caution or worse, reason includes restriction note', () => {
+    const result = combinedLocationStatus(
+      { gageFt: 3.5 },   // normal conditions
+      noAdvisories,
+      'pony-pasture',
+      { kind: 'restricted', reason: 'Trail section closed', affects: 'South trail' },
+    );
+    expect(result.status).toBe('caution');
+    expect(result.reason).toContain('South trail');
+    expect(result.reason).toContain('restricted');
+  });
+
+  it('restricted kind with danger weather → still danger', () => {
+    const result = combinedLocationStatus(
+      { gageFt: 9.5 },
+      noAdvisories,
+      'pony-pasture',
+      { kind: 'restricted', reason: 'Partial closure', affects: null },
+    );
+    expect(result.status).toBe('danger');
+  });
+
+  it('open kind → no override, passes through weather status', () => {
+    const result = combinedLocationStatus(
+      { gageFt: 3.5 },
+      noAdvisories,
+      'belle-isle',
+      { kind: 'open', reason: 'All clear', affects: null },
+    );
+    expect(result.status).toBe('safe');
+  });
+
+  it('expired/null operationalStatus → no override', () => {
+    const result = combinedLocationStatus(
+      { gageFt: 3.5 },
+      noAdvisories,
+      'belle-isle',
+      null,
+    );
+    expect(result.status).toBe('safe');
+  });
 });
 
 // ─── riverConditionSummary (sub-goal 37) ─────────────────────────────────────

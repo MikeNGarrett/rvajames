@@ -13,6 +13,7 @@ export function RiverLevelTile({ location }: Props) {
     safe:    'bg-status-safe-subtle border-status-safe',
     caution: 'bg-status-caution-subtle border-status-caution',
     danger:  'bg-status-danger-subtle border-status-danger',
+    closed:  'bg-status-closed-subtle border-status-closed/40',
   }[status] ?? 'bg-surface border-border';
 
   return (

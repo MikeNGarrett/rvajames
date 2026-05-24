@@ -21,7 +21,7 @@ export interface LocationDetail {
     ageMinutes: number;
   } | null;
   deterministicStatus: {
-    status: 'safe' | 'caution' | 'danger';
+    status: 'safe' | 'caution' | 'danger' | 'closed';
     label: string;
     reason: string;
   };

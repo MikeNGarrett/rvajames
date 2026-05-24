@@ -6,9 +6,20 @@
 
 import thresholds from './thresholds.json';
 
-export type SafetyStatus = 'safe' | 'caution' | 'danger';
+/**
+ * SafetyStatus includes 'closed' for locations that are operationally
+ * unavailable (bridge out, park closure, etc.).
+ *
+ * 'closed' is NOT a worse safety level than 'danger' — it's a categorical
+ * state meaning "unavailable regardless of conditions." Color mapping:
+ *   closed  → neutral gray with lock icon (not red)
+ *   danger  → red
+ *   caution → yellow
+ *   safe    → green
+ */
+export type SafetyStatus = 'safe' | 'caution' | 'danger' | 'closed';
 
-/** Worst-of helper: danger > caution > safe */
+/** Worst-of helper: danger > caution > safe. 'closed' is handled separately. */
 function worst(a: SafetyStatus, b: SafetyStatus): SafetyStatus {
   if (a === 'danger' || b === 'danger') return 'danger';
   if (a === 'caution' || b === 'caution') return 'caution';
@@ -213,14 +224,49 @@ export interface MetroStateInput {
 }
 
 /**
+ * Operational closure/restriction status — overlaid on weather-based assessment.
+ * Supplied by the location_status table (sub-goal 43).
+ *
+ * kind 'open' → no override
+ * kind 'restricted' → worst(caution, weather) with combined reason
+ * kind 'closed' | 'closed_indefinite' → status='closed' unconditionally
+ */
+export interface OperationalStatusOverride {
+  kind: 'open' | 'restricted' | 'closed' | 'closed_indefinite';
+  reason: string;
+  affects: string | null;
+}
+
+/**
  * Combines all rules and returns the worst status plus a human-readable reason.
  * Used by LocationCard to produce a deterministic status pill without AI.
+ *
+ * When `operationalStatus` is provided:
+ *   - 'closed' / 'closed_indefinite': returns { status: 'closed' } immediately.
+ *   - 'restricted': escalates to caution + prepends the restriction note.
+ *   - 'open': no override.
  */
 export function combinedLocationStatus(
   metro: MetroStateInput,
   advisories: Array<{ kind: string; severity: string; headline: string }>,
   locationSlug: string,
+  operationalStatus?: OperationalStatusOverride | null,
 ): CombinedStatus {
+  // ── Operational closure takes precedence over everything ──────────────────
+  if (
+    operationalStatus &&
+    (operationalStatus.kind === 'closed' ||
+      operationalStatus.kind === 'closed_indefinite')
+  ) {
+    const scopeLabel = operationalStatus.affects
+      ? `${operationalStatus.affects}: `
+      : '';
+    return {
+      status: 'closed',
+      reason: `${scopeLabel}${operationalStatus.reason}`,
+      label:  'Access closed',
+    };
+  }
   const loc = thresholds.locations[locationSlug as keyof typeof thresholds.locations];
 
   // 1. Gage height (primary signal)
@@ -283,6 +329,13 @@ export function combinedLocationStatus(
     }
   }
 
+  // ── Restricted operational status: escalate to caution, prepend note ────
+  if (operationalStatus?.kind === 'restricted') {
+    status = worst(status, 'caution');
+    const scope = operationalStatus.affects ? `${operationalStatus.affects} restricted` : 'Restricted access';
+    reason = `${scope}; ${reason}`;
+  }
+
   // Derive pill label from final status + gage
   const label =
     status === 'danger'
@@ -290,9 +343,11 @@ export function combinedLocationStatus(
         ? 'High water'
         : 'Check advisories'
       : status === 'caution'
-        ? metro.gageFt !== null && metro.gageFt > thresholds.gage.normal_max_ft
-          ? 'Elevated flow'
-          : 'Use caution'
+        ? operationalStatus?.kind === 'restricted'
+          ? 'Restricted access'
+          : metro.gageFt !== null && metro.gageFt > thresholds.gage.normal_max_ft
+            ? 'Elevated flow'
+            : 'Use caution'
         : 'Good conditions';
 
   return { status, reason, label };

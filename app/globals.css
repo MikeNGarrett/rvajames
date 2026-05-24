@@ -37,6 +37,10 @@
   --color-status-flood: #264677;          /* CoR Blue — flood advisory (overrides all) */
   --color-status-flood-fg: #ffffff;       /* white text on flood — AAA 8.2:1 */
 
+  --color-status-closed: #6b7280;         /* Neutral gray — operationally unavailable */
+  --color-status-closed-fg: #ffffff;      /* white text on closed — AA 5.3:1 */
+  --color-status-closed-subtle: #f3f4f6;  /* light tint for closed cards */
+
   /* === Neutral / Surface Scale === */
   --color-surface: #f8f9fc;
   --color-surface-raised: #ffffff;
