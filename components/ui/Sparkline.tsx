@@ -4,6 +4,12 @@
  * Decorative: aria-hidden. Data context is announced via surrounding text.
  *
  * Points are {t, v} where t is a Unix timestamp in ms and v is the value.
+ *
+ * Desktop note: the SVG uses preserveAspectRatio="none" so it fills its
+ * container width regardless of aspect ratio. A plain SVG <circle> deforms
+ * into a wide flat ellipse at extreme widths (e.g. 1024px × 40px).
+ * The current-value marker is therefore rendered via <foreignObject> so the
+ * dot stays a true circle at any container width.
  */
 
 interface Point {
@@ -47,13 +53,13 @@ export function Sparkline({
   const tMax = Math.max(...points.map((p) => p.t));
 
   // Y range is derived from data only — not from normalBand.
-  // Including normalBand.low/high in the range (e.g., 0–4 ft) would collapse a
+  // Including normalBand.low/high (e.g., 0–4 ft) would collapse a
   // small variation like 3.69–3.90 ft into a nearly-flat line.
   const dataMin = Math.min(...points.map((p) => p.v));
   const dataMax = Math.max(...points.map((p) => p.v));
   const vPad    = (dataMax - dataMin) * 0.15 || 0.5;
-  const vLo     = dataMin - vPad;    // bottom of chart coordinate space
-  const vHi     = dataMax + vPad;    // top of chart coordinate space
+  const vLo     = dataMin - vPad;
+  const vHi     = dataMax + vPad;
 
   const xScale = (t: number) =>
     PAD + ((t - tMin) / (tMax - tMin || 1)) * (W - PAD * 2);
@@ -68,10 +74,10 @@ export function Sparkline({
   const bandLo   = normalBand ? Math.max(vLo, normalBand.low)  : 0;
   const bandHi   = normalBand ? Math.min(vHi, normalBand.high) : 0;
   const showBand = normalBand != null && bandHi > bandLo;
-  const bandY1   = showBand ? yScale(bandHi) : 0;  // top of band in SVG px
-  const bandY2   = showBand ? yScale(bandLo) : 0;  // bottom of band in SVG px
+  const bandY1   = showBand ? yScale(bandHi) : 0;
+  const bandY2   = showBand ? yScale(bandLo) : 0;
 
-  // Current-value marker (last point)
+  // Current-value marker position (last point)
   const last    = points[points.length - 1];
   const markerX = xScale(last.t);
   const markerY = yScale(last.v);
@@ -81,7 +87,7 @@ export function Sparkline({
       aria-hidden="true"
       viewBox={`0 0 ${W} ${H}`}
       preserveAspectRatio="none"
-      className="w-full"
+      className="w-full block"
       style={{ height: `${H}px` }}
     >
       {/* Normal band shading — only the visible portion */}
@@ -95,7 +101,7 @@ export function Sparkline({
         />
       )}
 
-      {/* Line */}
+      {/* Trend line — vectorEffect keeps stroke width consistent at any aspect ratio */}
       <path
         d={linePath}
         fill="none"
@@ -103,16 +109,37 @@ export function Sparkline({
         strokeWidth={1.5}
         strokeLinejoin="round"
         strokeLinecap="round"
+        vectorEffect="non-scaling-stroke"
       />
 
-      {/* Current value dot */}
-      <circle
-        cx={markerX}
-        cy={markerY}
-        r={3}
-        className="fill-rva-blue stroke-surface"
-        strokeWidth={1.5}
-      />
+      {/*
+       * Current-value marker rendered via foreignObject so the dot stays a
+       * true CSS circle regardless of the SVG's horizontal stretch.
+       *
+       * The foreignObject x/y are in SVG user-space (correctly positioned by
+       * the transform), while the div inside renders at screen pixels (no
+       * distortion). width="0" height="0" + overflow="visible" avoids any
+       * clipping from the foreignObject bounding box.
+       */}
+      <foreignObject
+        x={markerX}
+        y={markerY}
+        width="0"
+        height="0"
+        overflow="visible"
+      >
+        <div
+          style={{
+            position:     'absolute',
+            width:        '10px',
+            height:       '10px',
+            borderRadius: '50%',
+            backgroundColor: 'var(--color-rva-blue, #264677)',
+            border:       '2px solid var(--color-surface, white)',
+            transform:    'translate(-50%, -50%)',
+          }}
+        />
+      </foreignObject>
     </svg>
   );
 }

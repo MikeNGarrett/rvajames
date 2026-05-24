@@ -14,6 +14,10 @@ const JRA_SITE_MAP: Record<string, string[]> = {
   'richmond':     ['belle-isle', 'browns-island', 'mayo-island'],
 };
 
+// JRA publishes weekly. Advisories expire after 14 days so they don't
+// linger indefinitely if the scraper stops receiving data.
+const ADVISORY_TTL_DAYS = 14;
+
 interface JraSample {
   site: string;
   date: string;
@@ -71,34 +75,38 @@ async function tryHtmlScrape(): Promise<JraSample[] | null> {
 }
 
 export async function runJraIngestion(): Promise<RunResult> {
-  const samples = (await tryJsonEndpoint()) ?? (await tryHtmlScrape());
-
   const supabase = await createServerClient('service');
   let rowsWritten = 0;
 
-  if (!samples?.length) {
-    // No data available — log a "no current sample" advisory
-    const { data: belleLoc } = await supabase
-      .from('locations')
-      .select('id')
-      .eq('slug', 'belle-isle')
-      .single();
+  // ── Clean up accumulated "no sample" notices ──────────────────────────────
+  // Prior versions of this ingest inserted a low-severity advisory row every
+  // time JRA had no data, with effective_to=null. They accumulated with no
+  // expiry and showed as duplicate banners. Expire them all now.
+  await supabase
+    .from('advisories')
+    .update({ effective_to: new Date().toISOString() })
+    .eq('source', 'jra')
+    .eq('headline', 'No current JRA water quality sample available')
+    .is('effective_to', null);
 
-    if (belleLoc) {
-      await supabase.from('advisories').insert({
-        source: 'jra',
-        kind: 'water_quality',
-        severity: 'low',
-        headline: 'No current JRA water quality sample available',
-        body: 'James River Association has not published a water quality update for this period.',
-        effective_from: new Date().toISOString(),
-        effective_to: null,
-        location_ids: [belleLoc.id],
-      });
-      rowsWritten++;
-    }
-    return { ok: true, rowsWritten };
+  const samples = (await tryJsonEndpoint()) ?? (await tryHtmlScrape());
+
+  if (!samples?.length) {
+    // No data available from JRA. Don't create a user-facing advisory —
+    // the ingestion_runs row captures the no-data state for operators.
+    console.log('[jra] No samples returned — skipping advisory creation.');
+    return { ok: true, rowsWritten: 0 };
   }
+
+  // ── Expire previous JRA swim advisories before writing fresh ones ─────────
+  // Prevents duplicates when the same location gets a new advisory row.
+  // We expire (not delete) so historical records are preserved.
+  await supabase
+    .from('advisories')
+    .update({ effective_to: new Date().toISOString() })
+    .eq('source', 'jra')
+    .eq('kind', 'swim_closure')
+    .is('effective_to', null);
 
   for (const sample of samples) {
     const slugs = JRA_SITE_MAP[sample.site] ?? ['belle-isle'];
@@ -109,16 +117,24 @@ export async function runJraIngestion(): Promise<RunResult> {
 
     const locationIds = locations?.map((l) => l.id) ?? [];
 
+    // effective_from = sample date; effective_to = sample date + ADVISORY_TTL_DAYS
+    const effectiveFrom = sample.date
+      ? new Date(sample.date).toISOString()
+      : new Date().toISOString();
+    const effectiveTo = new Date(
+      new Date(effectiveFrom).getTime() + ADVISORY_TTL_DAYS * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
     if (!sample.safe) {
       const { error } = await supabase.from('advisories').insert({
-        source: 'jra',
-        kind: 'swim_closure',
-        severity: 'high',
-        headline: `JRA water quality advisory — swimming not recommended`,
-        body: sample.note ?? `E. coli levels exceed safe swimming thresholds${sample.ecoli ? ` (${sample.ecoli} CFU/100mL)` : ''}.`,
-        effective_from: sample.date ? new Date(sample.date).toISOString() : new Date().toISOString(),
-        effective_to: null,
-        location_ids: locationIds,
+        source:         'jra',
+        kind:           'swim_closure',
+        severity:       'high',
+        headline:       'JRA water quality advisory — swimming not recommended',
+        body:           sample.note ?? `E. coli levels exceed safe swimming thresholds${sample.ecoli ? ` (${sample.ecoli} CFU/100mL)` : ''}.`,
+        effective_from: effectiveFrom,
+        effective_to:   effectiveTo,
+        location_ids:   locationIds,
       });
       if (!error) rowsWritten++;
     } else {
@@ -126,8 +142,8 @@ export async function runJraIngestion(): Promise<RunResult> {
       for (const loc of locations ?? []) {
         const { error } = await supabase.from('conditions_snapshots').insert({
           location_id: loc.id,
-          source: 'jra',
-          payload: sample as unknown as Json,
+          source:      'jra',
+          payload:     sample as unknown as Json,
         });
         if (!error) rowsWritten++;
       }
