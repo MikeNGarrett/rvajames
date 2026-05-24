@@ -11,14 +11,16 @@ export const metadata: Metadata = {
 
 export const revalidate = 60;
 
-const SOURCES = ['usgs', 'nws', 'jra', 'cso', 'rva-closures'] as const;
+const SOURCES = ['usgs', 'nws', 'jra', 'cso', 'closures:rva-gov', 'closures:venture-richmond', 'closures:jrps'] as const;
 
 const SOURCE_LABELS: Record<string, string> = {
   usgs: 'USGS (every 15 min)',
   nws: 'NWS (hourly)',
   jra: 'JRA (daily noon)',
   cso: 'RVA DPU CSO (6 AM, 6 PM)',
-  'rva-closures': 'RVA.gov closures (daily 3am)',
+  'closures:rva-gov': 'RVA.gov closures (daily 3am)',
+  'closures:venture-richmond': 'Venture Richmond closures (daily 3am)',
+  'closures:jrps': 'JRPS closures (daily 3am)',
 };
 
 function timeAgo(isoDate: string | null): string {

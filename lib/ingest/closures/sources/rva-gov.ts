@@ -1,12 +1,17 @@
 /**
  * RVA.gov James River Park System closures scraper.
  *
- * Target: https://www.rva.gov/parks-recreation/james-river-park-system
+ * Targets:
+ *   https://www.rva.gov/parks-recreation/james-river-park-system
+ *   https://www.rva.gov/press-releases-and-announcements-public-utilities/news
  *
  * The City of Richmond parks pages embed closure notices as plain body
  * paragraphs (Drupal CMS, .field--name-body selector). There are no
  * structured alert elements. Paragraphs starting with "Notice:" or
  * containing "closed"/"restricted"/"warning" are captured.
+ *
+ * The DPU press-release index is also scraped to catch infrastructure-related
+ * closures (e.g. Pipeline Trail) that are announced via DPU rather than Parks.
  *
  * Dedup strategy: before creating a draft, check whether an existing
  * active or draft row already has the same source_url + reason text.
@@ -14,8 +19,7 @@
  * queue on each daily scrape when nothing has changed.
  *
  * Cron: piggybacked on the usgs-percentiles 0 3 * * * daily trigger
- * to stay within the Cloudflare Workers free-plan 5-trigger limit.
- * Standalone endpoint: /api/cron/rva-closures (for manual triggering).
+ * via runAllClosureSources() in lib/ingest/closures/run-all.ts.
  */
 
 // Use cheerio/slim to avoid the undici dependency (cheerio's fromURL helper
@@ -24,12 +28,18 @@ import * as cheerio from 'cheerio/slim';
 import * as crypto from 'node:crypto';
 import { createServerClient } from '@/lib/supabase/server';
 import type { RunResult } from '@/lib/ingest/run';
+import type { ClosureSource } from '@/lib/ingest/closures/registry';
 
 const SOURCE_NAME = 'rva.gov parks scrape';
+
 const SCRAPE_PAGES: Array<{ url: string; label: string }> = [
   {
     url: 'https://www.rva.gov/parks-recreation/james-river-park-system',
     label: 'James River Park System',
+  },
+  {
+    url: 'https://www.rva.gov/press-releases-and-announcements-public-utilities/news',
+    label: 'DPU Press Releases',
   },
 ];
 
@@ -38,15 +48,18 @@ const SCRAPE_PAGES: Array<{ url: string; label: string }> = [
  * Ordered longest-match-first to prefer more specific patterns.
  */
 const LOCATION_KEYWORDS: Array<{ pattern: RegExp; slug: string }> = [
-  { pattern: /pony\s+pasture/i,   slug: 'pony-pasture'    },
-  { pattern: /texas\s+beach/i,    slug: 'texas-beach'     },
-  { pattern: /belle\s+isle/i,     slug: 'belle-isle'      },
-  { pattern: /browns?\s+island/i, slug: 'browns-island'   },
-  { pattern: /mayo\s+island/i,    slug: 'mayo-island'     },
-  { pattern: /shiplock/i,         slug: 'shiplock-trail'  },
-  { pattern: /north\s+bank/i,     slug: 'north-bank-trail'},
-  { pattern: /buttermilk/i,       slug: 'buttermilk-trail'},
-  { pattern: /pump\s+house/i,     slug: 'pump-house'      },
+  { pattern: /pipeline\s+trail/i,  slug: 'pipeline-trail'  },
+  { pattern: /pony\s+pasture/i,    slug: 'pony-pasture'    },
+  { pattern: /texas\s+beach/i,     slug: 'texas-beach'     },
+  { pattern: /belle\s+isle/i,      slug: 'belle-isle'      },
+  { pattern: /browns?\s+island/i,  slug: 'browns-island'   },
+  { pattern: /mayo\s+island/i,     slug: 'mayo-island'     },
+  { pattern: /shiplock/i,          slug: 'shiplock-trail'  },
+  { pattern: /north\s+bank/i,      slug: 'north-bank-trail'},
+  { pattern: /buttermilk/i,        slug: 'buttermilk-trail'},
+  { pattern: /pump\s+house/i,      slug: 'pump-house'      },
+  { pattern: /reedy\s+creek/i,     slug: 'reedy-creek'     },
+  { pattern: /tredegar/i,          slug: 'tredegar'        },
 ];
 
 /** Keywords that indicate a paragraph is closure-relevant. */
@@ -86,12 +99,12 @@ interface ScrapeHit {
 async function scrapePage(url: string): Promise<ScrapeHit[]> {
   const res = await fetch(url, {
     headers: {
-      'User-Agent': 'RVAJames-ClosureBot/1.0 (https://rvajames.org; james-river-conditions)',
+      'User-Agent': 'rva-james-bot (mike.garrett@teamcolab.com)',
     },
   });
 
   if (!res.ok) {
-    console.warn(`[rva-closures] fetch ${url} → ${res.status}`);
+    console.warn(`[rva-gov] fetch ${url} → ${res.status}`);
     return [];
   }
 
@@ -113,6 +126,12 @@ async function scrapePage(url: string): Promise<ScrapeHit[]> {
     '.paragraph__column p',
     '.views-element-container p',
     '.views-element-container h3',
+    // DPU press release index — article titles / teaser text
+    '.views-row .views-field-title',
+    '.views-row .views-field-body',
+    '.views-row .views-field-field-summary',
+    'article .node__title',
+    'article .field--name-body p',
   ];
 
   for (const sel of selectors) {
@@ -140,7 +159,7 @@ async function scrapePage(url: string): Promise<ScrapeHit[]> {
   });
 }
 
-export async function runRvaClosuresIngestion(): Promise<RunResult> {
+async function runRvaGovSource(): Promise<RunResult> {
   const supabase = await createServerClient('service');
 
   // Fetch all location slugs so we can look up UUIDs
@@ -157,14 +176,14 @@ export async function runRvaClosuresIngestion(): Promise<RunResult> {
     (locationRows ?? []).map((l) => [l.slug, l.id]),
   );
 
-  // Scrape all pages in parallel
+  // Scrape all pages sequentially (polite — public-sector site)
   const allHits: ScrapeHit[] = [];
-  await Promise.all(
-    SCRAPE_PAGES.map(async ({ url }) => {
-      const hits = await scrapePage(url);
-      allHits.push(...hits);
-    }),
-  );
+  for (const { url } of SCRAPE_PAGES) {
+    const hits = await scrapePage(url);
+    allHits.push(...hits);
+    // Small delay between pages
+    await new Promise((r) => setTimeout(r, 500));
+  }
 
   if (allHits.length === 0) {
     return { ok: true, rowsWritten: 0 };
@@ -225,7 +244,7 @@ export async function runRvaClosuresIngestion(): Promise<RunResult> {
   }
 
   if (errors.length > 0) {
-    console.error('[rva-closures] errors:', errors);
+    console.error('[rva-gov] errors:', errors);
   }
 
   return {
@@ -234,3 +253,8 @@ export async function runRvaClosuresIngestion(): Promise<RunResult> {
     error:       errors.length > 0 ? errors.join('; ') : undefined,
   };
 }
+
+export const rvaGovSource: ClosureSource = {
+  name: 'rva-gov',
+  run:  runRvaGovSource,
+};
