@@ -1,5 +1,6 @@
 import { createServerClient } from '@/lib/supabase/server';
 import { getWesthamDischargeNormalRange, type NormalRange } from '@/lib/queries/normal-range';
+import { getForecast, type NoaaAhpsPayload } from '@/lib/queries/forecast';
 import {
   riverConditionSummary,
   rapidsClass,
@@ -54,6 +55,11 @@ export interface MetroRiverState {
    * Computed server-side from the current reading + normal range.
    */
   summary: RiverConditionSummary;
+  /**
+   * Latest NOAA AHPS 72-hour forecast for the Richmond/Westham gauge (RMDV2).
+   * Null before the first noaa-ahps cron run.
+   */
+  forecast: NoaaAhpsPayload | null;
 }
 
 const UPRIVER_STATION = '02037500';
@@ -117,7 +123,7 @@ export async function getMetroRiverState(
 
   // ── Enrich with percentiles and 72h history ─────────────────────────────
 
-  const [normalRange, sparkSnaps] = await Promise.all([
+  const [normalRange, sparkSnaps, forecast] = await Promise.all([
     getWesthamDischargeNormalRange(new Date()),
     // Last 72h of gage readings for the sparkline
     supabase
@@ -128,6 +134,8 @@ export async function getMetroRiverState(
       .gte('fetched_at', new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString())
       .order('fetched_at', { ascending: true })
       .limit(300),
+    // Latest NOAA AHPS 72h forecast
+    getForecast(),
   ]);
 
   const recent72h: { t: number; v: number }[] = (sparkSnaps.data ?? [])
@@ -157,5 +165,5 @@ export async function getMetroRiverState(
   // Note: avgGageFt and deltaGageFt have been intentionally removed.
   // The two readings use different datums (02037500 = arbitrary gage datum;
   // 02037705 = NAVD 1988 tidal elevation) and cannot be numerically compared.
-  return { upriver, downriver, lastUpdatedAt, normalRange, recent72h, summary };
+  return { upriver, downriver, lastUpdatedAt, normalRange, recent72h, summary, forecast };
 }

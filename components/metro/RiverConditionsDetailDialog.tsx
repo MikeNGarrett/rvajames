@@ -22,6 +22,7 @@
 import { useEffect, useRef } from 'react';
 import type { MetroRiverState } from '@/lib/queries/river-segment';
 import { Sparkline } from '@/components/ui/Sparkline';
+import { getForecastCrossing, getForecastPeak } from '@/lib/queries/forecast';
 
 // Invoker Commands polyfill — loaded only when native support is absent.
 // Baseline since 2025-12-12 (Chrome/Edge 135, Firefox 144, Safari 26.2).
@@ -68,7 +69,11 @@ export function RiverConditionsDetailDialog({ metroState }: Props) {
     return () => dialog.removeEventListener('click', handleClick);
   }, []);
 
-  const { upriver, downriver, recent72h, normalRange } = metroState;
+  const { upriver, downriver, recent72h, normalRange, forecast } = metroState;
+
+  const forecastPoints = forecast?.forecast.map((p) => ({ t: p.t, v: p.stage_ft })) ?? [];
+  const crossing       = getForecastCrossing(forecast ?? null);
+  const peak           = getForecastPeak(forecast ?? null);
 
   return (
     <dialog
@@ -173,6 +178,59 @@ export function RiverConditionsDetailDialog({ metroState }: Props) {
           </a>
         </section>
 
+        {/* ── NOAA AHPS 72h forecast ── */}
+        {forecast && forecastPoints.length >= 2 && (
+          <section aria-label="72-hour river forecast">
+            <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wide mb-2">
+              72-Hour Forecast
+            </h3>
+
+            {/* Crossing alert */}
+            {crossing ? (
+              <div className={`rounded-lg px-3 py-2 mb-3 text-xs font-medium ${
+                crossing.label === 'flood'
+                  ? 'bg-status-danger-subtle text-status-danger border border-status-danger/30'
+                  : 'bg-status-caution-subtle text-status-caution-fg border border-status-caution/30'
+              }`}>
+                {crossing.label === 'flood' ? '🚨 Forecast to reach flood stage' : '⚠️ Forecast to reach action stage'} ({crossing.stage_ft.toFixed(1)} ft) by{' '}
+                {new Date(crossing.at_ms).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+              </div>
+            ) : (
+              <p className="text-xs text-status-safe-fg font-medium mb-2">
+                ✓ No stage thresholds forecast to be exceeded
+              </p>
+            )}
+
+            {/* Forecast sparkline */}
+            <div className="border border-border/50 rounded-lg px-2 pt-2 pb-1 mb-2">
+              <p className="text-xs text-text-muted mb-1" aria-hidden="true">Stage forecast (ft) · next 72h</p>
+              <Sparkline
+                points={forecastPoints}
+                lineClass="stroke-rva-coral"
+                height={60}
+              />
+            </div>
+
+            {/* Peak + issued summary */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
+              {peak && (
+                <span>
+                  Peak {peak.stage_ft.toFixed(1)} ft ·{' '}
+                  {new Date(peak.at_ms).toLocaleString('en-US', { weekday: 'short', hour: 'numeric' })}
+                </span>
+              )}
+              <span>
+                Issued{' '}
+                {new Date(forecast.issued_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+              </span>
+            </div>
+
+            <p className="text-xs text-text-muted mt-1">
+              Action stage: {forecast.action_stage_ft} ft · Flood stage: {forecast.flood_stage_ft} ft
+            </p>
+          </section>
+        )}
+
         {/* ── City Locks downriver section ── */}
         <section aria-label="City Locks tidal gauge">
           <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wide mb-2">
@@ -223,9 +281,17 @@ export function RiverConditionsDetailDialog({ metroState }: Props) {
                 records. Percentiles update daily.
               </li>
             )}
+            {forecast && (
+              <li>
+                <strong>Forecast:</strong> NOAA Advanced Hydrologic Prediction Service
+                (AHPS), gauge RMDV2. 6-hourly forecast points, refreshed hourly.
+                Action stage: {forecast.action_stage_ft} ft. Flood stage:{' '}
+                {forecast.flood_stage_ft} ft (minor).
+              </li>
+            )}
             <li>
               <strong>Refresh cadence:</strong> Gage data — 15 min cron.
-              Percentile data — daily at 03:00 UTC. Forecasts — hourly.
+              Percentile data — daily at 03:00 UTC. NOAA forecast — hourly.
             </li>
           </ul>
         </section>
