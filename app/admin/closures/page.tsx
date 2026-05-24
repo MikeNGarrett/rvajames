@@ -130,12 +130,12 @@ export default async function ClosuresAdminPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-surface text-left text-xs font-semibold text-text-secondary uppercase tracking-wide">
-                <th className="px-4 py-3">Location</th>
-                <th className="px-4 py-3">Kind</th>
-                <th className="px-4 py-3">State</th>
-                <th className="px-4 py-3 hidden sm:table-cell">Effective</th>
-                <th className="px-4 py-3 hidden md:table-cell">Source</th>
-                <th className="px-4 py-3">Actions</th>
+                <th scope="col" className="px-4 py-3">Location</th>
+                <th scope="col" className="px-4 py-3">Kind</th>
+                <th scope="col" className="px-4 py-3">State</th>
+                <th scope="col" className="px-4 py-3 hidden sm:table-cell">Effective</th>
+                <th scope="col" className="px-4 py-3 hidden md:table-cell">Source</th>
+                <th scope="col" className="px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">

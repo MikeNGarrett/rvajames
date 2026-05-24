@@ -183,7 +183,7 @@ export function ConfirmDialog({
             autoComplete="off"
             spellCheck={false}
             aria-invalid={inputMismatch ? 'true' : undefined}
-            aria-describedby={inputMismatch ? 'type-confirm-error' : undefined}
+            aria-errormessage={inputMismatch ? 'type-confirm-error' : undefined}
             className={`touch-target rounded-lg border px-3 text-sm text-text bg-surface focus:outline-none focus:ring-2 transition-colors ${
               inputMismatch
                 ? 'border-status-danger focus:ring-status-danger'

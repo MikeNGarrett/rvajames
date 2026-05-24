@@ -17,7 +17,7 @@
  * actual dismiss). prefers-reduced-motion: the bar is hidden.
  */
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useTransition } from 'react';
 
 const DURATION_MS = 10_000;
 
