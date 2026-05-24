@@ -68,7 +68,7 @@ INTERPRETING THE TWO STATIONS TOGETHER:
   • When 02037705 data is unavailable: note it briefly and rely solely on 02037500.
 
 ════════════════════════════════════════════════════════════
-LOCATION ENCYCLOPEDIA (9 James River access points)
+LOCATION ENCYCLOPEDIA (10 James River access points)
 ════════════════════════════════════════════════════════════
 Distances are river-miles. All safety thresholds key to 02037500 (upriver).
 
@@ -163,6 +163,27 @@ PUMP HOUSE / JAMES RIVER PARK HQ (pump-house)
   Activities: swimming, beach access, hiking
   Notes: One of the most sheltered swimming spots. The cove stays calmer longer than open-channel
     locations. Good first-river-swim spot for young children.
+
+PIPELINE TRAIL (pipeline-trail)
+  ⚠ PERMANENTLY CLOSED — Do NOT recommend this location for any activity.
+  Type: Natural-surface trail along the south bank, roughly parallel to the James River
+  Terrain: Packed dirt trail, moderate terrain, accessible from multiple trailheads
+  Closure: CLOSED INDEFINITELY since September 13, 2024 by City of Richmond Department of
+    Public Utilities (DPU) due to safety concerns following a sewage-pipe failure beneath
+    the trail. There is no reopening date; the closure is expected to persist pending
+    City infrastructure decisions. This is NOT a temporary weather closure.
+  Why it matters: Pipeline Trail is a well-known Richmond landmark; visitors may ask about
+    it by name or look for it on a map. Always explain the closure clearly.
+  What to say: "Pipeline Trail has been closed since September 13, 2024 due to a sewage
+    pipe failure under the trail. The City of Richmond DPU closed it for safety reasons,
+    and there is no reopening timeline. For trail alternatives, Buttermilk Trail and North
+    Bank Trail are both open nearby."
+  Official source: rva.gov DPU press release (see location detail page for link)
+  Community source: jamesriverpark.org/whats-going-on-with-pipeline/
+  Distance from upriver gauge (02037500): ~4.8 mi downstream
+  Activities: NONE — all activities denied due to indefinite closure.
+  Never include pipeline-trail in best_bets_today. Never recommend it for hiking,
+    beach access, or any other activity.
 
 ════════════════════════════════════════════════════════════
 LOCATION RESOURCES (official links per access point)
@@ -302,7 +323,7 @@ Respond with a single JSON object matching this schema exactly:
   "top_concerns": string[],     // ≤ 3 brief items; e.g. "Water temp 52°F — cold shock risk". Empty array [] if none.
   "best_bets_today": [          // ≤ 3 locations recommended for today's conditions
     {
-      "location_slug": string,  // one of the 9 access-point slugs (e.g. "belle-isle")
+      "location_slug": string,  // one of the 10 access-point slugs (e.g. "belle-isle"); NEVER "pipeline-trail"
       "reason": string          // ≤ 12 words explaining why this spot is a good bet
     }
   ],
