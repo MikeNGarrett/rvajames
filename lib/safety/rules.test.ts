@@ -8,6 +8,8 @@ import {
   combinedLocationStatus,
   rapidsClass,
   riverWideActivityStatuses,
+  riverConditionSummary,
+  type RiverConditionInput,
 } from './rules';
 
 // ─── gageHeightStatus ─────────────────────────────────────────────────────────
@@ -334,5 +336,213 @@ describe('combinedLocationStatus', () => {
       'texas-beach',
     );
     expect(result.status).toBe('caution');
+  });
+});
+
+// ─── riverConditionSummary (sub-goal 37) ─────────────────────────────────────
+
+const baseRiverInput: RiverConditionInput = {
+  currentGageFt:          3.69,
+  dischargeNormal:        { p25: 2800, p50: 5500, p75: 9800, unit: 'cfs' },
+  currentDischargeCfs:    5200,
+  rapidsClass:            'I-II',
+  activeAdvisorySeverity: null,
+  ageBucket:              null,
+};
+
+describe('riverConditionSummary', () => {
+  // ── Band detection ──────────────────────────────────────────────────────────
+
+  it('gage 2.0 → band low', () => {
+    const r = riverConditionSummary({ ...baseRiverInput, currentGageFt: 2.0 });
+    expect(r.band).toBe('low');
+    expect(r.headline).toBe('Low & Slow');
+    expect(r.status).toBe('safe');
+  });
+
+  it('gage 2.5 → band low (boundary)', () => {
+    const r = riverConditionSummary({ ...baseRiverInput, currentGageFt: 2.5 });
+    expect(r.band).toBe('low');
+  });
+
+  it('gage 2.6 → band normal (just above low threshold)', () => {
+    const r = riverConditionSummary({ ...baseRiverInput, currentGageFt: 2.6 });
+    expect(r.band).toBe('normal');
+  });
+
+  it('gage 3.69 → band normal', () => {
+    const r = riverConditionSummary({ ...baseRiverInput, currentGageFt: 3.69 });
+    expect(r.band).toBe('normal');
+    expect(r.headline).toBe('Calm & Normal');
+    expect(r.status).toBe('safe');
+  });
+
+  it('gage 4.0 → band normal (boundary)', () => {
+    const r = riverConditionSummary({ ...baseRiverInput, currentGageFt: 4.0 });
+    expect(r.band).toBe('normal');
+  });
+
+  it('gage 4.1 → band elevated', () => {
+    const r = riverConditionSummary({ ...baseRiverInput, currentGageFt: 4.1 });
+    expect(r.band).toBe('elevated');
+    expect(r.status).toBe('caution');
+  });
+
+  it('gage 5.5 → band elevated (boundary)', () => {
+    const r = riverConditionSummary({ ...baseRiverInput, currentGageFt: 5.5 });
+    expect(r.band).toBe('elevated');
+  });
+
+  it('gage 5.6 → band high', () => {
+    const r = riverConditionSummary({ ...baseRiverInput, currentGageFt: 5.6 });
+    expect(r.band).toBe('high');
+    expect(r.status).toBe('caution');
+  });
+
+  it('gage 8.0 → band high (boundary)', () => {
+    const r = riverConditionSummary({ ...baseRiverInput, currentGageFt: 8.0 });
+    expect(r.band).toBe('high');
+  });
+
+  it('gage 8.1 → band flood', () => {
+    const r = riverConditionSummary({ ...baseRiverInput, currentGageFt: 8.1 });
+    expect(r.band).toBe('flood');
+    expect(r.status).toBe('danger');
+  });
+
+  it('gage 25.0 → band flood (extreme)', () => {
+    const r = riverConditionSummary({ ...baseRiverInput, currentGageFt: 25 });
+    expect(r.band).toBe('flood');
+    expect(r.status).toBe('danger');
+  });
+
+  // ── Delta label ─────────────────────────────────────────────────────────────
+
+  it('discharge near median → deltaLabel "near seasonal median flow"', () => {
+    const r = riverConditionSummary({
+      ...baseRiverInput,
+      currentDischargeCfs: 5500, // exactly p50
+    });
+    expect(r.deltaLabel).toBe('near seasonal median flow');
+  });
+
+  it('discharge above median → deltaLabel shows above', () => {
+    const r = riverConditionSummary({
+      ...baseRiverInput,
+      currentDischargeCfs: 8000, // 2,500 above p50=5500
+    });
+    expect(r.deltaLabel).toMatch(/above seasonal median/);
+  });
+
+  it('discharge below median → deltaLabel shows below', () => {
+    const r = riverConditionSummary({
+      ...baseRiverInput,
+      currentDischargeCfs: 3000, // 2,500 below p50=5500
+    });
+    expect(r.deltaLabel).toMatch(/below seasonal median/);
+  });
+
+  it('no discharge data → deltaLabel is null', () => {
+    const r = riverConditionSummary({
+      ...baseRiverInput,
+      dischargeNormal:     null,
+      currentDischargeCfs: null,
+    });
+    expect(r.deltaLabel).toBeNull();
+  });
+
+  it('discharge present but currentDischargeCfs null → deltaLabel is null', () => {
+    const r = riverConditionSummary({
+      ...baseRiverInput,
+      currentDischargeCfs: null,
+    });
+    expect(r.deltaLabel).toBeNull();
+  });
+
+  // ── Advisory override ────────────────────────────────────────────────────────
+
+  it('high-severity advisory elevates status to danger regardless of band', () => {
+    const r = riverConditionSummary({
+      ...baseRiverInput,
+      currentGageFt:          3.5,
+      activeAdvisorySeverity: 'high',
+    });
+    expect(r.band).toBe('normal');     // band stays normal
+    expect(r.status).toBe('danger');   // but status is overridden
+  });
+
+  it('extreme advisory elevates status to danger', () => {
+    const r = riverConditionSummary({
+      ...baseRiverInput,
+      currentGageFt:          2.0,
+      activeAdvisorySeverity: 'extreme',
+    });
+    expect(r.status).toBe('danger');
+  });
+
+  it('low advisory does not override status', () => {
+    const r = riverConditionSummary({
+      ...baseRiverInput,
+      currentGageFt:          3.5,
+      activeAdvisorySeverity: 'low',
+    });
+    expect(r.status).toBe('safe');
+  });
+
+  // ── Child-friendly translations ──────────────────────────────────────────────
+
+  it('ageBucket 0-2 produces child-friendly translation', () => {
+    const r = riverConditionSummary({
+      ...baseRiverInput,
+      currentGageFt: 3.5,
+      ageBucket:     '0-2',
+    });
+    expect(r.translation).toMatch(/famil|gentle|wading/i);
+  });
+
+  it('ageBucket 6-9 produces child-friendly translation', () => {
+    const r = riverConditionSummary({
+      ...baseRiverInput,
+      currentGageFt: 6.0,
+      ageBucket:     '6-9',
+    });
+    expect(r.translation).toMatch(/adult|shore/i);
+  });
+
+  it('ageBucket adult produces adult translation', () => {
+    const r = riverConditionSummary({
+      ...baseRiverInput,
+      currentGageFt: 3.5,
+      ageBucket:     '18+',
+    });
+    expect(r.translation).toMatch(/access points|rapids|season/i);
+  });
+
+  it('null ageBucket produces adult translation', () => {
+    const r = riverConditionSummary({
+      ...baseRiverInput,
+      currentGageFt: 3.5,
+      ageBucket:     null,
+    });
+    expect(r.translation).toMatch(/access points|rapids|season/i);
+  });
+
+  // ── Translation content ──────────────────────────────────────────────────────
+
+  it('flood translation warns to keep clear', () => {
+    const r = riverConditionSummary({ ...baseRiverInput, currentGageFt: 10.0 });
+    expect(r.translation).toMatch(/flood/i);
+  });
+
+  it('returns a translation string of ≤18 words for every band', () => {
+    const gages: [number, string][] = [
+      [2.0, 'low'], [3.5, 'normal'], [5.0, 'elevated'],
+      [7.0, 'high'], [9.0, 'flood'],
+    ];
+    for (const [gage] of gages) {
+      const r = riverConditionSummary({ ...baseRiverInput, currentGageFt: gage });
+      const wordCount = r.translation.split(/\s+/).length;
+      expect(wordCount, `band ${r.band} translation too long (${wordCount} words)`).toBeLessThanOrEqual(18);
+    }
   });
 });

@@ -1,4 +1,10 @@
 import { createServerClient } from '@/lib/supabase/server';
+import { getWesthamDischargeNormalRange, type NormalRange } from '@/lib/queries/normal-range';
+import {
+  riverConditionSummary,
+  rapidsClass,
+  type RiverConditionSummary,
+} from '@/lib/safety/rules';
 
 export interface GaugeReading {
   locationId: string;
@@ -33,13 +39,30 @@ export interface MetroRiverState {
   downriver: GaugeReading;
   /** Most recent fetched_at across both gauges */
   lastUpdatedAt: string | null;
+  /**
+   * Historical discharge percentiles for today's day-of-year (USGS 02037500, param 00060).
+   * Null before the first usgs-percentiles cron run.
+   */
+  normalRange: NormalRange | null;
+  /**
+   * Last 72 h of gage readings for the sparkline. Each point is
+   * { t: Unix-ms, v: gage_ft }. Empty array if no history available.
+   */
+  recent72h: { t: number; v: number }[];
+  /**
+   * Deterministic river condition summary (band, headline, deltaLabel, translation).
+   * Computed server-side from the current reading + normal range.
+   */
+  summary: RiverConditionSummary;
 }
 
 const UPRIVER_STATION = '02037500';
 const DOWNRIVER_STATION = '02037705';
 
 /** Returns the latest conditions snapshot for each of the two metro gauges. */
-export async function getMetroRiverState(): Promise<MetroRiverState> {
+export async function getMetroRiverState(
+  ageBucket?: string | null,
+): Promise<MetroRiverState> {
   const supabase = await createServerClient('anon');
 
   const { data: gauges } = await supabase
@@ -84,7 +107,7 @@ export async function getMetroRiverState(): Promise<MetroRiverState> {
     };
   }
 
-  const upriver = makeReading(UPRIVER_STATION);
+  const upriver  = makeReading(UPRIVER_STATION);
   const downriver = makeReading(DOWNRIVER_STATION);
 
   const dates = [upriver.fetchedAt, downriver.fetchedAt].filter(Boolean) as string[];
@@ -92,8 +115,47 @@ export async function getMetroRiverState(): Promise<MetroRiverState> {
     ? dates.reduce((a, b) => (new Date(a) > new Date(b) ? a : b))
     : null;
 
+  // ── Enrich with percentiles and 72h history ─────────────────────────────
+
+  const [normalRange, sparkSnaps] = await Promise.all([
+    getWesthamDischargeNormalRange(new Date()),
+    // Last 72h of gage readings for the sparkline
+    supabase
+      .from('conditions_snapshots')
+      .select('fetched_at, gage_ft')
+      .eq('location_id', gaugeMap[UPRIVER_STATION]?.id ?? '')
+      .eq('source', 'usgs')
+      .gte('fetched_at', new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString())
+      .order('fetched_at', { ascending: true })
+      .limit(300),
+  ]);
+
+  const recent72h: { t: number; v: number }[] = (sparkSnaps.data ?? [])
+    .filter((s) => s.gage_ft !== null)
+    .map((s) => ({
+      t: new Date(s.fetched_at).getTime(),
+      v: s.gage_ft as number,
+    }));
+
+  // ── Deterministic river condition summary ────────────────────────────────
+
+  const classValue = upriver.gageFt !== null
+    ? rapidsClass(upriver.gageFt).class
+    : 'I-II' as const;
+
+  const summary = riverConditionSummary({
+    currentGageFt:          upriver.gageFt ?? 0,
+    dischargeNormal:        normalRange
+      ? { p25: normalRange.p25, p50: normalRange.p50, p75: normalRange.p75, unit: 'cfs' }
+      : null,
+    currentDischargeCfs:    upriver.dischargeCfs,
+    rapidsClass:            classValue,
+    activeAdvisorySeverity: null, // advisories fetched separately in page.tsx
+    ageBucket,
+  });
+
   // Note: avgGageFt and deltaGageFt have been intentionally removed.
   // The two readings use different datums (02037500 = arbitrary gage datum;
   // 02037705 = NAVD 1988 tidal elevation) and cannot be numerically compared.
-  return { upriver, downriver, lastUpdatedAt };
+  return { upriver, downriver, lastUpdatedAt, normalRange, recent72h, summary };
 }

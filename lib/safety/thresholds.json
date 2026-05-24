@@ -78,6 +78,16 @@
     }
   },
 
+  "riverState": {
+    "bands": [
+      { "name": "low",      "maxGageFt": 2.5,  "label": "Low & Slow",                 "statusClass": "safe" },
+      { "name": "normal",   "maxGageFt": 4.0,  "label": "Calm & Normal",              "statusClass": "safe" },
+      { "name": "elevated", "maxGageFt": 5.5,  "label": "Elevated — Faster Current",  "statusClass": "caution" },
+      { "name": "high",     "maxGageFt": 8.0,  "label": "High & Fast",                "statusClass": "caution" },
+      { "name": "flood",    "maxGageFt": null,  "label": "Flood Stage",               "statusClass": "danger" }
+    ]
+  },
+
   "locations": {
     "belle-isle": {
       "notes": "South-channel crossing closes above 5.0 ft; north beach swimmable at normal flows",

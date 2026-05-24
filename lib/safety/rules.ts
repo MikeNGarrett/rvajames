@@ -297,3 +297,142 @@ export function combinedLocationStatus(
 
   return { status, reason, label };
 }
+
+// ─── River condition summary (sub-goal 37) ───────────────────────────────────
+
+export type RiverBand = 'low' | 'normal' | 'elevated' | 'high' | 'flood';
+
+export interface RiverConditionSummary {
+  band:        RiverBand;
+  /** 2–5 word qualitative headline, e.g. "Calm & Normal". */
+  headline:    string;
+  /** e.g. "0.4 ft above seasonal median" or null when no percentile data */
+  deltaLabel:  string | null;
+  status:      SafetyStatus;
+  /** ≤18-word plain-language translation of conditions. */
+  translation: string;
+}
+
+/** Discharge (CFS) context — uses seasonal discharge percentiles when available. */
+interface DischargeNormal {
+  p25: number;
+  p50: number;
+  p75: number;
+  unit: 'cfs';
+}
+
+/** Full input for riverConditionSummary. */
+export interface RiverConditionInput {
+  currentGageFt:           number;
+  /** Discharge percentile data for the current day-of-year. May be null. */
+  dischargeNormal:         DischargeNormal | null;
+  /** Current discharge (CFS) for comparing to percentiles. */
+  currentDischargeCfs:     number | null;
+  rapidsClass:             RapidsClassValue;
+  activeAdvisorySeverity:  'low' | 'medium' | 'high' | 'extreme' | null;
+  /** Age bucket for child-friendly variant. */
+  ageBucket?:              string | null;
+}
+
+type BandConfig = {
+  name:        string;
+  maxGageFt:   number | null;
+  label:       string;
+  statusClass: string;
+};
+
+function getBand(gageFt: number): { band: RiverBand; config: BandConfig } {
+  for (const b of thresholds.riverState.bands as BandConfig[]) {
+    if (b.maxGageFt === null || gageFt <= b.maxGageFt) {
+      return { band: b.name as RiverBand, config: b };
+    }
+  }
+  const last = thresholds.riverState.bands[thresholds.riverState.bands.length - 1] as BandConfig;
+  return { band: 'flood', config: last };
+}
+
+const TRANSLATIONS: Record<RiverBand, { adult: string; child: string }> = {
+  low: {
+    adult: 'River is low and slow — rocks exposed at Belle Isle, calm rapids.',
+    child: 'River is low and gentle — great for wading, lots of rocks to explore.',
+  },
+  normal: {
+    adult: 'River is running normal for the season — typical conditions across access points.',
+    child: 'River is running normally — good conditions for families at most spots.',
+  },
+  elevated: {
+    adult: 'River is running above seasonal average — faster current, some shoreline rocks underwater.',
+    child: 'River is a bit higher than usual — stay close to shore, stronger currents.',
+  },
+  high: {
+    adult: 'River is high and moving fast — many rocks submerged, rapids more challenging.',
+    child: 'River is high and fast — wade only in very calm, shallow areas with an adult.',
+  },
+  flood: {
+    adult: 'River is at or above flood stage — keep clear of the riverbanks.',
+    child: 'River is flooding — stay away from the water entirely.',
+  },
+};
+
+const CHILD_BUCKETS = new Set(['0-2', '3-5', '6-9']);
+
+function isChildBucket(ageBucket: string | null | undefined): boolean {
+  return Boolean(ageBucket && CHILD_BUCKETS.has(ageBucket));
+}
+
+/**
+ * Deterministic river condition summary combining band, status, and a
+ * plain-language translation sentence. Pure function — no I/O.
+ */
+export function riverConditionSummary(input: RiverConditionInput): RiverConditionSummary {
+  const { band, config } = getBand(input.currentGageFt);
+
+  // Status from band config
+  const status: SafetyStatus =
+    config.statusClass === 'danger'
+      ? 'danger'
+      : config.statusClass === 'caution'
+        ? 'caution'
+        : 'safe';
+
+  // Override to danger if active high/extreme advisory
+  const finalStatus: SafetyStatus =
+    input.activeAdvisorySeverity === 'high' || input.activeAdvisorySeverity === 'extreme'
+      ? 'danger'
+      : status;
+
+  // Delta label from discharge percentiles
+  let deltaLabel: string | null = null;
+  if (
+    input.dischargeNormal &&
+    input.currentDischargeCfs !== null
+  ) {
+    const { p50 } = input.dischargeNormal;
+    const diff = input.currentDischargeCfs - p50;
+    const absDiff = Math.abs(diff);
+    if (absDiff < p50 * 0.05) {
+      deltaLabel = 'near seasonal median flow';
+    } else {
+      const k = absDiff >= 1000
+        ? `${(absDiff / 1000).toFixed(1)}k`
+        : `${Math.round(absDiff).toLocaleString()}`;
+      deltaLabel =
+        diff > 0
+          ? `${k} cfs above seasonal median`
+          : `${k} cfs below seasonal median`;
+    }
+  }
+
+  // Translation
+  const useChild = isChildBucket(input.ageBucket);
+  const tpl = TRANSLATIONS[band];
+  const translation = useChild ? tpl.child : tpl.adult;
+
+  return {
+    band,
+    headline:   config.label,
+    deltaLabel,
+    status:     finalStatus,
+    translation,
+  };
+}

@@ -117,7 +117,9 @@ DONE                Finding 18 — withIngestionRun fix (commit 852428e or 84f42
 DONE                Round 2 — Homepage rapids redesign (commit 84f42cd)
 DONE                Round 4 sub-goal 41 — howsthejamesrva investigation (commit 926c1da)
 NEXT   (Round 5)    Quick wins: Findings 2, 3, 4, 9, 22, 23, OOS-prefers-reduced-motion, OOS-/brand, + Item 9 (delete orphaned TopRecommendationsTile)
-THEN   (Round 3)    River conditions redesign (with patches above; migration renumbered to 0008) — sub-goals 35–40
+THEN   (Round 9.48) Responsive foundation + design contract — sub-goal 48 only (page container scale, reading-width tokens, text-wrap polish, docs/responsive-guidelines.md). Runs BEFORE Round 3 so Round 3's new components inherit the responsive contract.
+THEN   (Round 3)    River conditions redesign (with patches above; migration renumbered to 0008; new components must follow responsive-guidelines.md) — sub-goals 35–40
+THEN   (Round 9.49–52) Responsive application — sub-goals 49–52 apply the foundation to the full surface (per-route, per-component, container queries, visual regression sweep)
 THEN   (Round 6)    Headers, caching, BF-Cache, security: Findings 6, 7, 8, 10 (preconnect), 17
 THEN   (Round 4)    Closures + NOAA forecast (migration renumbered to 0009) — sub-goals 42–47
 LATER  (Round 7)    ConditionsForm modernization: Findings 15, 16

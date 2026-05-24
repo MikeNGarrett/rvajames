@@ -28,7 +28,7 @@ export default async function Home({ searchParams }: Props) {
   // Fetch deterministic data in parallel — these render immediately
   const [data, metroState] = await Promise.all([
     getTodayData(dateStr, ageBucket),
-    getMetroRiverState(),
+    getMetroRiverState(ageBucket),
   ]);
 
   const hasFlood = data.activeAdvisories.some((a) => a.kind === 'flood_warning');
