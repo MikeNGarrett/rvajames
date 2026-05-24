@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { DisclaimerFooter } from '@/components/legal/DisclaimerFooter';
+import { PageContainer } from '@/components/ui/PageContainer';
 
 export const metadata: Metadata = {
   title: 'Safety Resources — RVA James',
@@ -9,20 +10,21 @@ export const metadata: Metadata = {
 
 export default function SafetyPage() {
   return (
-    <main className="max-w-lg mx-auto px-4 py-5">
+    <main>
+    <PageContainer className="py-5">
       <Link href="/" className="inline-flex items-center text-sm text-rva-blue mb-4 touch-target">
         ← Back to dashboard
       </Link>
 
       <h1 className="text-2xl font-extrabold text-text mb-2">Safety resources</h1>
-      <p className="text-text-secondary text-sm mb-6">
+      <p className="text-text-secondary text-sm mb-6 max-w-prose">
         RVA James uses these official sources to ground its recommendations. Always defer to your
         own judgment and these authorities over any AI-generated guidance.
       </p>
 
       <section className="mb-6">
         <h2 className="text-lg font-semibold text-text mb-3">Water & swimming safety</h2>
-        <ul className="space-y-3">
+        <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 list-none p-0 m-0">
           <li className="rounded-xl border border-border bg-surface-raised p-4">
             <p className="font-semibold text-text mb-1">
               American Academy of Pediatrics (AAP)
@@ -62,7 +64,7 @@ export default function SafetyPage() {
 
       <section className="mb-6">
         <h2 className="text-lg font-semibold text-text mb-3">River conditions</h2>
-        <ul className="space-y-3">
+        <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 list-none p-0 m-0">
           <li className="rounded-xl border border-border bg-surface-raised p-4">
             <p className="font-semibold text-text mb-1">USGS Gage 02037500 — James River at Richmond</p>
             <p className="text-sm text-text-secondary mb-2">
@@ -100,7 +102,7 @@ export default function SafetyPage() {
 
       <section className="mb-6">
         <h2 className="text-lg font-semibold text-text mb-3">Water quality</h2>
-        <ul className="space-y-3">
+        <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 list-none p-0 m-0">
           <li className="rounded-xl border border-border bg-surface-raised p-4">
             <p className="font-semibold text-text mb-1">James River Association — James River Watch</p>
             <p className="text-sm text-text-secondary mb-2">
@@ -136,7 +138,7 @@ export default function SafetyPage() {
 
       <section className="mb-6">
         <h2 className="text-lg font-semibold text-text mb-3">Trail safety</h2>
-        <ul className="space-y-3">
+        <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 list-none p-0 m-0">
           <li className="rounded-xl border border-border bg-surface-raised p-4">
             <p className="font-semibold text-text mb-1">NPS — Trail difficulty standards</p>
             <p className="text-sm text-text-secondary mb-2">
@@ -156,6 +158,7 @@ export default function SafetyPage() {
       </section>
 
       <DisclaimerFooter />
+    </PageContainer>
     </main>
   );
 }

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { createServerClient } from '@/lib/supabase/server';
 import { DisclaimerFooter } from '@/components/legal/DisclaimerFooter';
+import { PageContainer } from '@/components/ui/PageContainer';
 
 export const metadata: Metadata = {
   title: 'System Status — RVA James',
@@ -80,7 +81,8 @@ export default async function StatusPage() {
   const activeClosures = activeClosureRows ?? [];
 
   return (
-    <main className="max-w-lg mx-auto px-4 py-5">
+    <main>
+    <PageContainer className="py-5">
       <Link href="/" className="inline-flex items-center text-sm text-rva-blue mb-4 touch-target">
         ← Dashboard
       </Link>
@@ -196,6 +198,7 @@ export default async function StatusPage() {
       </section>
 
       <DisclaimerFooter />
+    </PageContainer>
     </main>
   );
 }

@@ -176,7 +176,7 @@ export default function BrandPage() {
   return (
     <main
       style={{
-        maxWidth: '48rem',
+        maxWidth: '64rem',
         margin: '0 auto',
         padding: '1.5rem 1rem',
         fontFamily: 'var(--font-sans)',

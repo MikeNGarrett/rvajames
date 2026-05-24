@@ -89,14 +89,14 @@ export default async function Home({ searchParams }: Props) {
           ) : !data.hasConditions ? (
             <>
               <EmptyState message="No gauge data yet — USGS updates every 15 minutes." />
-              <div className="mt-4 grid gap-3">
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 auto-rows-fr">
                 {data.locations.map((loc) => (
                   <RiverLevelTile key={loc.id} location={loc} />
                 ))}
               </div>
             </>
           ) : (
-            <div className="grid gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 auto-rows-fr">
               {data.locations.map((loc) => (
                 <RiverLevelTile key={loc.id} location={loc} />
               ))}
