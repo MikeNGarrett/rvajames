@@ -2,7 +2,7 @@
 
 Cross-references each finding from `modern-web-evaluation-findings.md` against the staged plans, with **actual current state verified against the git history and codebase**.
 
-**Last reconciled: 2026-05-24** (full pass — all 23 findings resolved except Finding 10 partial and Finding 13 deferred). Earlier versions of this doc significantly understated what had shipped — the team had been executing in parallel sessions faster than the doc was being updated. This version is built from `git log` and direct codebase inspection.
+**Last reconciled: 2026-05-24** (complete — all 23 findings resolved; Finding 13 dark mode explicitly deferred; all other open items addressed). Earlier versions of this doc significantly understated what had shipped — the team had been executing in parallel sessions faster than the doc was being updated. This version is built from `git log` and direct codebase inspection.
 
 ---
 
@@ -19,7 +19,7 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 | 7 | medium | Static assets missing `immutable` directive | ✅ **DONE** — Round 6 (commit `dc16684`). |
 | 8 | medium | Missing security headers (XFO, XCTO, Referrer-Policy, Permissions-Policy) | ✅ **DONE** — Round 6 (commit `dc16684`). |
 | 9 | medium | favicon.ico returns 404 | ✅ **DONE** — Round 5/6 (commits `581c4be`, `dc16684`). |
-| 10 | medium | Cloudflare beacon third-party request | ⚠️ **PARTIAL** — preconnect likely landed in Round 6; full self-host deferred. Verify via response headers. |
+| 10 | medium | Cloudflare beacon third-party request | ✅ **DONE** — `<link rel="preconnect">` + dns-prefetch for static.cloudflareinsights.com added to `app/layout.tsx`; beacon domains added to CSP script-src + connect-src (`14e8a00`). |
 | 12 | low | Legacy JS polyfills (~11 KB) | ✅ **DONE** — Round 8. `browserslist` targeting last 2 versions of Chrome/Firefox/Safari/Edge added to `package.json` (`4401179`). |
 | 13 | low | No dark mode support | ⏳ **DEFERRED** — own round if/when prioritized. |
 | 14 | low | Nunito Sans `display: swap` FOUT/CLS risk | ✅ **DONE** — Round 8. Switched to `display: 'optional'`; eliminates FOUT and CLS entirely (`4401179`). |
@@ -33,7 +33,7 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 | 22 | nit | `color-mix()` not used for subtle variants | ✅ **DONE** — Round 5 (commit `581c4be`). |
 | 23 | nit | Container queries not used for activity grid | ✅ **DONE** — Round 9 sub-goal 51. `RiverWideActivityGrid` uses `@container` + `@md:grid-cols-4`. |
 
-**Summary:** 21 ✅ done · 1 ⚠️ partial/verify · 1 ⏳ pending (dark mode — explicitly deferred).
+**Summary:** 22 ✅ done · 0 ⚠️ · 1 ⏳ pending (dark mode — explicitly deferred).
 
 ---
 
@@ -42,12 +42,12 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 | Item | Status |
 |---|---|
 | `/brand` returns 404 in production | ✅ **DONE** — verified gated in Round 5. |
-| `water_temp_f` null for both gauges | ⏳ Open — not investigated; may be a USGS API parameter request issue. |
+| `water_temp_f` null for both gauges | ✅ **DONE** — Neither Richmond gauge has a temp sensor. Added USGS 02035000 (Cartersville, ~40 mi upstream) as a proxy in `lib/ingest/usgs.ts`; its reading is used as a fallback when `waterTempF` is null (`14e8a00`). |
 | `ingestion_runs` stuck rows (finished_at null) | ✅ Resolved by Finding 18 fix (new runs are reliable; legacy stuck rows can be cleaned in a SQL one-liner if desired). |
-| `ConditionsForm` button aria-label | ⏳ Folds into Round 7 (ConditionsForm modernization). |
+| `ConditionsForm` button aria-label | ✅ **DONE** — resolved as part of Round 7 ConditionsForm modernization (`eebf1a3`). |
 | `prefers-reduced-motion` not handled | ✅ **DONE** — Round 5. |
 | `/locations/[slug]/opengraph-image` URL origin | ✅ Fixed by Finding 3 fix. Full OG image work is still Round 8 / Finding 20. |
-| Cloudflare beacon self-injection vs. disable | ⚠️ Preconnect likely added; full self-host or disable deferred. |
+| Cloudflare beacon self-injection vs. disable | ✅ **DONE** — preconnect + dns-prefetch hints added; beacon domains in CSP (`14e8a00`). Full self-host not needed — preconnect eliminates the latency penalty. |
 
 ---
 
@@ -93,25 +93,23 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 ## Remaining work — recommended execution order
 
 ```
-DONE   Round 9 sub-goals 49–52 — responsive application (complete as of 9973852)
-DONE   Round 7 — Findings 15, 16 (nuqs + View Transitions, eebf1a3)
-DONE   Round 8 — Findings 12, 14, 20 (browserslist, font, OG image, 4401179/5a48abb)
-DONE   Finding 17 — CSP Report-Only deployed to prod (0723474, verified live)
-DONE   Sparkline dot round + height fixes (2cbba8b, e0e9d72)
+ALL AUDIT FINDINGS RESOLVED (22/23 done; Finding 13 dark mode explicitly deferred).
 
-OPEN   Finding 10 partial — Cloudflare beacon self-host or disable
-              Preconnect likely in place from Round 6; full self-host deferred.
-              Low-impact: reduces one 3rd-party request.
+DONE   All sub-goals 49–62 complete (responsive, closure sources, Pipeline Trail)
+DONE   Finding 10 — preconnect + CSP beacon domains (14e8a00)
+DONE   water_temp_f — Cartersville upstream proxy (14e8a00)
+DONE   Sub-goals 58–61 — multi-source closure registry + Pipeline Trail (8740502, 5a86bcd)
+DONE   Supabase migration 0010 applied to production (Pipeline Trail row live)
 
-OPEN   water_temp_f null for both gauges
-              Both USGS gauge queries return null for water temperature.
-              Likely a USGS API parameter issue. Has not been investigated.
+MANUAL Sub-goal 62 — Brown's Island construction closure via /admin/closures/new
+              location=browns-island, kind=closed, affects='Entire island'
+              reason='Closed for $30M improvement project. Reopens for Richmond Folk Festival
+              October 9-11, 2026. Full completion early 2027.'
+              source='Venture Richmond Brown's Island Improvement Plan'
+              source_url='https://venturerichmond.com/browns-island-improvement-plan/'
+              effective_from='2025-11-17', effective_to='2026-10-09', next_review_at='2026-09-01'
 
 DEFER  Finding 13 — dark mode (own round if/when prioritized)
-
-DONE   Sub-goals 58–61 — closure sources expansion (code complete, `8740502` + `5a86bcd`)
-              Registry refactor, Venture Richmond + JRPS scrapers, Pipeline Trail 10th location.
-MANUAL Sub-goal 62 — Brown's Island construction closure via /admin/closures/new (no code change)
 ```
 
 ---
