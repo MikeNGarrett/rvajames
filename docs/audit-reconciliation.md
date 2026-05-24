@@ -31,7 +31,7 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 | 20 | low | No OG image defined | ⏳ **NOT STARTED** — Round 8 candidate. Depends on Finding 3 (done). |
 | 21 | nit | Speculation rules are CDN-default | ✅ **DONE** — Round 3 sub-goal 38 (commit `d722386`). |
 | 22 | nit | `color-mix()` not used for subtle variants | ✅ **DONE** — Round 5 (commit `581c4be`). |
-| 23 | nit | Container queries not used for activity grid | ⏳ **NOT STARTED** — Round 9 sub-goal 51 (responsive application). |
+| 23 | nit | Container queries not used for activity grid | ✅ **DONE** — Round 9 sub-goal 51. `RiverWideActivityGrid` uses `@container` + `@md:grid-cols-4`. |
 
 **Summary:** 16 ✅ done · 2 ⚠️ partial/verify · 5 ⏳ pending.
 
@@ -75,7 +75,7 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 | Hotfix: Typography minimum size | `--text-xs` bumped 12px→13px (0.8125rem), `--text-sm` bumped 14px→16px (1rem); removed `text-[7px]` from HorizontalGauge band labels | ✅ COMPLETE | `e48c05e` |
 | Hotfix: CSO ingest dead URLs | Original rva.gov CSO URLs (both 404); switched to DPU news RSS feed + wastewater page scrape with proper source-unavailable vs. no-advisory distinction | ✅ COMPLETE | `e48c05e` |
 | Sub-goals 53–57: Admin safety & a11y | Native `<dialog>` confirm modal, type-to-confirm for Discard, Expire undo toast, visual safe/destructive separation, a11y audit (`scope="col"`, `aria-errormessage`) | ✅ COMPLETE | `a1c71a5`–`dc12e7e` |
-| Round 9 sub-goals 49–52 | Responsive application across routes/components/container queries/visual regression | ⏳ NOT STARTED |
+| Round 9 sub-goals 49–52 | Responsive application across routes/components/container queries/visual regression | ✅ COMPLETE | `ef33f83`–`9973852` |
 | Round 7 (Findings 15, 16) | ConditionsForm modernization (nuqs setters + View Transitions) | ⏳ NOT STARTED |
 | Round 8 (Findings 12, 14, 20) | Polish — legacy JS, font display, OG images | ⏳ NOT STARTED |
 | Deferred | Finding 13 — dark mode | ⏳ DEFERRED |
