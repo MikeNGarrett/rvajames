@@ -81,6 +81,14 @@
   --text-4xl--line-height: 2.5rem;
 }
 
+/* ─── Modal dialog backdrop ──────────────────────────────────────────────── */
+/* Targets the native ::backdrop of <dialog showModal()>. */
+/* Tailwind utility classes can't reach ::backdrop on a ref'd element. */
+dialog.confirm-dialog::backdrop {
+  background-color: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+}
+
 /* ─── 44 px minimum touch target ─────────────────────────────────────────── */
 @utility touch-target {
   min-height: 2.75rem; /* 44px */

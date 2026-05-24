@@ -248,10 +248,11 @@ export default async function ClosuresAdminPage() {
 
                       {row.state === 'active' && (
                         <>
-                          {/* Expire */}
+                          {/* Expire — recoverable, so caution (not danger) variant */}
                           <ConfirmActionButton
                             action={expireClosure.bind(null, row.id)}
-                            confirmMessage={`Expire the closure for "${row.locations?.name ?? 'this location'}"?\n\nThis sets effective_to to now and marks it expired.`}
+                            confirmMessage={`Expire the closure for "${row.locations?.name ?? 'this location'}"?\n\nThis sets effective_to to now and marks it expired. You can re-create it if needed.`}
+                            confirmVariant="caution"
                             className="text-xs text-text-muted hover:underline font-medium"
                           >
                             Expire
