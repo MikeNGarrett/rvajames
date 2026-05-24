@@ -107,7 +107,7 @@ export function HorizontalGauge({
             return (
               <span
                 key={label}
-                className={`absolute top-0 text-[7px] text-text-muted whitespace-nowrap leading-none ${align}`}
+                className={`absolute top-0 text-xs text-text-muted whitespace-nowrap leading-none ${align}`}
                 style={{ left: p(v) }}
               >
                 {label}

@@ -2,7 +2,7 @@
 
 Cross-references each finding from `modern-web-evaluation-findings.md` against the staged plans, with **actual current state verified against the git history and codebase**.
 
-**Last reconciled: 2026-05-24** (after session that fixed cron, gauge, sparkline, admin UX). Earlier versions of this doc significantly understated what had shipped — the team had been executing in parallel sessions faster than the doc was being updated. This version is built from `git log` and direct codebase inspection.
+**Last reconciled: 2026-05-24** (after session that fixed cron, gauge, sparkline, admin UX, typography, and CSO ingest). Earlier versions of this doc significantly understated what had shipped — the team had been executing in parallel sessions faster than the doc was being updated. This version is built from `git log` and direct codebase inspection.
 
 ---
 
@@ -72,6 +72,8 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 | Hotfix: HorizontalGauge responsive | SVG `preserveAspectRatio="none"` caused stretching + "Flood" label clipped — rewrote as CSS | ✅ COMPLETE | pending commit |
 | Hotfix: Sparkline flat-line | normalBand forced Y-axis to 0–4 ft, collapsing ~0.2 ft variation — Y range now derived from data only | ✅ COMPLETE | pending commit |
 | Hotfix: Admin double-confirmation | Expire + Discard actions had no confirmation — added `ConfirmActionButton` client component | ✅ COMPLETE | pending commit |
+| Hotfix: Typography minimum size | `--text-xs` bumped 12px→13px (0.8125rem), `--text-sm` bumped 14px→16px (1rem); removed `text-[7px]` from HorizontalGauge band labels | ✅ COMPLETE | pending commit |
+| Hotfix: CSO ingest dead URLs | Original rva.gov CSO URLs (both 404); switched to DPU news RSS feed + wastewater page scrape with proper source-unavailable vs. no-advisory distinction | ✅ COMPLETE | pending commit |
 | Round 9 sub-goals 49–52 | Responsive application across routes/components/container queries/visual regression | ⏳ NOT STARTED |
 | Round 7 (Findings 15, 16) | ConditionsForm modernization (nuqs setters + View Transitions) | ⏳ NOT STARTED |
 | Round 8 (Findings 12, 14, 20) | Polish — legacy JS, font display, OG images | ⏳ NOT STARTED |

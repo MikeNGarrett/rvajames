@@ -94,7 +94,11 @@ export function RiverSegmentPanel({ metroState }: Props) {
           River conditions
         </h2>
         {lastUpdatedAt && (
-          <span className="text-xs text-text-muted" aria-label={`Data updated ${ageLabel(lastUpdatedAt)}`}>
+          <span
+            className="text-xs text-text-muted"
+            aria-label={`Data updated ${ageLabel(lastUpdatedAt)}`}
+            suppressHydrationWarning
+          >
             Updated {ageLabel(lastUpdatedAt)}
           </span>
         )}

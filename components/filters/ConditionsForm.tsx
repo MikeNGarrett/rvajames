@@ -32,9 +32,14 @@ export function ConditionsForm({ currentDate, currentAge }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-3 mb-5 items-end">
+    /*
+     * Mobile (< sm): 2-column grid — both labelled inputs share row 1,
+     * the Show button spans both columns on row 2.
+     * ≥ sm: single-row flex (original layout) — inputs grow, button is fixed.
+     */
+    <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-3 mb-5 sm:flex sm:items-end">
       {/* Date */}
-      <div className="flex flex-col gap-1 flex-1">
+      <div className="flex flex-col gap-1 sm:flex-1">
         <label htmlFor="date-picker" className="text-sm font-medium text-text-secondary">
           Date
         </label>
@@ -52,7 +57,7 @@ export function ConditionsForm({ currentDate, currentAge }: Props) {
       </div>
 
       {/* Age bucket */}
-      <div className="flex flex-col gap-1 flex-1">
+      <div className="flex flex-col gap-1 sm:flex-1">
         <label htmlFor="age-bucket" className="text-sm font-medium text-text-secondary">
           Youngest child
         </label>
@@ -70,11 +75,11 @@ export function ConditionsForm({ currentDate, currentAge }: Props) {
         </select>
       </div>
 
-      {/* Submit */}
+      {/* Submit — full-width on mobile (col-span-2), auto-width in the sm flex row */}
       <button
         type="submit"
         disabled={!hasChanged || isPending}
-        className={`touch-target flex-shrink-0 rounded-lg px-4 text-base font-semibold transition-colors
+        className={`col-span-2 touch-target rounded-lg px-4 text-base font-semibold transition-colors sm:flex-shrink-0
           ${hasChanged && !isPending
             ? 'bg-rva-blue text-white hover:bg-rva-blue/90 active:scale-95'
             : 'bg-surface-raised border border-border text-text-muted cursor-not-allowed'
@@ -82,7 +87,7 @@ export function ConditionsForm({ currentDate, currentAge }: Props) {
         aria-label="Show conditions"
       >
         {isPending ? (
-          <span className="flex items-center gap-1.5">
+          <span className="flex items-center justify-center gap-1.5">
             <svg className="animate-spin motion-reduce:animate-none h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden>
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3V4a10 10 0 100 20v-4l-3 3 3 3v-4a8 8 0 01-8-8z" />
