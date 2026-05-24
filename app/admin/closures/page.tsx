@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Trash2 } from 'lucide-react';
 import { requireAdminEmail } from '@/lib/admin/auth';
 import { createServerClient } from '@/lib/supabase/server';
 import {
@@ -195,67 +196,65 @@ export default async function ClosuresAdminPage() {
                     )}
                   </td>
 
-                  {/* Actions */}
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {/* Edit — always available */}
-                      <Link
-                        href={`/admin/closures/${row.id}`}
-                        className="text-xs text-rva-blue hover:underline font-medium"
-                      >
-                        Edit
-                      </Link>
-
-                      {row.state === 'draft' && (
-                        <>
-                          {/* Approve — scraper drafts get an inline kind selector;
-                              manual drafts just promote as-is */}
-                          <form
-                            action={approveDraft.bind(null, row.id)}
-                            className="flex items-center gap-1"
-                          >
-                            {row.source === SCRAPER_SOURCE && (
-                              <select
-                                name="kind"
-                                defaultValue={row.kind}
-                                className="text-xs border border-border rounded px-1 py-0.5 bg-surface text-text"
-                                aria-label="Kind override"
-                              >
-                                <option value="open">Open</option>
-                                <option value="restricted">Restricted</option>
-                                <option value="closed">Closed</option>
-                                <option value="closed_indefinite">Closed ∞</option>
-                              </select>
-                            )}
-                            <button
-                              type="submit"
-                              className="text-xs text-status-safe-fg hover:underline font-medium"
+                  {/* Actions — sub-goal 56: safe actions left, destructive icon right.
+                      justify-between creates visual whitespace between them so the
+                      user's pointer must travel across the cell to reach the
+                      destructive button, preventing muscle-memory misclicks. */}
+                  <td className="px-4 py-3 min-w-[140px]">
+                    {row.state === 'draft' && (
+                      <div className="flex items-center justify-between gap-2">
+                        {/* Left: Approve (primary happy path) */}
+                        <form
+                          action={approveDraft.bind(null, row.id)}
+                          className="flex items-center gap-1"
+                        >
+                          {row.source === SCRAPER_SOURCE && (
+                            <select
+                              name="kind"
+                              defaultValue={row.kind}
+                              className="text-xs border border-border rounded px-1 py-0.5 bg-surface text-text"
+                              aria-label="Kind override"
                             >
-                              Approve
-                            </button>
-                          </form>
-
-                          {/* Discard draft — hard delete, no undo; requires typing location name */}
-                          <ConfirmActionButton
-                            action={discardDraft.bind(null, row.id)}
-                            confirmMessage={`Permanently delete this draft?\n\nThis cannot be undone. The draft will be gone with no way to recover it.`}
-                            typeToConfirm={row.locations?.name ?? 'unknown location'}
-                            className="text-xs text-status-danger hover:underline font-medium"
+                              <option value="open">Open</option>
+                              <option value="restricted">Restricted</option>
+                              <option value="closed">Closed</option>
+                              <option value="closed_indefinite">Closed ∞</option>
+                            </select>
+                          )}
+                          <button
+                            type="submit"
+                            className="text-xs font-semibold text-status-safe-fg hover:underline"
                           >
-                            Discard
-                          </ConfirmActionButton>
-                        </>
-                      )}
+                            Approve
+                          </button>
+                        </form>
 
-                      {row.state === 'active' && (
-                        <>
-                          {/* Expire — ExpireButton shows undo toast after success */}
-                          <ExpireButton
-                            id={row.id}
-                            locationName={row.locations?.name ?? 'this location'}
-                          />
+                        {/* Right: Discard icon — hard delete, type-to-confirm guard */}
+                        <ConfirmActionButton
+                          action={discardDraft.bind(null, row.id)}
+                          confirmMessage={`Permanently delete this draft?\n\nThis cannot be undone. The draft will be gone with no way to recover it.`}
+                          confirmLabel="Discard"
+                          typeToConfirm={row.locations?.name ?? 'unknown location'}
+                          className="inline-flex items-center justify-center w-7 h-7 rounded-md text-status-danger/60 hover:bg-status-danger-subtle hover:text-status-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-danger transition-colors"
+                        >
+                          <Trash2 size={14} aria-hidden />
+                          <span className="sr-only">
+                            Discard draft for {row.locations?.name ?? 'this location'}
+                          </span>
+                        </ConfirmActionButton>
+                      </div>
+                    )}
 
-                          {/* Duplicate */}
+                    {row.state === 'active' && (
+                      <div className="flex items-center justify-between gap-2">
+                        {/* Left: safe actions */}
+                        <div className="flex items-center gap-3">
+                          <Link
+                            href={`/admin/closures/${row.id}`}
+                            className="text-xs text-rva-blue hover:underline font-medium"
+                          >
+                            Edit
+                          </Link>
                           <form action={duplicateClosure.bind(null, row.id)}>
                             <button
                               type="submit"
@@ -264,9 +263,15 @@ export default async function ClosuresAdminPage() {
                               Duplicate
                             </button>
                           </form>
-                        </>
-                      )}
-                    </div>
+                        </div>
+
+                        {/* Right: Expire icon with undo toast */}
+                        <ExpireButton
+                          id={row.id}
+                          locationName={row.locations?.name ?? 'this location'}
+                        />
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}

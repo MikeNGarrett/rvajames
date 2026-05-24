@@ -9,6 +9,7 @@
  */
 
 import { useState, useTransition } from 'react';
+import { Archive } from 'lucide-react';
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog';
 import { useAdminToast } from '@/components/admin/ToastProvider';
 import { expireClosure, unexpireClosure } from './actions';
@@ -36,12 +37,19 @@ export function ExpireButton({ id, locationName }: Props) {
 
   return (
     <>
+      {/*
+       * Icon-only: Archive icon signals "archiving" (recoverable) rather than
+       * destruction. title= provides a native tooltip; aria-label gives AT the
+       * full verb for the specific location.
+       */}
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs text-text-muted hover:underline font-medium"
+        title="Expire closure"
+        aria-label={`Expire closure for ${locationName}`}
+        className="inline-flex items-center justify-center w-7 h-7 rounded-md text-text-muted hover:bg-status-caution-subtle hover:text-status-caution-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-caution-fg transition-colors"
       >
-        Expire
+        <Archive size={14} aria-hidden />
       </button>
 
       <ConfirmDialog
