@@ -13,11 +13,17 @@ export async function withIngestionRun(
   const supabase = await createServerClient('service');
   const startedAt = new Date().toISOString();
 
-  const { data: run } = await supabase
+  const { data: run, error: insertError } = await supabase
     .from('ingestion_runs')
     .insert({ source, started_at: startedAt })
     .select('id')
     .single();
+
+  if (insertError) {
+    // Log but continue — the actual ingest must run even if audit logging is broken.
+    // This surfaces in `wrangler tail` and does not silently swallow the failure (Finding 18).
+    console.error('[withIngestionRun] failed to create ingestion_runs row:', insertError.message);
+  }
 
   let result: RunResult;
   try {
