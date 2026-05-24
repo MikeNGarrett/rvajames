@@ -73,13 +73,19 @@ Public vars in `wrangler.jsonc`:
 
 ## Cron schedule
 
+5 triggers (Cloudflare Workers free-plan limit is 5 per account).
+
 | Route | Schedule | Description |
 |---|---|---|
 | `/api/cron/usgs` | `*/15 * * * *` | USGS gage data (every 15 min) |
-| `/api/cron/nws` | `0 * * * *` | NWS weather/alerts (hourly) |
+| `/api/cron/nws` | `0 * * * *` | NWS weather/alerts **+ NOAA AHPS 72h forecast** (hourly) |
+| `/api/cron/usgs-percentiles` | `0 3 * * *` | USGS historical discharge percentiles (daily 3am) |
 | `/api/cron/jra` | `0 12 * * *` | JRA water quality (daily noon) |
 | `/api/cron/cso` | `0 6,18 * * *` | RVA CSO advisories (6am + 6pm) |
-| `/api/cron/interpret` | `15 6 * * *` | AI interpretations (daily 6:15am) |
+
+> **Why NWS and NOAA AHPS share one trigger:** Both are federal water/weather feeds on hourly cadence. Sharing a slot keeps us within the free-plan limit. The standalone `/api/cron/noaa-ahps` endpoint still exists for manual triggering.
+>
+> To upgrade and restore a dedicated NOAA AHPS trigger: upgrade to Workers Paid plan, then add `"30 * * * *"` back to `wrangler.jsonc` and remove the NOAA call from `/api/cron/nws/route.ts`.
 
 ## First manual trigger — 2026-05-23
 

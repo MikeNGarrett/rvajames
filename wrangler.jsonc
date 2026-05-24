@@ -14,14 +14,11 @@
 	},
 	"triggers": {
 		"crons": [
-			"*/15 * * * *",  // /api/cron/usgs — USGS gage data (every 15 min)
-			"0 * * * *",     // /api/cron/nws — NWS weather/alerts (hourly)
-			// "30 * * * *", // /api/cron/noaa-ahps — DISABLED: free-tier 5-trigger cap reached.
-			//                 Trigger manually: curl -H "x-cron-secret: $CRON_SECRET" https://rvajames.org/api/cron/noaa-ahps
-			//                 Or upgrade to Workers Paid plan to re-enable.
-			"0 3 * * *",     // /api/cron/usgs-percentiles — USGS historical percentiles (daily 3am)
-			"0 12 * * *",    // /api/cron/jra — JRA water quality (daily noon)
-			"0 6,18 * * *"   // /api/cron/cso — RVA CSO advisories (6am + 6pm)
+			"*/15 * * * *", // /api/cron/usgs           — USGS gage data (every 15 min)
+			"0 * * * *",    // /api/cron/nws             — NWS weather/alerts + NOAA AHPS forecast (hourly)
+			"0 3 * * *",    // /api/cron/usgs-percentiles — USGS historical percentiles (daily 3am)
+			"0 12 * * *",   // /api/cron/jra             — JRA water quality (daily noon)
+			"0 6,18 * * *"  // /api/cron/cso             — RVA CSO advisories (6am + 6pm)
 		]
 	},
 	"observability": {
