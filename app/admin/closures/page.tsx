@@ -15,12 +15,15 @@ type Row = {
   affects: string | null;
   reason: string;
   source: string;
+  source_url: string | null;
   effective_from: string;
   effective_to: string | null;
   next_review_at: string | null;
   created_at: string;
   locations: { name: string; slug: string } | null;
 };
+
+const SCRAPER_SOURCE = 'rva.gov parks scrape';
 
 function KindBadge({ kind }: { kind: string }) {
   const styles: Record<string, string> = {
@@ -137,12 +140,21 @@ export default async function ClosuresAdminPage() {
               {sorted.map((row) => (
                 <tr key={row.id} className="hover:bg-surface transition-colors">
                   {/* Location */}
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 max-w-[220px]">
                     <div className="font-medium text-text">
                       {row.locations?.name ?? <span className="text-text-muted italic">Unknown</span>}
                     </div>
                     {row.affects && (
                       <div className="text-xs text-text-muted mt-0.5">{row.affects}</div>
+                    )}
+                    {/* Show truncated scraped text for scraper drafts so reviewer can judge relevance */}
+                    {row.state === 'draft' && row.source === SCRAPER_SOURCE && (
+                      <div
+                        className="text-xs text-text-muted mt-1 line-clamp-2 italic"
+                        title={row.reason}
+                      >
+                        {row.reason}
+                      </div>
                     )}
                   </td>
 
@@ -169,6 +181,17 @@ export default async function ClosuresAdminPage() {
                   {/* Source */}
                   <td className="px-4 py-3 hidden md:table-cell text-text-secondary max-w-[180px]">
                     <div className="truncate" title={row.source}>{row.source}</div>
+                    {row.source_url && (
+                      <a
+                        href={row.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-rva-blue hover:underline truncate block mt-0.5"
+                        title={row.source_url}
+                      >
+                        View source ↗
+                      </a>
+                    )}
                   </td>
 
                   {/* Actions */}
@@ -184,10 +207,25 @@ export default async function ClosuresAdminPage() {
 
                       {row.state === 'draft' && (
                         <>
-                          {/* Quick-approve: no overrides, just set state=active */}
+                          {/* Approve — scraper drafts get an inline kind selector;
+                              manual drafts just promote as-is */}
                           <form
                             action={approveDraft.bind(null, row.id)}
+                            className="flex items-center gap-1"
                           >
+                            {row.source === SCRAPER_SOURCE && (
+                              <select
+                                name="kind"
+                                defaultValue={row.kind}
+                                className="text-xs border border-border rounded px-1 py-0.5 bg-surface text-text"
+                                aria-label="Kind override"
+                              >
+                                <option value="open">Open</option>
+                                <option value="restricted">Restricted</option>
+                                <option value="closed">Closed</option>
+                                <option value="closed_indefinite">Closed ∞</option>
+                              </select>
+                            )}
                             <button
                               type="submit"
                               className="text-xs text-status-safe-fg hover:underline font-medium"
@@ -196,15 +234,8 @@ export default async function ClosuresAdminPage() {
                             </button>
                           </form>
 
-                          {/* Discard draft — wrapped in a confirm-on-submit form */}
-                          <form
-                            action={discardDraft.bind(null, row.id)}
-                            onSubmit={(e) => {
-                              if (!window.confirm('Discard this draft? This cannot be undone.')) {
-                                e.preventDefault();
-                              }
-                            }}
-                          >
+                          {/* Discard draft — hard delete; no undo */}
+                          <form action={discardDraft.bind(null, row.id)}>
                             <button
                               type="submit"
                               className="text-xs text-status-danger hover:underline font-medium"
@@ -218,14 +249,7 @@ export default async function ClosuresAdminPage() {
                       {row.state === 'active' && (
                         <>
                           {/* Expire */}
-                          <form
-                            action={expireClosure.bind(null, row.id)}
-                            onSubmit={(e) => {
-                              if (!window.confirm('Mark this closure as expired?')) {
-                                e.preventDefault();
-                              }
-                            }}
-                          >
+                          <form action={expireClosure.bind(null, row.id)}>
                             <button
                               type="submit"
                               className="text-xs text-text-muted hover:underline font-medium"

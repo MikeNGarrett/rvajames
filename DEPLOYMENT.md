@@ -79,7 +79,7 @@ Public vars in `wrangler.jsonc`:
 |---|---|---|
 | `/api/cron/usgs` | `*/15 * * * *` | USGS gage data (every 15 min) |
 | `/api/cron/nws` | `0 * * * *` | NWS weather/alerts **+ NOAA AHPS 72h forecast** (hourly) |
-| `/api/cron/usgs-percentiles` | `0 3 * * *` | USGS historical discharge percentiles (daily 3am) |
+| `/api/cron/usgs-percentiles` | `0 3 * * *` | USGS historical discharge percentiles **+ rva.gov closure scrape** (daily 3am) |
 | `/api/cron/jra` | `0 12 * * *` | JRA water quality (daily noon) |
 | `/api/cron/cso` | `0 6,18 * * *` | RVA CSO advisories (6am + 6pm) |
 
