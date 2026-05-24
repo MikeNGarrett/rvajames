@@ -1,6 +1,7 @@
 import { createServerClient } from '@/lib/supabase/server';
 import type { AgeBucket } from '@/lib/url-state';
 import { getMetroRiverState } from './river-segment';
+import { getActiveStatusMap } from './location-status';
 import { combinedLocationStatus, type SafetyStatus } from '@/lib/safety/rules';
 
 export interface DeterministicStatus {
@@ -41,7 +42,8 @@ export interface TodayData {
 export async function getTodayData(date: string, ageBucket: AgeBucket): Promise<TodayData> {
   const supabase = await createServerClient('anon');
 
-  const [{ data: locations }, { data: advisories }, metroState] = await Promise.all([
+  const now = new Date();
+  const [{ data: locations }, { data: advisories }, metroState, statusMap] = await Promise.all([
     supabase
       .from('locations')
       .select('id, slug, name, tags')
@@ -50,9 +52,10 @@ export async function getTodayData(date: string, ageBucket: AgeBucket): Promise<
     supabase
       .from('advisories')
       .select('id, kind, severity, headline, body')
-      .or(`effective_to.is.null,effective_to.gte.${new Date().toISOString()}`)
+      .or(`effective_to.is.null,effective_to.gte.${now.toISOString()}`)
       .order('severity', { ascending: false }),
     getMetroRiverState(),
+    getActiveStatusMap(now),
   ]);
 
   if (!locations?.length) {
@@ -82,6 +85,12 @@ export async function getTodayData(date: string, ageBucket: AgeBucket): Promise<
     : null;
 
   const summarized: LocationSummary[] = locations.map((loc) => {
+    // Look up any active operational closure / restriction for this location
+    const opStatus = statusMap.get(loc.id) ?? null;
+    const operationalOverride = opStatus
+      ? { kind: opStatus.kind, reason: opStatus.reason, affects: opStatus.affects }
+      : null;
+
     const combined = combinedLocationStatus(
       {
         gageFt: upriverGageFt,
@@ -91,6 +100,7 @@ export async function getTodayData(date: string, ageBucket: AgeBucket): Promise<
       },
       advisoriesForRules,
       loc.slug,
+      operationalOverride,
     );
 
     return {
@@ -107,6 +117,21 @@ export async function getTodayData(date: string, ageBucket: AgeBucket): Promise<
       },
       snapshotAge,
     };
+  });
+
+  // Sort: operationally closed/restricted locations first (most actionable info
+  // at top), then by natural name order within each group.
+  const STATUS_SORT_ORDER: Record<SafetyStatus, number> = {
+    closed:  0,
+    danger:  1,
+    caution: 2,
+    safe:    3,
+  };
+  summarized.sort((a, b) => {
+    const aOrder = STATUS_SORT_ORDER[a.deterministicStatus.status] ?? 99;
+    const bOrder = STATUS_SORT_ORDER[b.deterministicStatus.status] ?? 99;
+    if (aOrder !== bOrder) return aOrder - bOrder;
+    return a.name.localeCompare(b.name);
   });
 
   return {

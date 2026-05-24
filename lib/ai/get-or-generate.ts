@@ -92,6 +92,10 @@ function computeMetroHash(input: MetroSummaryInput): string {
     rain48hIn: input.rain48hIn ?? 0,
     activeCSOAdvisory: input.activeCSOAdvisory ?? false,
     advisories: [...input.activeAdvisoryHeadlines].sort(),
+    // Closure changes naturally invalidate the cache — no manual version bump needed
+    closures: (input.activeClosures ?? [])
+      .map((c) => `${c.locationSlug}:${c.kind}`)
+      .sort(),
   }));
 }
 

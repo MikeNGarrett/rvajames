@@ -10,13 +10,14 @@ export const metadata: Metadata = {
 
 export const revalidate = 60;
 
-const SOURCES = ['usgs', 'nws', 'jra', 'cso'] as const;
+const SOURCES = ['usgs', 'nws', 'jra', 'cso', 'rva-closures'] as const;
 
 const SOURCE_LABELS: Record<string, string> = {
   usgs: 'USGS (every 15 min)',
   nws: 'NWS (hourly)',
   jra: 'JRA (daily noon)',
   cso: 'RVA DPU CSO (6 AM, 6 PM)',
+  'rva-closures': 'RVA.gov closures (daily 3am)',
 };
 
 function timeAgo(isoDate: string | null): string {
@@ -65,6 +66,18 @@ export default async function StatusPage() {
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+
+  // Active closures (anon RLS: only active state is readable)
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const { data: activeClosureRows } = await supabase
+    .from('location_status')
+    .select('id, kind, reason, affects, effective_from, effective_to, locations(name)')
+    .eq('state', 'active')
+    .lte('effective_from', nowIso)
+    .or(`effective_to.is.null,effective_to.gt.${nowIso}`);
+
+  const activeClosures = activeClosureRows ?? [];
 
   return (
     <main className="max-w-lg mx-auto px-4 py-5">
@@ -139,6 +152,47 @@ export default async function StatusPage() {
             Last generated: {timeAgo(latestInterp.created_at)} · lazy on-demand
           </p>
         )}
+      </section>
+
+      {/* Active closures */}
+      <section className="mb-6">
+        <h2 className="text-base font-semibold text-text mb-3">Active closures</h2>
+        {activeClosures.length === 0 ? (
+          <div className="rounded-xl border border-border bg-surface-raised px-4 py-3 text-sm text-text-muted">
+            No active closures.
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+            {activeClosures.map((row, i) => {
+              // Supabase returns a nested object or array for joined tables
+              const loc = Array.isArray(row.locations) ? row.locations[0] : row.locations;
+              const name = (loc as { name?: string } | null)?.name ?? 'Unknown location';
+              return (
+                <div
+                  key={row.id}
+                  className={`px-4 py-3 ${i < activeClosures.length - 1 ? 'border-b border-border' : ''}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium text-text">{name}</p>
+                    <span className="flex-shrink-0 text-xs font-medium rounded px-1.5 py-0.5 bg-status-closed-subtle text-status-closed">
+                      {row.kind === 'closed_indefinite' ? 'Closed ∞' : row.kind}
+                    </span>
+                  </div>
+                  {row.affects && (
+                    <p className="text-xs text-text-muted mt-0.5">{row.affects}</p>
+                  )}
+                  <p className="text-xs text-text-secondary mt-1 line-clamp-1">{row.reason}</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <p className="text-xs text-text-muted mt-2">
+          Drafts pending review at{' '}
+          <Link href="/admin/closures" className="text-rva-blue hover:underline">
+            /admin/closures
+          </Link>
+        </p>
       </section>
 
       <DisclaimerFooter />

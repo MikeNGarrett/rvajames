@@ -34,6 +34,35 @@ export async function getActiveStatuses(
 }
 
 /**
+ * Returns a Map<locationId, LocationStatus> with the most-severe active
+ * status for each location on `date`. Single query — efficient for the
+ * homepage which needs to check all 9 access points at once.
+ *
+ * Severity order: closed_indefinite(4) > closed(3) > restricted(2) > open(1)
+ */
+export async function getActiveStatusMap(
+  date: Date,
+): Promise<Map<string, LocationStatus>> {
+  const all = await getActiveStatuses(date);
+
+  const SEVERITY: Record<LocationStatusKind, number> = {
+    'closed_indefinite': 4,
+    'closed':            3,
+    'restricted':        2,
+    'open':              1,
+  };
+
+  const map = new Map<string, LocationStatus>();
+  for (const row of all) {
+    const existing = map.get(row.location_id);
+    if (!existing || SEVERITY[row.kind] > SEVERITY[existing.kind]) {
+      map.set(row.location_id, row);
+    }
+  }
+  return map;
+}
+
+/**
  * Returns the most-severe active status for a single location on `date`.
  * Severity order: closed_indefinite > closed > restricted > open
  */

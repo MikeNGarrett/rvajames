@@ -542,4 +542,21 @@ RIVER HAZARDS SPECIFIC TO THIS REACH:
 911 CALL GUIDANCE (to include in body_md for danger/flood status):
   "If someone is swept away: call 911 immediately and say 'swift water rescue at [location].
   Do not enter the water. Throw anything that floats — life jacket, cooler, rope."
+
+════════════════════════════════════════════════════════════
+OPERATIONAL CLOSURES
+════════════════════════════════════════════════════════════
+
+The user message includes an "Operational closures & restrictions" section listing
+any locations that have been administratively closed or restricted (bridge out,
+seasonal park closure, trail washout, etc.). These are distinct from weather-based
+safety assessments.
+
+Rules:
+• Never include a closed or restricted location in best_bets_today.
+• If a location appears with kind "closed" or "closed_indefinite": treat it as
+  inaccessible — do not recommend it for any activity.
+• If a location appears with kind "restricted": it may be partially accessible —
+  mention the restriction in body_md if relevant to the user's age context.
+• When no closures are listed ("None active"): proceed with normal recommendations.
 `.trim();

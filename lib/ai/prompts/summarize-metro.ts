@@ -68,6 +68,12 @@ export const PROMPT_VERSION = 'b2' as const;
 
 // ─── Input / user message builder ────────────────────────────────────────────
 
+export interface ActiveClosureEntry {
+  locationSlug: string;
+  kind:         'open' | 'restricted' | 'closed' | 'closed_indefinite';
+  reason:       string;
+}
+
 export interface MetroSummaryInput {
   date:                    string;       // YYYY-MM-DD
   ageBucket:               AgeBucket;
@@ -78,6 +84,12 @@ export interface MetroSummaryInput {
   rain48hIn?:              number;
   activeCSOAdvisory?:      boolean;
   hasHighSeverityAdvisory?: boolean;
+  /**
+   * Active operational closures / restrictions. Included in the user message
+   * so the AI avoids recommending closed locations in best_bets_today.
+   * Changes naturally invalidate the prompt_hash, forcing regeneration.
+   */
+  activeClosures?:         ActiveClosureEntry[];
 }
 
 export function buildMetroUserMessage(input: MetroSummaryInput): string {
@@ -135,6 +147,16 @@ export function buildMetroUserMessage(input: MetroSummaryInput): string {
     input.activeAdvisoryHeadlines.length
       ? input.activeAdvisoryHeadlines.map((h) => `• ${h}`).join('\n')
       : 'None',
+    '',
+    '--- Operational closures & restrictions ---',
+    ...(input.activeClosures && input.activeClosures.length > 0
+      ? [
+          ...input.activeClosures.map(
+            (c) => `• ${c.locationSlug} [${c.kind}]: ${c.reason}`,
+          ),
+          'IMPORTANT: Do not include any closed/restricted locations above in best_bets_today.',
+        ]
+      : ['None active']),
     '',
     '--- Deterministic baselines (copy slug + status verbatim; write note in your own words) ---',
     `rapids_class: ${classResult.class}  (rules engine: ${classResult.label})`,
