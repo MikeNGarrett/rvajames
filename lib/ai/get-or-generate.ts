@@ -142,17 +142,22 @@ export async function getOrGenerate(
     .maybeSingle();
 
   if (exact) {
-    return {
-      kind: 'location',
-      interpretation: InterpretationSchema.parse(parseJson(exact.body_md)),
-      source: 'cache',
-      tokensIn: exact.tokens_in,
-      tokensOut: exact.tokens_out,
-      costUsd: exact.cost_usd,
-      cacheCreated: 0,
-      cacheRead: 0,
-      model: exact.model,
-    };
+    try {
+      return {
+        kind: 'location',
+        interpretation: InterpretationSchema.parse(parseJson(exact.body_md)),
+        source: 'cache',
+        tokensIn: exact.tokens_in,
+        tokensOut: exact.tokens_out,
+        costUsd: exact.cost_usd,
+        cacheCreated: 0,
+        cacheRead: 0,
+        model: exact.model,
+      };
+    } catch (parseErr) {
+      // Legacy row with incompatible body_md format — fall through to regenerate.
+      console.error('[get-or-generate] cache parse failed for', input.locationSlug, parseErr);
+    }
   }
 
   // ── 2. Generate ──────────────────────────────────────────────────────────
@@ -201,17 +206,21 @@ export async function getOrGenerate(
         .eq('prompt_hash', promptHash)
         .maybeSingle();
       if (winner) {
-        return {
-          kind: 'location',
-          interpretation: InterpretationSchema.parse(parseJson(winner.body_md)),
-          source: 'cache',
-          tokensIn: winner.tokens_in,
-          tokensOut: winner.tokens_out,
-          costUsd: winner.cost_usd,
-          cacheCreated: 0,
-          cacheRead: 0,
-          model: winner.model,
-        };
+        try {
+          return {
+            kind: 'location',
+            interpretation: InterpretationSchema.parse(parseJson(winner.body_md)),
+            source: 'cache',
+            tokensIn: winner.tokens_in,
+            tokensOut: winner.tokens_out,
+            costUsd: winner.cost_usd,
+            cacheCreated: 0,
+            cacheRead: 0,
+            model: winner.model,
+          };
+        } catch {
+          // winner row also has legacy format — return the freshly generated result instead
+        }
       }
     }
 
@@ -227,17 +236,21 @@ export async function getOrGenerate(
       .limit(1)
       .maybeSingle();
     if (stale) {
-      return {
-        kind: 'location',
-        interpretation: InterpretationSchema.parse(parseJson(stale.body_md)),
-        source: 'stale',
-        tokensIn: stale.tokens_in,
-        tokensOut: stale.tokens_out,
-        costUsd: stale.cost_usd,
-        cacheCreated: 0,
-        cacheRead: 0,
-        model: stale.model,
-      };
+      try {
+        return {
+          kind: 'location',
+          interpretation: InterpretationSchema.parse(parseJson(stale.body_md)),
+          source: 'stale',
+          tokensIn: stale.tokens_in,
+          tokensOut: stale.tokens_out,
+          costUsd: stale.cost_usd,
+          cacheCreated: 0,
+          cacheRead: 0,
+          model: stale.model,
+        };
+      } catch {
+        // stale row also has legacy format — return null and let the next request regenerate
+      }
     }
     return null;
   }
@@ -263,24 +276,31 @@ export async function getOrGenerateMetro(
     .maybeSingle();
 
   if (exact) {
-    const summary: MetroSummary = {
-      headline: exact.headline,
-      body_md: exact.body_md,
-      top_concerns: exact.top_concerns as string[],
-      best_bets_today: exact.best_bets as MetroSummary['best_bets_today'],
-      disclaimer_kind: 'standard', // will parse from body_md if stored later
-    };
-    return {
-      kind: 'metro',
-      summary,
-      source: 'cache',
-      tokensIn: exact.tokens_in,
-      tokensOut: exact.tokens_out,
-      costUsd: exact.cost_usd,
-      cacheCreated: 0,
-      cacheRead: 0,
-      model: exact.model,
-    };
+    // metro summary is stored as structured columns (not raw body_md JSON),
+    // so no parse can fail here — but guard for safety anyway.
+    try {
+      const summary: MetroSummary = {
+        headline: exact.headline,
+        body_md: exact.body_md,
+        top_concerns: exact.top_concerns as string[],
+        best_bets_today: exact.best_bets as MetroSummary['best_bets_today'],
+        disclaimer_kind: 'standard',
+      };
+      return {
+        kind: 'metro',
+        summary,
+        source: 'cache',
+        tokensIn: exact.tokens_in,
+        tokensOut: exact.tokens_out,
+        costUsd: exact.cost_usd,
+        cacheCreated: 0,
+        cacheRead: 0,
+        model: exact.model,
+      };
+    } catch (parseErr) {
+      console.error('[get-or-generate] metro cache parse failed', parseErr);
+      // fall through to regenerate
+    }
   }
 
   // ── 2. Generate ──────────────────────────────────────────────────────────
@@ -360,6 +380,7 @@ export async function getOrGenerateMetro(
       .limit(1)
       .maybeSingle();
     if (stale) {
+      // metro_summaries columns are structured (not raw JSON body_md), always safe to return
       return {
         kind: 'metro',
         summary: {

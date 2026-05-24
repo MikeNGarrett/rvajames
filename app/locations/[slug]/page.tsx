@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import type { Metadata } from 'next';
-import { getLocationDetail, getAllLocationSlugs } from '@/lib/queries/location';
+import { getLocationDetail } from '@/lib/queries/location';
 import { searchParamsCache, isValidAgeBucket, formatDateParam, type AgeBucket } from '@/lib/url-state';
 import { ActivityMatrix } from '@/components/location/ActivityMatrix';
 import { PrepChecklist } from '@/components/trip/PrepChecklist';
@@ -13,14 +13,14 @@ import { StaleState } from '@/components/states/Stale';
 import { DisclaimerFooter } from '@/components/legal/DisclaimerFooter';
 import { isStale } from '@/lib/freshness';
 
+// Always render dynamically — live gauge data and lazy AI generation make static
+// pre-rendering pointless, and generateStaticParams returning [] at build time
+// (local Supabase unreachable) caused ambiguous caching behaviour.
+export const dynamic = 'force-dynamic';
+
 interface Props {
   params: Promise<{ slug: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
-}
-
-export async function generateStaticParams() {
-  const slugs = await getAllLocationSlugs();
-  return slugs.map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -54,7 +54,13 @@ export default async function LocationPage({ params, searchParams }: Props) {
   const ageBucket: AgeBucket = isValidAgeBucket(age) ? age : '6-9';
   const dateStr = formatDateParam(date);
 
-  const location = await getLocationDetail(slug, dateStr, ageBucket);
+  let location;
+  try {
+    location = await getLocationDetail(slug, dateStr, ageBucket);
+  } catch (err) {
+    console.error(`[/locations/${slug}] getLocationDetail threw:`, err);
+    throw err;
+  }
   if (!location) notFound();
 
   const status = location.deterministicStatus.status;
