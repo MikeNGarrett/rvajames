@@ -65,6 +65,11 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 | Round 4 sub-goal 45 | rva.gov closure scraper + review queue | ✅ COMPLETE | `86e70e2` |
 | Round 4 sub-goal 46 | Surface closures across the app | ✅ COMPLETE | `cef2111` + follow-up |
 | Round 4 sub-goal 47 | A11y + perf verification + modern-web pass | ✅ COMPLETE — Lighthouse mobile Performance 100, Accessibility 100 (up from 97/96), all CWV green (LCP 0.6s, CLS 0, FCP 0.3s) | `9015985` |
+| Sub-goal 58 | Multi-source closure registry refactor — rva-closures.ts → closures/sources/rva-gov.ts; ClosureSource interface; registry.ts; run-all.ts; DPU press-release URL added to rva-gov scrape; usgs-percentiles cron updated to runAllClosureSources() | ✅ COMPLETE | `8740502` |
+| Sub-goal 59 | Venture Richmond closure source — ventureRichmondSource registered; scrapes /news/ + /browns-island-improvement-plan/; checks robots.txt; keyword + location filter; draft rows only | ✅ COMPLETE (implemented in sub-goal 58 commit) | `8740502` |
+| Sub-goal 60 | Friends of JRPS closure source — jrpsSource registered; scrapes /news/ + /whats-going-on-with-pipeline/; honors JSON-LD datePublished; checks robots.txt; draft rows only | ✅ COMPLETE (implemented in sub-goal 58 commit) | `8740502` |
+| Sub-goal 61 | Pipeline Trail as 10th location — migration 0010 inserts location row + active closed_indefinite status (effective 2024-09-13, no end date) + 3 location_resources; AI system prompt updated with permanent closure context | ✅ COMPLETE | `5a86bcd` |
+| Sub-goal 62 | Manual admin entry — Brown's Island construction closure via /admin/closures/new (no code change needed) | ⏳ MANUAL STEP — No code change. Admin should create a location_status row: location=browns-island, kind=closed, affects='Entire island', reason='Closed for $30M improvement project. Reopens for Richmond Folk Festival October 9-11, 2026. Full completion early 2027.', source='Venture Richmond Brown\'s Island Improvement Plan', source_url='https://venturerichmond.com/browns-island-improvement-plan/', effective_from='2025-11-17', effective_to='2026-10-09', next_review_at='2026-09-01'. |
 | Round 5 (Items 1–9) | Audit quick wins | ✅ COMPLETE | `581c4be` |
 | Round 6 (Findings 3, 6–9) | Headers, caching, BF-Cache, security | ✅ COMPLETE | `dc16684` |
 | Round 9 sub-goal 48 | Responsive foundation + `docs/responsive-guidelines.md` | ✅ COMPLETE | `581c4be` |
@@ -104,10 +109,9 @@ OPEN   water_temp_f null for both gauges
 
 DEFER  Finding 13 — dark mode (own round if/when prioritized)
 
-SEPARATE PLAN  Sub-goals 58–62 — closure sources expansion
-              Multi-source registry refactor, Venture Richmond + JRPS scrapers,
-              Pipeline Trail as 10th location, backfill known closures.
-              Tracked in docs/closure-sources-expansion-plan.md.
+DONE   Sub-goals 58–61 — closure sources expansion (code complete, `8740502` + `5a86bcd`)
+              Registry refactor, Venture Richmond + JRPS scrapers, Pipeline Trail 10th location.
+MANUAL Sub-goal 62 — Brown's Island construction closure via /admin/closures/new (no code change)
 ```
 
 ---
