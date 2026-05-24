@@ -81,15 +81,12 @@ Acceptable.
 
 | Station | Distance | Relationship |
 |---|---|---|
-| **James River 42nd Street Access** | **0.82 mi** | ← assigned (closest main-river) |
-| Reedy Creek | 1.19 mi | tributary |
+| James River 42nd Street Access | 0.82 mi | main river |
+| **Reedy Creek** | **1.19 mi** | ← assigned (user-confirmed) |
 | Pony Pasture | 2.19 mi | — |
 
-**Rationale:** The plan initially suggested "Reedy Creek" for Buttermilk Trail, but the
-actual distance data shows 42nd Street Access is significantly closer (0.82 vs 1.19 mi).
-More importantly, Reedy Creek is a tributary station — it measures creek water quality,
-not the main James. 42nd Street Access is on the main James, upriver of the Buttermilk
-trailhead. Reassigned to 42nd Street Access.
+**Rationale:** User-confirmed: Reedy Creek. The Reedy Creek tributary confluence is the
+most representative station for the Buttermilk Trail entrance area.
 
 ---
 
@@ -108,32 +105,15 @@ Reedy Creek (0.83 mi) is closer than Tredegar but is a tributary. Reassigned.
 
 ---
 
-### Belle Isle (`belle-isle`) ⚠️ USER CONFIRMATION REQUESTED
+### Belle Isle (`belle-isle`)
 
 | Station | Distance | Relationship |
 |---|---|---|
-| Reedy Creek | 0.53 mi | **tributary** — not the main James |
-| **James River 42nd Street Access** | **0.78 mi** | ← recommended (closest main-river, upriver) |
-| Rope Swing at Tredegar | 0.98 mi | main river, downriver (plan's original suggestion) |
+| **Reedy Creek** | **0.53 mi** | ← assigned (user-confirmed) |
+| James River 42nd Street Access | 0.78 mi | main river, upriver |
+| Rope Swing at Tredegar | 0.98 mi | main river, downriver |
 
-**Rationale (three candidates):**
-- **Reedy Creek (0.53 mi)** — physically closest, but measures a creek tributary, not
-  the main James River. E. coli from Reedy Creek may not reflect swim conditions on
-  Belle Isle where swimmers enter from the north bank bridge.
-- **James River 42nd Street Access (0.78 mi)** — closest main-river station, slightly
-  upriver of Belle Isle. Water quality here reflects conditions entering the Belle Isle
-  rapids. The data from 42nd Street is protective: if bacteria levels are elevated
-  upriver, they'll be present at Belle Isle too.
-- **Rope Swing at Tredegar (0.98 mi)** — the plan's original suggestion; on the main
-  James, but slightly downriver of Belle Isle. This station measures conditions *after*
-  the water passes Belle Isle.
-
-**My recommendation: James River 42nd Street Access** — closest main-river station, and
-upriver orientation is more protective for a swim advisory context.
-
-**⚠️ Please confirm:** Is James River 42nd Street Access the right choice for Belle Isle,
-or would you prefer Rope Swing at Tredegar (the plan's original suggestion, which is
-directly across the narrow channel from Belle Isle's north entrance)?
+**Rationale:** User-confirmed: Reedy Creek (0.53 mi, closest station).
 
 ---
 
@@ -154,13 +134,12 @@ to the Browns Island / Belle Isle rapids complex. This matches the plan exactly.
 
 | Station | Distance | Relationship |
 |---|---|---|
-| **Rope Swing at Tredegar** | **0.25 mi** | ← assigned (same rapids complex as Browns Island) |
-| 14th Street | 0.70 mi | — |
+| Rope Swing at Tredegar | 0.25 mi | — |
+| **14th Street** | **0.70 mi** | ← assigned (user-confirmed) |
 | Rockett's Landing | 1.75 mi | — |
 
-**Rationale:** Mayo Island is immediately adjacent to Browns Island in the same rapids
-complex. Same station assignment. The plan originally suggested "Rocketts Landing as
-nearest?" — but Rope Swing at Tredegar is 7× closer (0.25 vs 1.75 mi). Reassigned.
+**Rationale:** User-confirmed: 14th Street (0.70 mi). Mayo Island is in the lower rapids
+near the 14th Street bridge area.
 
 ---
 
@@ -168,15 +147,16 @@ nearest?" — but Rope Swing at Tredegar is 7× closer (0.25 vs 1.75 mi). Reassi
 
 | Station | Distance | Relationship |
 |---|---|---|
-| **Rope Swing at Tredegar** | **0.41 mi** | ← assigned (closest main-river) |
-| 14th Street | 0.45 mi | nearly as close |
+| Rope Swing at Tredegar | 0.41 mi | — |
+| 14th Street | 0.45 mi | — |
+| **Chapel Island (J41)** | **1.06 mi** | ← assigned (user-confirmed) |
 | Rockett's Landing | 1.52 mi | — |
 
-**Rationale:** The plan originally suggested "Rocketts Landing as downriver-side proxy,"
-but Rope Swing at Tredegar (0.41 mi) and 14th Street (0.45 mi) are both far closer.
-Shiplock Trail is the eastern end of Canal Walk, near the 14th Street Bridge. Either
-Tredegar or 14th Street would work; Tredegar is slightly closer at 0.41 mi. Assigned
-Rope Swing at Tredegar.
+**Rationale:** User-confirmed: Chapel Island. This is JRA station code J41 at coordinates
+37.5254, -77.4217. The StationName field is null in the ArcGIS FeatureServer — identified
+by the `name` code "J41" and by coordinates. The CollectionDate field is also null for J41
+records; the `creationdate` epoch-ms field carries the sample timestamp. Recent E. coli
+readings observed (e.g., 111.8 CFU/100mL, May 2026).
 
 ---
 
@@ -196,33 +176,31 @@ is nearly twice as close. Reassigned.
 
 ---
 
-## Plan corrections summary
+## Final mapping summary
 
-The plan's original expected mappings were educated guesses before station data was queried.
-Several were significantly off:
-
-| Access point | Plan expected | Actual mapping | Key change |
+| Access point | Station | Distance | How confirmed |
 |---|---|---|---|
-| pump-house | "likely none" | Pony Pasture (0.76 mi) | Station does exist nearby |
-| buttermilk-trail | Reedy Creek (1.19 mi) | 42nd Street Access (0.82 mi) | Closer + main-river station |
-| north-bank-trail | Rope Swing at Tredegar (1.37 mi) | 42nd Street Access (0.73 mi) | Nearly 2× closer |
-| belle-isle | Rope Swing at Tredegar (0.98 mi) | 42nd Street Access (0.78 mi) ← TBD | Closest main-river station |
-| mayo-island | Rocketts Landing (1.75 mi) | Rope Swing at Tredegar (0.25 mi) | 7× closer |
-| shiplock-trail | Rocketts Landing (1.52 mi) | Rope Swing at Tredegar (0.41 mi) | 3.7× closer |
-| pipeline-trail | Rope Swing at Tredegar (0.95 mi) | 14th Street (0.49 mi) | Closer |
+| pump-house | Pony Pasture | 0.76 mi | Distance + local proximity |
+| pony-pasture | Pony Pasture | 0.82 mi | Direct name match |
+| texas-beach | James River 42nd Street Access | 1.36 mi | Across the river — user confirmed |
+| buttermilk-trail | Reedy Creek | 1.19 mi | User-confirmed |
+| north-bank-trail | James River 42nd Street Access | 0.73 mi | Closest station |
+| belle-isle | Reedy Creek | 0.53 mi | User-confirmed |
+| browns-island | Rope Swing at Tredegar | 0.25 mi | Adjacent rapids complex |
+| mayo-island | 14th Street | 0.70 mi | User-confirmed |
+| shiplock-trail | Chapel Island (J41) | 1.06 mi | User-confirmed by ObjectID |
+| pipeline-trail | 14th Street | 0.49 mi | Closest station (location is closed) |
 
 ---
 
-## Advisory kind note
+## Advisory kind decision
 
-The plan (sub-goal 70) references `kind='bacterial'` for derived advisories. The actual
-`advisory_kind` DB enum is:
+The plan (sub-goal 70) references `kind='bacterial'` for derived advisories, and claims
+"bacterial is already a valid kind from Round 1 schema." Both are incorrect.
+
+The actual `advisory_kind` DB enum is:
 `{flood_watch, flood_warning, flood_advisory, cso_overflow, water_quality, swim_closure, general}`
 
-`bacterial` is **not** a valid value. Sub-goal 69's migration `0011_water_quality_readings.sql`
-should either:
-- Add `'bacterial'` to the enum via `ALTER TYPE advisory_kind ADD VALUE 'bacterial'`, **or**
-- Use the existing `'water_quality'` kind instead.
-
-This needs a decision before sub-goal 70 proceeds. The plan's comment "bacterial is already
-a valid kind from Round 1 schema" is incorrect.
+**User-confirmed decision: use `water_quality`** — there is currently no other source
+of water quality data, so a separate `bacterial` enum value is unnecessary. All JRA-derived
+advisories in sub-goals 69–70 will use `kind = 'water_quality'`. No enum migration needed.

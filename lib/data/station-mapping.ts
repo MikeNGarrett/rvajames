@@ -21,8 +21,15 @@ export interface JraStation {
    * Exact StationName string as returned by the ArcGIS FeatureServer.
    * Some entries use the Windows-1252 curly apostrophe (U+0092) rather than
    * a plain apostrophe — this field preserves the raw bytes for WHERE-clause use.
+   * Empty string means StationName is null for this station — filter by stationCode
+   * instead.
    */
   apiName: string;
+  /**
+   * Short station code from the `name` field (e.g. "J41"). Present for stations
+   * where StationName is null. Used as the fallback identifier in WHERE clauses.
+   */
+  stationCode?: string;
   lat: number;
   lng: number;
   /** Collecting organization, e.g. "JRA". */
@@ -109,6 +116,24 @@ export const JRA_RICHMOND_STATIONS = {
     lng: -77.6467,
     organization: 'JRA',
   },
+  /**
+   * Chapel Island — ArcGIS station code J41.
+   *
+   * StationName and Organization are null in the FeatureServer; the record is
+   * identified only by the short `name` code "J41". CollectionDate is also null —
+   * use the `creationdate` (epoch-ms) field for the sample timestamp.
+   *
+   * Coordinates confirmed from OBJECTID 3164 (May 2026 reading). User (local
+   * Richmond expert) identifies this sampling site as Chapel Island.
+   */
+  chapelIsland: {
+    name: 'Chapel Island',
+    apiName: '',          // StationName is null; query by stationCode 'J41' instead
+    stationCode: 'J41',
+    lat: 37.52541833,
+    lng: -77.42173598,
+    organization: 'JRA',
+  },
 } as const satisfies Record<string, JraStation>;
 
 // ── Access point → station mapping ───────────────────────────────────────────
@@ -146,11 +171,10 @@ export const ACCESS_POINT_STATIONS: Record<string, AccessPointStationConfig> = {
 
   'buttermilk-trail': {
     slug: 'buttermilk-trail',
-    primaryStations: [S.james42ndStreet],
-    distanceMi: 0.82,
-    notes: 'Plan suggested Reedy Creek (1.19 mi, tributary). 42nd Street Access is closer ' +
-           '(0.82 mi) AND is a main-river station. Reedy Creek measures a tributary, not ' +
-           'the main James.',
+    primaryStations: [S.reedyCreek],
+    distanceMi: 1.19,
+    notes: 'User-confirmed: Reedy Creek. The Reedy Creek tributary confluence is the most ' +
+           'representative station for the Buttermilk Trail entrance area.',
   },
 
   'north-bank-trail': {
@@ -161,25 +185,11 @@ export const ACCESS_POINT_STATIONS: Record<string, AccessPointStationConfig> = {
            'nearly 2× closer (0.73 mi). North Bank Trail runs in the 40s–50s corridor.',
   },
 
-  /**
-   * Belle Isle mapping — see docs/water-quality-station-mapping.md.
-   *
-   * Three candidates:
-   *   - Reedy Creek (0.53 mi) — closest overall, but is a tributary station
-   *   - James River 42nd Street Access (0.78 mi) — closest main-river, upriver
-   *   - Rope Swing at Tredegar (0.98 mi) — plan's original suggestion, downriver
-   *
-   * Defaulting to 42nd Street Access (closest main-river, upstream protective).
-   * Change to ropeSwingTredegar if the local geography warrants (the Rope Swing is
-   * directly across the narrow channel from Belle Isle's north entrance).
-   */
   'belle-isle': {
     slug: 'belle-isle',
-    primaryStations: [S.james42ndStreet],
-    distanceMi: 0.78,
-    notes: 'Closest main-river station, upriver of Belle Isle (protective orientation). ' +
-           'Reedy Creek is 0.25 mi closer but measures a tributary, not the main James. ' +
-           'User should confirm — see docs/water-quality-station-mapping.md.',
+    primaryStations: [S.reedyCreek],
+    distanceMi: 0.53,
+    notes: 'User-confirmed: Reedy Creek (0.53 mi, closest station).',
   },
 
   'browns-island': {
@@ -192,19 +202,19 @@ export const ACCESS_POINT_STATIONS: Record<string, AccessPointStationConfig> = {
 
   'mayo-island': {
     slug: 'mayo-island',
-    primaryStations: [S.ropeSwingTredegar],
-    distanceMi: 0.25,
-    notes: 'Mayo Island and Browns Island share the same rapids complex; same station. ' +
-           'Plan suggested Rocketts Landing (1.75 mi) — Tredegar is 7× closer.',
+    primaryStations: [S.fourteenthStreet],
+    distanceMi: 0.70,
+    notes: 'User-confirmed: 14th Street (0.70 mi). Mayo Island is in the lower rapids ' +
+           'near the 14th Street bridge area.',
   },
 
   'shiplock-trail': {
     slug: 'shiplock-trail',
-    primaryStations: [S.ropeSwingTredegar],
-    distanceMi: 0.41,
-    notes: 'Plan suggested Rocketts Landing (1.52 mi). Rope Swing at Tredegar (0.41 mi) ' +
-           'and 14th Street (0.45 mi) are both far closer. Tredegar assigned as it is ' +
-           'marginally closer.',
+    primaryStations: [S.chapelIsland],
+    distanceMi: 1.06,
+    notes: 'User-confirmed: Chapel Island (J41 station, 1.06 mi). StationName is null ' +
+           'in ArcGIS — identified by station code J41. User knows this as the Chapel ' +
+           'Island sampling site on the river near Canal Walk.',
   },
 
   'pipeline-trail': {
@@ -226,15 +236,30 @@ export function getStationConfig(slug: string): AccessPointStationConfig | null 
 }
 
 /**
- * Returns the list of all unique JRA station names that the app cares about,
- * for use in ArcGIS WHERE clauses.
+ * Returns the list of all unique JRA StationName values that the app cares about,
+ * for use in ArcGIS WHERE clauses (filters out stations whose apiName is empty,
+ * i.e. those identified by stationCode instead).
  */
 export function getAllMappedStationNames(): string[] {
   const names = new Set<string>();
   for (const config of Object.values(ACCESS_POINT_STATIONS)) {
     for (const station of config.primaryStations) {
-      names.add(station.apiName);
+      if (station.apiName) names.add(station.apiName);
     }
   }
   return [...names];
+}
+
+/**
+ * Returns the list of all unique station codes (from the `name` field) for
+ * stations that have no StationName (i.e. identified by code only, e.g. J41).
+ */
+export function getAllMappedStationCodes(): string[] {
+  const codes = new Set<string>();
+  for (const config of Object.values(ACCESS_POINT_STATIONS)) {
+    for (const station of config.primaryStations) {
+      if (!station.apiName && station.stationCode) codes.add(station.stationCode);
+    }
+  }
+  return [...codes];
 }
