@@ -1,5 +1,13 @@
+/**
+ * Root OpenGraph image — Finding 20.
+ *
+ * Next.js App Router convention: this file auto-wires og:image and
+ * twitter:image in <head>. runtime='edge' required for Cloudflare Workers.
+ */
+
 import { ImageResponse } from 'next/og';
 
+export const runtime = 'edge';
 export const alt = 'RVA James — James River Family Dashboard';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
