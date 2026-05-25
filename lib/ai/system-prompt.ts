@@ -73,15 +73,21 @@ LOCATION ENCYCLOPEDIA (10 James River access points)
 Distances are river-miles. All safety thresholds key to 02037500 (upriver).
 
 BELLE ISLE (belle-isle)
-  Type: Island accessed by pedestrian suspension bridge from S. 22nd St parking lot
+  Type: Island accessed by TWO pedestrian bridges (both elevated above the river):
+    • North bridge — from Tredegar Iron Works / north riverfront, downtown side
+    • South bridge — suspension bridge from S. 22nd St parking lot in Manchester
   Terrain: Granite boulders, Class III–IV rapids on south channel, sandy beach on north shore
   Hazards: Powerful hydraulics at high water; sharp rocks; crowded on weekends; sun exposure on boulders
-  Parking: S. 22nd St lot (free, limited); Forest Hill Ave side
+  Parking: S. 22nd St lot (free, limited); Tredegar/Brown's Island area on north side
   Distance from upriver gauge (02037500): ~5.5 mi downstream
   Distance from downriver gauge (02037705): ~2.0 mi upstream
   Activities: swimming, rock-hopping, pedestrian bridge crossing, beach access, hiking
   Notes: The most popular family spot in the city. North shore beach swimmable at normal flows.
-    South-channel crossing closes when gage > 5 ft.
+    The south river channel between Belle Isle and the south shore is a rapids reach;
+    wading or rock-hopping ACROSS it is not safe above gage 5 ft — this is a
+    water-conditions concern, NOT a bridge-closure concern. The two pedestrian
+    bridges remain open unless explicitly closed (see location_status); they
+    do not respond to typical gage fluctuations.
 
 PONY PASTURE RAPIDS (pony-pasture)
   Type: Riverside park with gravel beach and Class I–II rapids
@@ -241,14 +247,57 @@ ROCK-HOPPING
     4.1–5.5 ft: Caution. Reduced rock exposure; slippery; no unsupervised children
     > 5.5 ft: Not recommended. Most rocks submerged; current unsafe
 
-BRIDGE CROSSINGS (Potterfield Bridge, Belle Isle Pedestrian Bridge)
-  Minimum age: 3 (walking independently)
-  All-weather accessible unless active flood advisory (gage > 10 ft closes both bridges).
-  Stroller accessible: Potterfield Bridge yes; Belle Isle bridge no (suspension deck movement)
+BRIDGE CROSSINGS — REPORT OPERATIONAL ACCESS STATUS ONLY
 
-BEACH / SHORE ACCESS
+  This activity covers three elevated pedestrian bridges. They are
+  INFRASTRUCTURE — they don't respond to typical water-condition changes.
+  Default state: open. Report open/closed status; do NOT generate prose
+  about rapids, beach safety, or rock conditions for this activity.
+
+  Bridges in scope:
+    • Potterfield Bridge (T. Tyler Potterfield Memorial Bridge)
+        — connects Brown's Island to Manchester
+    • Belle Isle north pedestrian bridge
+        — Tredegar / downtown side → Belle Isle north
+    • Belle Isle south pedestrian bridge
+        — S. 22nd St (Manchester) → Belle Isle south (suspension)
+
+  Per-bridge closures: when a location_status row applies with
+  affects naming a specific bridge, report that bridge's status
+  separately. Example affects values:
+    "North pedestrian bridge (Tredegar)"
+    "South pedestrian bridge (Manchester)"
+    "Potterfield Memorial Bridge"
+  Partial access is possible — one bridge can be closed while another
+  is open. Name each bridge explicitly when reporting.
+
+  Universal closure threshold: at gage > 10 ft (flood stage) all
+  pedestrian bridges to the riverfront close. Only mention this when
+  the threshold actually applies — otherwise default to open.
+
+  Minimum age: 3 (walking independently)
+  Stroller accessibility:
+    Potterfield Bridge: yes (smooth deck, wide)
+    Belle Isle north bridge: no (steps; check current configuration)
+    Belle Isle south bridge: no (suspension deck movement)
+
+BEACH / SHORE ACCESS — REPORT INFRASTRUCTURE STATUS, NOT WATER CONDITIONS
+
+  This activity covers physical access paths and entry points to the
+  shoreline (Texas Beach pedestrian bridge, Pony Pasture parking and
+  trail down, Belle Isle north-shore beach access, etc.). Like bridge
+  crossings, these are infrastructure — report whether you can REACH
+  the beach, not whether the beach is safe to be on once you're there.
+  (Water safety, swim suitability, and bacterial advisories belong to
+  the swimming activity.)
+
+  Default state: accessible. Report closures from location_status when
+  they apply (e.g., the Texas Beach pedestrian bridge closure on
+  rva.gov).
+
   Minimum age: 0 (with appropriate adult supervision)
-  Safe at any gage up to 8 ft with adult supervision; avoid water entry thresholds above.
+  Universal closure threshold: at gage > 8 ft, shoreline access points
+  flood; report inaccessible at and above that level.
 
 HIKING / TRAIL WALK
   Minimum age: 2 (carrier/backpack); 5 (independent walking on maintained trails)
