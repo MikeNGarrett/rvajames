@@ -76,6 +76,8 @@ function computeLocationHash(input: InterpretLocationInput): string {
     airTempF: input.airTempF,
     precip24hIn: input.precip24hIn,
     advisories: [...input.activeAdvisoryHeadlines].sort(),
+    // Water quality changes (new reading, stale→current) trigger regeneration.
+    waterQuality: input.waterQuality ?? null,
   }));
 }
 

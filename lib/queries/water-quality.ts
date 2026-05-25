@@ -95,6 +95,48 @@ export async function getLatestWaterQualityReading(
 }
 
 /**
+ * Returns the most recent water quality reading for a specific station code,
+ * regardless of access-point mapping. Used to fetch upstream watch readings.
+ */
+export async function getLatestReadingByStationCode(
+  stationCode: string,
+): Promise<WaterQualityReading | null> {
+  const supabase = await createServerClient('service');
+
+  const { data, error } = await supabase
+    .from('water_quality_readings')
+    .select('station_name,station_code,organization,collected_at,ecoli_cfu_per_100ml,enterococci_cfu_per_100ml,ecoli_average,enterococci_average,water_temp_f,air_temp_f,turbidity,salinity,site_conditions')
+    .eq('station_code', stationCode)
+    .order('collected_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  const collectedAt = new Date(data.collected_at);
+  const daysOld = Math.floor(
+    (Date.now() - collectedAt.getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  return {
+    stationName:            data.station_name,
+    stationCode:            data.station_code,
+    organization:           data.organization,
+    collectedAt,
+    daysOld,
+    ecoliCfuPer100ml:       data.ecoli_cfu_per_100ml,
+    enterococciCfuPer100ml: data.enterococci_cfu_per_100ml,
+    ecoliAverage:           data.ecoli_average,
+    enterococciAverage:     data.enterococci_average,
+    waterTempF:             data.water_temp_f,
+    airTempF:               data.air_temp_f,
+    turbidity:              data.turbidity ?? null,
+    salinity:               data.salinity ?? null,
+    siteConditions:         data.site_conditions,
+  };
+}
+
+/**
  * Returns readings for all access points with data, keyed by slug.
  * Used by the homepage and the AI prompt builder to load all locations in one pass.
  */

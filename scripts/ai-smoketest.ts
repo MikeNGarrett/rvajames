@@ -24,6 +24,25 @@ const INPUT = {
   dataAgeMinutes: 12,
   activeAdvisoryHeadlines: [],
   availableActivitySlugs: ['swim', 'rock-hop', 'bridge-crossing', 'belle-isle-pedestrian', 'beach-access', 'hike'],
+  // Belle Isle primary station: J20 (Rope Swing at Tredegar); watch: J24 (Huguenot Flatwater)
+  waterQuality: {
+    primaryStation: {
+      stationCode: 'J20',
+      stationName: 'Rope Swing at Tredegar',
+      ecoliCfuPer100ml: 45,
+      enterococciCfuPer100ml: null,
+      daysOld: 2,
+      freshness: 'current' as const,
+      testsEnterococcus: false,
+    },
+    watchStation: {
+      stationCode: 'J24',
+      stationName: 'Huguenot Flatwater',
+      ecoliCfuPer100ml: 30,
+      daysOld: 2,
+      freshness: 'current' as const,
+    },
+  },
 };
 
 async function call(ai: Anthropic, label: string) {

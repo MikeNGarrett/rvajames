@@ -1,9 +1,10 @@
 import { createServerClient } from '@/lib/supabase/server';
 import type { AgeBucket } from '@/lib/url-state';
 import { getOrGenerate } from '@/lib/ai/get-or-generate';
-import type { InterpretLocationInput } from '@/lib/ai/prompts/interpret-location';
+import type { InterpretLocationInput, WaterQualityInput } from '@/lib/ai/prompts/interpret-location';
+import { computeWqFreshness } from '@/lib/ai/prompts/interpret-location';
 import { combinedLocationStatus } from '@/lib/safety/rules';
-import { getLatestWaterQualityReading, type WaterQualityReading } from './water-quality';
+import { getLatestWaterQualityReading, getLatestReadingByStationCode, type WaterQualityReading } from './water-quality';
 import { getStationConfig } from '@/lib/data/station-mapping';
 
 export interface LocationDetail {
@@ -83,8 +84,16 @@ export async function getLocationDetail(
 
   if (!loc) return null;
 
-  // Kick off water quality fetch before the Promise.all so both run in parallel
+  // Resolve station config synchronously (no DB call) so we can kick off all
+  // parallel fetches before entering the Promise.all.
+  const stationConfig = getStationConfig(slug);
+
+  // Kick off water quality fetches before the Promise.all so they run in parallel.
   const wqPromise = getLatestWaterQualityReading(slug);
+  const upstreamWatchCode = stationConfig?.upstreamWatchStations?.[0]?.code ?? null;
+  const upstreamWatchPromise: Promise<WaterQualityReading | null> = upstreamWatchCode
+    ? getLatestReadingByStationCode(upstreamWatchCode)
+    : Promise.resolve(null);
 
   // Run parallel queries
   const [
@@ -140,13 +149,39 @@ export async function getLocationDetail(
     return a ? [{ slug: a.slug, name: a.name, minAge: a.min_age, requiresSwim: a.requires_swim }] : [];
   });
 
-  // Await the water quality fetch (was kicked off in parallel above)
-  const wqReading = await wqPromise;
-  const stationConfig = getStationConfig(slug);
+  // Await the water quality fetches (both kicked off in parallel above).
+  const [wqReading, upstreamWatchReading] = await Promise.all([wqPromise, upstreamWatchPromise]);
+
   const testsEnterococcus =
     stationConfig?.primaryStations.some((s) => s.bacteria.includes('enterococcus')) ?? false;
   const waterQuality = wqReading
     ? { reading: wqReading, testsEnterococcus }
+    : null;
+
+  // Build structured water quality input for the AI per-call message.
+  const waterQualityInput: WaterQualityInput | null = stationConfig
+    ? {
+        primaryStation: wqReading
+          ? {
+              stationCode:            wqReading.stationCode ?? '',
+              stationName:            wqReading.stationName,
+              ecoliCfuPer100ml:       wqReading.ecoliCfuPer100ml,
+              enterococciCfuPer100ml: wqReading.enterococciCfuPer100ml,
+              daysOld:                wqReading.daysOld,
+              freshness:              computeWqFreshness(wqReading.daysOld),
+              testsEnterococcus,
+            }
+          : null,
+        watchStation: upstreamWatchReading
+          ? {
+              stationCode:      upstreamWatchReading.stationCode ?? '',
+              stationName:      upstreamWatchReading.stationName,
+              ecoliCfuPer100ml: upstreamWatchReading.ecoliCfuPer100ml,
+              daysOld:          upstreamWatchReading.daysOld,
+              freshness:        computeWqFreshness(upstreamWatchReading.daysOld),
+            }
+          : null,
+      }
     : null;
 
   const snap = snapshots?.[0] ?? null;
@@ -195,6 +230,7 @@ export async function getLocationDetail(
     dataAgeMinutes: latestSnapshot?.ageMinutes ?? null,
     activeAdvisoryHeadlines: activeAdvisories.map((a) => a.headline),
     availableActivitySlugs: activitySlugs,
+    waterQuality: waterQualityInput,
   };
 
   const genResult = await getOrGenerate(interpretInput, loc.id, hasHighSeverity);

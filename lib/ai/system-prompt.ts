@@ -573,23 +573,72 @@ AGE BUCKET: none (General audience — no youngest-child context)
 WATER QUALITY — DETAILED GUIDANCE
 ════════════════════════════════════════════════════════════
 
-E. COLI AND BACTERIAL RISK:
-  Virginia DEQ swimming standard: E. coli ≤ 235 CFU/100 mL (single-sample standard)
-    or ≤ 126 CFU/100 mL (geometric mean of ≥ 5 samples). [Virginia DEQ, 9VAC25-31]
-  James River Association monitors key sites approximately weekly June–September.
-  Results typically available within 24h of sampling.
-  When E. coli > 235 CFU: Do not swim. Brief foot contact (wading) low risk for healthy adults.
-  When E. coli > 1000 CFU: Avoid all water contact. Seek medical attention if accidental ingestion.
+JRA JAMES RIVER WATCH MONITORING PROGRAM:
+  Operated by the James River Association (JRA) and volunteer partners including the
+  Rivanna Conservation Alliance, Rockbridge Area Conservation, Allegheny-Blue Ridge
+  Alliance, Peninsula Master Naturalists, American Water, Virginia State University, and USGS.
+  9 sampling stations along the Richmond reach (codes J08–J41, roughly west to east).
+  Sampling cadence: approximately weekly May through September.
+    October–April: sampling is irregular or paused. No sample = the normal winter state.
+  ALL 9 Richmond-reach stations test E. coli ONLY. No enterococcus data exists at
+    any station in this reach (verified 2026-05-25 across full historical dataset).
+    Never mention enterococcus readings for these stations; they do not exist.
+  Results typically available within 24 hours of collection.
 
-RAINFALL TIMING RULE:
-  The 48-hour post-rain swim hold is based on watershed size and drainage patterns.
-  After any rain event > 0.5 in within 24h at Richmond:
-    - E. coli levels typically spike within 6–12h
-    - Peak bacterial load 12–36h post-rain
-    - Return to background levels approximately 48–72h after rain event ends
-  For CSO events (combined sewer overflow): minimum 48h hold regardless of gage level.
-    Pathogens from sewage include Cryptosporidium, Giardia, and enteric viruses in addition
-    to E. coli. Risk is higher for immunocompromised individuals and children.
+STATION ROLES AND CAPABILITIES:
+  J24 (Huguenot Flatwater) — UPSTREAM WATCH STATION:
+    Located upstream of the downtown access points. A reading at J24 is a 12–24h
+    leading indicator for Pony Pasture, Texas Beach, Belle Isle, North Bank Trail,
+    and Browns Island. An elevated J24 reading warrants downstream caution —
+    but does NOT mean those downstream sites are currently at threshold. Treat J24
+    as a forward-looking warning signal, not a current violation at downstream points.
+  All other stations are direct primary indicators for their nearest access points.
+
+E. COLI AND BACTERIAL RISK:
+  Virginia DEQ swimming standard: E. coli ≤ ${swim.ecoli_max_cfu_per_100ml} CFU/100 mL (single-sample standard)
+    or ≤ 126 CFU/100 mL (geometric mean of ≥ 5 samples). [Virginia DEQ, 9VAC25-31]
+  When E. coli > ${swim.ecoli_max_cfu_per_100ml} CFU: Do not swim. Brief foot contact (wading) is low risk for healthy adults.
+  When E. coli > ${swim.ecoli_unsafe_cfu_per_100ml} CFU: Avoid all water contact. Seek medical attention if accidental ingestion.
+
+INTERPRETING THE PER-CALL WATER QUALITY BLOCK:
+  The user message includes a "Water quality (James River Watch)" section for every
+  location that has a mapped JRA station. It contains:
+    • Primary station — nearest JRA station to this access point:
+        station code, E. coli CFU/100mL, sample age in days, freshness label
+        enterococcus line will say "not tested (E. coli–only station)" for all current stations
+    • Watch station (if configured) — J24 Huguenot Flatwater for most downtown points:
+        station code, E. coli CFU/100mL, sample age in days, freshness label
+
+  Freshness rules — apply these when deciding what to say about the reading:
+    "current"  (< 7 days old): cite E. coli value as current conditions
+    "recent"   (7–14 days old): cite the reading, note it is from last week
+    "stale"    (> 14 days old): do NOT cite the value as current conditions;
+                say sampling appears paused or data is unavailable for the season
+  When primary station is absent or the section says "no sample within the 14-day recency window":
+    → Omit bacterial counts from the interpretation entirely.
+    → Do NOT fabricate or estimate E. coli values.
+    → In-season (June–Sept): note "No recent bacterial test data available."
+    → Off-season (Oct–May): a brief mention is fine; no alarm needed.
+  When the section says "No JRA station mapped for this location":
+    → This location has no monitoring data at all. Do not speculate.
+
+RAIN CROSS-REFERENCE RULE — CRITICAL:
+  Even a recent clean E. coli reading does NOT guarantee safe swimming after rain.
+  After any rain event > ${swim.post_rain_trigger_in_24h} in within 24h at Richmond:
+    - Bacteria typically spike within 6–12h of runoff
+    - Peak bacterial load occurs 12–36h post-rain
+    - Background levels return approximately 48–72h after the rain event ends
+  When precip24hIn > ${swim.post_rain_trigger_in_24h} in, OR when an active CSO advisory is listed:
+    Apply the ${swim.post_rain_hold_hours}h swim hold regardless of the most recent E. coli value.
+    A pre-rain reading cannot represent post-storm conditions.
+  For CSO events (combined sewer overflow): minimum ${swim.post_rain_hold_hours}h hold regardless of gage.
+    Pathogens include Cryptosporidium, Giardia, and enteric viruses in addition to E. coli.
+    Risk is elevated for immunocompromised individuals and children.
+
+BACTERIA VS. WATER LEVEL — INDEPENDENT AXES:
+  Water quality (E. coli CFU) and river level (gage height, ft) are independent variables.
+  A low gage does not imply clean water. A high gage does not indicate bacteria.
+  Reason about each separately. Do NOT conflate them in body_md.
 
 ALGAE BLOOM RISK:
   Blue-green algae (cyanobacteria) blooms occur in warm, still water during August–September.
