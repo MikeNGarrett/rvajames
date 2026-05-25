@@ -3,6 +3,7 @@ import type { AgeBucket } from '@/lib/url-state';
 import { getMetroRiverState } from './river-segment';
 import { getActiveStatusMap } from './location-status';
 import { getForecast } from './forecast';
+import { getAllLatestWaterQualityReadings } from './water-quality';
 import type { NoaaAhpsForecastPoint, NoaaAhpsPayload } from '@/lib/ingest/noaa-ahps';
 import { combinedLocationStatus, type SafetyStatus } from '@/lib/safety/rules';
 import { formatRichmondDate } from '@/lib/utils/date-tz';
@@ -16,6 +17,13 @@ export interface DeterministicStatus {
   reason: string;
 }
 
+/** Water-quality badge data for homepage tiles. null = no badge (off-season or no data). */
+export interface WaterQualityBadge {
+  /** 'safe' = within VDH thresholds; 'caution' = exceeds single-sample max */
+  status: 'safe' | 'caution';
+  ecoliCfuPer100ml: number | null;
+}
+
 export interface LocationSummary {
   id: string;
   slug: string;
@@ -26,6 +34,13 @@ export interface LocationSummary {
   /** Deterministic rules-engine status — no AI, computed at render time */
   deterministicStatus: DeterministicStatus;
   snapshotAge: number | null;
+  /**
+   * Water-quality badge data. null when:
+   *   - No JRA station is mapped to this access point
+   *   - No reading within the 14-day recency window exists
+   *   - Most recent reading has no bacteria measurement (both null)
+   */
+  waterQuality: WaterQualityBadge | null;
 }
 
 export interface TodayData {
@@ -121,6 +136,34 @@ const STATUS_SORT_ORDER: Record<SafetyStatus, number> = {
   safe:    3,
 };
 
+/** VDH single-sample recreational water thresholds (mirrors thresholds.json). */
+const WQ_ECOLI_MAX  = 235;
+const WQ_ENTERO_MAX = 104;
+const WQ_RECENCY_DAYS = 14;
+
+/**
+ * Computes the homepage water-quality badge state from a latest reading.
+ * Returns null when the reading is absent, too old, or has no bacteria values.
+ */
+function computeWaterQualityBadge(
+  reading: Awaited<ReturnType<typeof getAllLatestWaterQualityReadings>>[string] | null,
+): WaterQualityBadge | null {
+  if (!reading) return null;
+  if (reading.daysOld > WQ_RECENCY_DAYS) return null;
+
+  const ecoli  = reading.ecoliCfuPer100ml;
+  const entero = reading.enterococciCfuPer100ml;
+
+  // No measurement in this sample — skip badge
+  if (ecoli === null && entero === null) return null;
+
+  const ecoliExceeds = ecoli  !== null && ecoli  >= WQ_ECOLI_MAX;
+  const entExceeds   = entero !== null && entero >= WQ_ENTERO_MAX;
+  const status: 'safe' | 'caution' = (ecoliExceeds || entExceeds) ? 'caution' : 'safe';
+
+  return { status, ecoliCfuPer100ml: ecoli };
+}
+
 // ── Observed path (today) ─────────────────────────────────────────────────────
 
 async function getObservedTodayData(
@@ -130,7 +173,10 @@ async function getObservedTodayData(
   const supabase = await createServerClient('anon');
   const now = new Date();
 
-  const [{ data: locations }, { data: advisories }, metroState, statusMap] = await Promise.all([
+  // Kick off water quality fetch in parallel (it uses its own service client)
+  const wqPromise = getAllLatestWaterQualityReadings();
+
+  const [{ data: locations }, { data: advisories }, metroState, statusMap, wqReadings] = await Promise.all([
     supabase
       .from('locations')
       .select('id, slug, name, tags')
@@ -143,6 +189,7 @@ async function getObservedTodayData(
       .order('severity', { ascending: false }),
     getMetroRiverState(),
     getActiveStatusMap(now),
+    wqPromise,
   ]);
 
   if (!locations?.length) {
@@ -186,6 +233,7 @@ async function getObservedTodayData(
       latestWaterTempF: upriverWaterTempF,
       deterministicStatus: { status: combined.status, label: combined.label, reason: combined.reason },
       snapshotAge,
+      waterQuality: computeWaterQualityBadge(wqReadings[loc.slug] ?? null),
     };
   });
 
@@ -275,6 +323,7 @@ async function getForecastTodayData(
       latestWaterTempF: null, // not available in AHPS forecast
       deterministicStatus: { status: combined.status, label: combined.label, reason: combined.reason },
       snapshotAge: null, // forecast data has no snapshot age
+      waterQuality: null, // water quality is historical — not shown on forecast views
     };
   });
 

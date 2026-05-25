@@ -43,7 +43,22 @@ export function DisclaimerFooter({ ageBucket }: Props = {}) {
           </>
         )}
       </p>
-      <p className="text-xs mt-3 text-text-muted">
+      <p className="mt-3 text-xs text-text-muted">
+        Water quality data from{' '}
+        <a
+          href="https://thejamesriver.org/james-river-watch/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline"
+        >
+          James River Watch
+        </a>
+        , a program of the James River Association with data collected by volunteers from the
+        James River Association, Rivanna Conservation Alliance, Rockbridge Area Conservation,
+        Allegheny-Blue Ridge Alliance, Peninsula Master Naturalists, American Water,
+        Virginia State University, and USGS.
+      </p>
+      <p className="text-xs mt-2 text-text-muted">
         Not affiliated with the City of Richmond or James River Association.
       </p>
     </footer>

@@ -5,6 +5,7 @@ import type { Metadata } from 'next';
 import { getLocationDetail } from '@/lib/queries/location';
 import { searchParamsCache, isValidAgeBucket, formatDateParam, type AgeBucket } from '@/lib/url-state';
 import { ActivityMatrix } from '@/components/location/ActivityMatrix';
+import { WaterQualityPanel } from '@/components/location/WaterQualityPanel';
 import { PrepChecklist } from '@/components/trip/PrepChecklist';
 import { ResourceList } from '@/components/location/ResourceList';
 import { AdvisoriesBanner } from '@/components/tiles/AdvisoriesBanner';
@@ -176,6 +177,14 @@ export default async function LocationPage({ params, searchParams }: Props) {
               Use your judgment — conditions can change fast.
             </p>
           </section>
+        )}
+
+        {/* Water quality panel */}
+        {location.waterQuality && (
+          <WaterQualityPanel
+            reading={location.waterQuality.reading}
+            testsEnterococcus={location.waterQuality.testsEnterococcus}
+          />
         )}
 
         {/* Activity matrix */}

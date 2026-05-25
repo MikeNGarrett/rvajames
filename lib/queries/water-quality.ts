@@ -35,6 +35,10 @@ export interface WaterQualityReading {
   waterTempF: number | null;
   /** Air temperature in °F. */
   airTempF: number | null;
+  /** Turbidity in NTU (Nephelometric Turbidity Units). */
+  turbidity: number | null;
+  /** Salinity in ppt (parts per thousand). */
+  salinity: number | null;
   /** Volunteer's free-text site conditions note. */
   siteConditions: string | null;
 }
@@ -59,7 +63,7 @@ export async function getLatestWaterQualityReading(
 
   const { data, error } = await supabase
     .from('water_quality_readings')
-    .select('station_name,station_code,organization,collected_at,ecoli_cfu_per_100ml,enterococci_cfu_per_100ml,ecoli_average,enterococci_average,water_temp_f,air_temp_f,site_conditions')
+    .select('station_name,station_code,organization,collected_at,ecoli_cfu_per_100ml,enterococci_cfu_per_100ml,ecoli_average,enterococci_average,water_temp_f,air_temp_f,turbidity,salinity,site_conditions')
     .in('station_code', stationCodes)
     .order('collected_at', { ascending: false })
     .limit(1)
@@ -84,6 +88,8 @@ export async function getLatestWaterQualityReading(
     enterococciAverage:     data.enterococci_average,
     waterTempF:             data.water_temp_f,
     airTempF:               data.air_temp_f,
+    turbidity:              data.turbidity ?? null,
+    salinity:               data.salinity ?? null,
     siteConditions:         data.site_conditions,
   };
 }
@@ -110,7 +116,7 @@ export async function getAllLatestWaterQualityReadings(): Promise<
   // directly — fetch ordered by collected_at DESC and deduplicate in JS.
   const { data, error } = await supabase
     .from('water_quality_readings')
-    .select('station_name,station_code,organization,collected_at,ecoli_cfu_per_100ml,enterococci_cfu_per_100ml,ecoli_average,enterococci_average,water_temp_f,air_temp_f,site_conditions')
+    .select('station_name,station_code,organization,collected_at,ecoli_cfu_per_100ml,enterococci_cfu_per_100ml,ecoli_average,enterococci_average,water_temp_f,air_temp_f,turbidity,salinity,site_conditions')
     .in('station_code', [...allStationCodes])
     .order('collected_at', { ascending: false })
     .limit(200); // max ~10 stations × ~20 recent readings each
@@ -149,6 +155,8 @@ export async function getAllLatestWaterQualityReadings(): Promise<
         enterococciAverage:     row.enterococci_average,
         waterTempF:             row.water_temp_f,
         airTempF:               row.air_temp_f,
+        turbidity:              row.turbidity ?? null,
+        salinity:               row.salinity ?? null,
         siteConditions:         row.site_conditions,
       };
       break; // first primary station with data wins

@@ -3,6 +3,8 @@ import type { AgeBucket } from '@/lib/url-state';
 import { getOrGenerate } from '@/lib/ai/get-or-generate';
 import type { InterpretLocationInput } from '@/lib/ai/prompts/interpret-location';
 import { combinedLocationStatus } from '@/lib/safety/rules';
+import { getLatestWaterQualityReading, type WaterQualityReading } from './water-quality';
+import { getStationConfig } from '@/lib/data/station-mapping';
 
 export interface LocationDetail {
   id: string;
@@ -47,6 +49,19 @@ export interface LocationDetail {
     kind: 'official' | 'parks' | 'safety' | 'community';
     sort_order: number;
   }[];
+  /**
+   * Latest water quality reading for the mapped JRA station, plus capability
+   * metadata from the station mapping.
+   *
+   * null when:
+   *   - This slug has no mapped JRA station (e.g. USGS gauge slugs)
+   *   - No readings exist yet for the mapped station
+   */
+  waterQuality: {
+    reading: WaterQualityReading;
+    /** True when the primary station tests enterococcus (currently always false — all JRA stations are E. coli–only). */
+    testsEnterococcus: boolean;
+  } | null;
 }
 
 const UPRIVER_STATION = '02037500';
@@ -67,6 +82,9 @@ export async function getLocationDetail(
     .single();
 
   if (!loc) return null;
+
+  // Kick off water quality fetch before the Promise.all so both run in parallel
+  const wqPromise = getLatestWaterQualityReading(slug);
 
   // Run parallel queries
   const [
@@ -121,6 +139,15 @@ export async function getLocationDetail(
     const a = la.activities as { slug: string; name: string; min_age: number; requires_swim: boolean } | null;
     return a ? [{ slug: a.slug, name: a.name, minAge: a.min_age, requiresSwim: a.requires_swim }] : [];
   });
+
+  // Await the water quality fetch (was kicked off in parallel above)
+  const wqReading = await wqPromise;
+  const stationConfig = getStationConfig(slug);
+  const testsEnterococcus =
+    stationConfig?.primaryStations.some((s) => s.bacteria.includes('enterococcus')) ?? false;
+  const waterQuality = wqReading
+    ? { reading: wqReading, testsEnterococcus }
+    : null;
 
   const snap = snapshots?.[0] ?? null;
   const latestSnapshot = snap
@@ -203,6 +230,7 @@ export async function getLocationDetail(
       kind: r.kind as 'official' | 'parks' | 'safety' | 'community',
       sort_order: r.sort_order,
     })),
+    waterQuality,
   };
 }
 

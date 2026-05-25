@@ -273,7 +273,7 @@ BRIDGE CROSSINGS — REPORT OPERATIONAL ACCESS STATUS ONLY
         bridge — the two Belle Isle bridges are SEPARATE structures.
 
   Per-bridge closures: when a location_status row applies with
-  `affects` naming a specific bridge, report that bridge's status
+  \`affects\` naming a specific bridge, report that bridge's status
   separately. Example affects values:
 
     "Potterfield Memorial Bridge"            (one value — single bridge)
