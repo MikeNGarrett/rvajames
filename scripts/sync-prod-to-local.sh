@@ -134,13 +134,33 @@ pg_dump \
 DUMP_SIZE="$(du -h "$DUMP_FILE" | cut -f1)"
 echo "      ✓ Dump complete ($DUMP_SIZE)"
 
-# ─── 2. Reset local schema ───────────────────────────────────────────────────
-echo "[2/3] Resetting local schema (re-applies migrations)..."
+# ─── 2. Reset local schema + wipe migration-seeded rows ─────────────────────
+# Migrations seed initial data (locations, activities, location_resources)
+# via INSERT statements. `--no-seed` only skips supabase/seed.sql, NOT data
+# inserts inside migrations. We must truncate after reset, or the restore
+# hits unique-constraint violations on seed slugs.
+echo "[2/3] Resetting local schema and clearing seed data..."
 (
   cd "$REPO_ROOT"
   supabase db reset --no-seed >/dev/null
 )
-echo "      ✓ Local schema reset"
+echo "      ✓ Schema reset (migrations re-applied)"
+
+psql "$LOCAL_DB_URL" \
+  --quiet \
+  --set ON_ERROR_STOP=on \
+  -c "DO \$\$
+      DECLARE r RECORD;
+      BEGIN
+        FOR r IN (
+          SELECT tablename
+          FROM pg_tables
+          WHERE schemaname = 'public'
+        ) LOOP
+          EXECUTE 'TRUNCATE TABLE public.' || quote_ident(r.tablename) || ' RESTART IDENTITY CASCADE';
+        END LOOP;
+      END \$\$;" >/dev/null
+echo "      ✓ Migration-seeded rows truncated (schema preserved)"
 
 # ─── 3. Restore production data into local ───────────────────────────────────
 echo "[3/3] Restoring production data into local..."

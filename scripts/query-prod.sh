@@ -57,7 +57,14 @@ EOF
   exit 1
 fi
 
-# Pass through to psql. Postgres enforces SELECT-only via the role; this
-# script does not attempt to second-guess SQL keywords (regex-based
-# detection causes false positives on legitimate strings and column names).
-exec psql "$AGENT_READ_DATABASE_URL" "$@"
+# If the first arg starts with `-`, pass through to psql verbatim — this
+# preserves flags like `-c`, `-f`, `-P expanded=on`, etc.
+# Otherwise treat the args as a bare SQL string and run it via `-c`.
+# Postgres enforces SELECT-only via the agent_reader role; this script does
+# not attempt to second-guess SQL keywords (regex-based detection causes
+# false positives on legitimate strings and column names).
+if [[ "${1:0:1}" == "-" ]]; then
+  exec psql "$AGENT_READ_DATABASE_URL" "$@"
+else
+  exec psql "$AGENT_READ_DATABASE_URL" -c "$*"
+fi
