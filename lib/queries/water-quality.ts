@@ -3,6 +3,10 @@
  *
  * Reads from the water_quality_readings table (written by lib/ingest/jra.ts)
  * and resolves the station → access-point mapping from lib/data/station-mapping.ts.
+ *
+ * Queries use station_code (the ArcGIS `name` short code, e.g. "J23") as the
+ * primary lookup key — this is the stable identifier. station_name can vary
+ * (null on 2026 ArcGIS records; resolved to displayName on write by jra.ts).
  */
 
 import { createServerClient } from '@/lib/supabase/server';
@@ -11,7 +15,7 @@ import { ACCESS_POINT_STATIONS } from '@/lib/data/station-mapping';
 export interface WaterQualityReading {
   /** Normalized station display name (e.g. "Pony Pasture"). */
   stationName: string;
-  /** Short station code, if any (e.g. "J41"). */
+  /** Short station code, e.g. "J23". Primary stable identifier. */
   stationCode: string | null;
   /** Collecting organization (e.g. "JRA"). */
   organization: string | null;
@@ -47,15 +51,16 @@ export async function getLatestWaterQualityReading(
   const config = ACCESS_POINT_STATIONS[accessPointSlug];
   if (!config) return null;
 
-  const stationNames = config.primaryStations.map((s) => s.name);
-  if (!stationNames.length) return null;
+  // Use station codes (stable) not station names (can be null in ArcGIS)
+  const stationCodes = config.primaryStations.map((s) => s.code);
+  if (!stationCodes.length) return null;
 
   const supabase = await createServerClient('service');
 
   const { data, error } = await supabase
     .from('water_quality_readings')
     .select('station_name,station_code,organization,collected_at,ecoli_cfu_per_100ml,enterococci_cfu_per_100ml,ecoli_average,enterococci_average,water_temp_f,air_temp_f,site_conditions')
-    .in('station_name', stationNames)
+    .in('station_code', stationCodes)
     .order('collected_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -90,34 +95,33 @@ export async function getLatestWaterQualityReading(
 export async function getAllLatestWaterQualityReadings(): Promise<
   Record<string, WaterQualityReading>
 > {
-  // Collect all unique station names across all configured access points
-  const allStationNames = new Set<string>();
+  // Collect all unique station codes across all configured access points
+  const allStationCodes = new Set<string>();
   for (const config of Object.values(ACCESS_POINT_STATIONS)) {
     for (const s of config.primaryStations) {
-      allStationNames.add(s.name);
+      allStationCodes.add(s.code);
     }
   }
-  if (!allStationNames.size) return {};
+  if (!allStationCodes.size) return {};
 
   const supabase = await createServerClient('service');
 
-  // Fetch the latest reading per station in one query using a window function approach:
-  // since Supabase/PostgREST doesn't support DISTINCT ON directly, we fetch all rows
-  // ordered by (station_name, collected_at DESC) and deduplicate in JS.
+  // Fetch the latest reading per station. PostgREST doesn't support DISTINCT ON
+  // directly — fetch ordered by collected_at DESC and deduplicate in JS.
   const { data, error } = await supabase
     .from('water_quality_readings')
     .select('station_name,station_code,organization,collected_at,ecoli_cfu_per_100ml,enterococci_cfu_per_100ml,ecoli_average,enterococci_average,water_temp_f,air_temp_f,site_conditions')
-    .in('station_name', [...allStationNames])
+    .in('station_code', [...allStationCodes])
     .order('collected_at', { ascending: false })
     .limit(200); // max ~10 stations × ~20 recent readings each
 
   if (error || !data) return {};
 
-  // Keep first (most recent) row per station name
-  const latestPerStation = new Map<string, typeof data[number]>();
+  // Keep first (most recent) row per station code
+  const latestByCode = new Map<string, typeof data[number]>();
   for (const row of data) {
-    if (!latestPerStation.has(row.station_name)) {
-      latestPerStation.set(row.station_name, row);
+    if (row.station_code && !latestByCode.has(row.station_code)) {
+      latestByCode.set(row.station_code, row);
     }
   }
 
@@ -125,7 +129,7 @@ export async function getAllLatestWaterQualityReadings(): Promise<
   const result: Record<string, WaterQualityReading> = {};
   for (const [slug, config] of Object.entries(ACCESS_POINT_STATIONS)) {
     for (const station of config.primaryStations) {
-      const row = latestPerStation.get(station.name);
+      const row = latestByCode.get(station.code);
       if (!row) continue;
 
       const collectedAt = new Date(row.collected_at);

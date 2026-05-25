@@ -1,23 +1,17 @@
 /**
- * JRA water quality ingest — sub-goal 69.
+ * JRA water quality ingest — sub-goal 69 (corrected).
  *
- * Replaces the old cheerio scrape of thejamesriver.org with a direct query
- * against the public ArcGIS REST FeatureServer:
- *
+ * Queries the public ArcGIS REST FeatureServer:
  *   https://services7.arcgis.com/.../River_Watch_data_with_station_locations/FeatureServer/0/
  *
- * The FeatureServer exposes E. coli, Enterococci, water temperature, and other
- * indicators from James River Watch (JRA) volunteer monitoring.
+ * BUG FIX (2026-05-25): the original implementation filtered by StationName
+ * which is NULL on every 2026 JRA record, silently dropping all current data.
+ * The stable identifier is the `name` short code (J08, J10, J20, etc.).
+ * WHERE clause now uses: name IN ('J08','J10','J20','J21','J22','J23','J24','J26','J41')
+ * Sort is by `creationdate DESC` (not date_Time, which is also null on 2026 records).
  *
- * Design choices:
- *   - Fetches only the stations mapped in lib/data/station-mapping.ts.
- *   - Named stations (StationName IS NOT NULL) are filtered by StationName IN (...).
- *   - Chapel Island / J41 has null StationName — filtered by name = 'J41'.
- *   - J41 records also have null CollectionDate; falls back to the creationdate
- *     (epoch-ms) field for the sample timestamp.
- *   - Upserts by station_global_id — re-running same day produces 0 new rows.
- *   - Polite identification via User-Agent header.
- *   - Advisory derivation (sub-goal 70) is a separate step called after this one.
+ * Collected-at fallback chain: date_Time → CollectionDate → creationdate → skip row.
+ * Station-name fallback:       StationName → displayName lookup by code → raw code.
  */
 
 import { z } from 'zod';
@@ -25,10 +19,8 @@ import { createServerClient } from '@/lib/supabase/server';
 import type { Json } from '@/lib/supabase/types';
 import type { RunResult } from './run';
 import {
-  getAllMappedStationNames,
   getAllMappedStationCodes,
-  JRA_RICHMOND_STATIONS,
-  type JraStation,
+  getDisplayNameByCode,
 } from '@/lib/data/station-mapping';
 
 const ARCGIS_BASE =
@@ -39,7 +31,7 @@ const OUT_FIELDS = [
   'OBJECTID', 'GlobalID',
   'StationName', 'name', 'StationNumber', 'Organization',
   'Latitude', 'Longitude',
-  'date_Time', 'CollectionDate', 'creationdate',
+  'date_Time', 'CollectionDate', 'creationdate',   // all three in fallback chain
   'Ecoli', 'Enterococci', 'EcoliAverage', 'EnterococciAverage',
   'WaterTemperature', 'AirTemperature',
   'Conductivity', 'Turbidity', 'Salinity', 'SiteConditions',
@@ -49,25 +41,30 @@ const OUT_FIELDS = [
 
 const AttrSchema = z.object({
   GlobalID:            z.string(),
-  StationName:         z.string().nullish(),
-  name:                z.string().nullish(),          // short code e.g. "J41"
-  StationNumber:       z.string().nullish(),
-  Organization:        z.string().nullish(),
-  Latitude:            z.number().nullish(),
-  Longitude:           z.number().nullish(),
-  date_Time:           z.string().nullish(),
-  CollectionDate:      z.string().nullish(),          // "M/D/YYYY" for named stations
-  creationdate:        z.number().nullish(),           // epoch-ms; only J41 uses this
-  Ecoli:               z.number().nullish(),
-  Enterococci:         z.number().nullish(),
-  EcoliAverage:        z.number().nullish(),
-  EnterococciAverage:  z.number().nullish(),
-  WaterTemperature:    z.number().nullish(),           // °C — converted to °F on insert
-  AirTemperature:      z.number().nullish(),           // °C
-  Conductivity:        z.number().nullish(),
-  Turbidity:           z.number().nullish(),
-  Salinity:            z.number().nullish(),
-  SiteConditions:      z.string().nullish(),
+  // StationName is NULL on all 2026 records — must be nullable
+  StationName:         z.string().nullable().optional(),
+  name:                z.string().nullable().optional(),   // short code e.g. "J23"
+  // StationNumber is nullable
+  StationNumber:       z.string().nullable().optional(),
+  Organization:        z.string().nullable().optional(),
+  Latitude:            z.number().nullable().optional(),
+  Longitude:           z.number().nullable().optional(),
+  // date_Time is NULL on all 2026 records — must be nullable
+  date_Time:           z.string().nullable().optional(),
+  // CollectionDate is NULL on all 2026 records — must be nullable
+  CollectionDate:      z.string().nullable().optional(),
+  // creationdate is epoch-ms; ArcGIS auto-field, always populated
+  creationdate:        z.number().nullable().optional(),
+  Ecoli:               z.number().nullable().optional(),
+  Enterococci:         z.number().nullable().optional(),
+  EcoliAverage:        z.number().nullable().optional(),
+  EnterococciAverage:  z.number().nullable().optional(),
+  WaterTemperature:    z.number().nullable().optional(),   // °C — converted to °F on insert
+  AirTemperature:      z.number().nullable().optional(),   // °C
+  Conductivity:        z.number().nullable().optional(),
+  Turbidity:           z.number().nullable().optional(),
+  Salinity:            z.number().nullable().optional(),
+  SiteConditions:      z.string().nullable().optional(),
 });
 
 const ArcGisResponseSchema = z.object({
@@ -83,9 +80,8 @@ function cToF(celsius: number | null | undefined): number | null {
 
 /**
  * Sanitize a JRA measurement value.
- * The JRA dataset uses −9 as a sentinel for "no reading taken" (instrumentation
- * not deployed, sample lost, QA rejection, etc.). Treat any negative value as
- * null rather than storing a bogus reading.
+ * JRA uses −9 as a sentinel for "no reading taken" (instrument not deployed,
+ * sample lost, QA rejection, etc.). Treat any negative value as null.
  */
 function sanitize(v: number | null | undefined): number | null {
   if (v == null || v < 0) return null;
@@ -93,12 +89,12 @@ function sanitize(v: number | null | undefined): number | null {
 }
 
 /**
- * Resolve sample collection timestamp.
+ * Resolve sample collection timestamp via fallback chain:
+ *   1. date_Time  — ISO-like string (present on older records)
+ *   2. CollectionDate — "M/D/YYYY" string (present on named stations, older records)
+ *   3. creationdate — epoch-ms, ArcGIS auto-managed; populated on ALL records
  *
- * Priority:
- *   1. date_Time  — ISO-like string (rare; kept for forward-compat)
- *   2. CollectionDate — "M/D/YYYY" string used by named stations
- *   3. creationdate — epoch-ms used by J41 / Chapel Island
+ * Returns null only if all three are absent (skip the row).
  */
 function parseCollectedAt(a: z.infer<typeof AttrSchema>): Date | null {
   for (const raw of [a.date_Time, a.CollectionDate]) {
@@ -113,16 +109,19 @@ function parseCollectedAt(a: z.infer<typeof AttrSchema>): Date | null {
   return null;
 }
 
-/** Build the display name for a reading, normalizing the API's raw StationName. */
-function resolveDisplayName(
-  rawApiName: string | null | undefined,
+/**
+ * Resolve the display name for a reading:
+ *   1. StationName field (populated on older records)
+ *   2. displayName lookup by `name` code (covers 2026 records where StationName is null)
+ *   3. Raw `name` code as last resort
+ */
+function resolveStationName(
+  rawStationName: string | null | undefined,
   code: string | null | undefined,
-  byApiName: Record<string, string>,
-  byCode: Record<string, string>,
 ): string {
-  if (rawApiName && byApiName[rawApiName]) return byApiName[rawApiName];
-  if (code && byCode[code]) return byCode[code];
-  return rawApiName ?? code ?? 'Unknown';
+  if (rawStationName) return rawStationName;
+  if (code) return getDisplayNameByCode(code);
+  return 'Unknown';
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
@@ -130,38 +129,29 @@ function resolveDisplayName(
 export async function runJraIngestion(): Promise<RunResult> {
   const supabase = await createServerClient('service');
 
-  // Build station lookup tables (apiName → displayName, code → displayName)
-  const byApiName: Record<string, string> = {};
-  const byCode: Record<string, string> = {};
-  for (const s of Object.values(JRA_RICHMOND_STATIONS) as JraStation[]) {
-    if (s.apiName) byApiName[s.apiName] = s.name;
-    if (s.stationCode) byCode[s.stationCode] = s.name;
+  // Build WHERE clause from station codes only — StationName is unreliable.
+  // Include all primary + upstream-watch stations so advisory derivation
+  // (sub-goal 70) has complete data.
+  const codes = getAllMappedStationCodes();
+
+  if (!codes.length) {
+    return {
+      ok: false, rowsWritten: 0,
+      error: 'No station codes in mapping — cannot build WHERE clause',
+    };
   }
 
-  // ── Build ArcGIS WHERE clause ─────────────────────────────────────────────
-  const stationNames = getAllMappedStationNames();
-  const stationCodes = getAllMappedStationCodes();
-
-  const namePart = stationNames.length
-    ? `StationName IN (${stationNames.map((n) => `'${n.replace(/'/g, "''")}'`).join(',')})`
-    : '';
-  const codePart = stationCodes.length
-    ? `name IN (${stationCodes.map((c) => `'${c}'`).join(',')})`
-    : '';
-  const where = [namePart, codePart].filter(Boolean).join(' OR ');
-
-  if (!where) {
-    return { ok: false, rowsWritten: 0, error: 'No stations in mapping — cannot build WHERE clause' };
-  }
+  const where = `name IN (${codes.map((c) => `'${c}'`).join(',')})`;
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const params = new URLSearchParams({
-    f:                  'json',
+    f:                 'json',
     where,
-    outFields:          OUT_FIELDS,
-    returnGeometry:     'false',
-    resultRecordCount:  '1000',
-    // No orderByFields — sort client-side after date parsing (avoids NULL sort issues)
+    outFields:         OUT_FIELDS,
+    returnGeometry:    'false',
+    // Sort by creationdate DESC so 2026 records with null date_Time surface first.
+    orderByFields:     'creationdate DESC',
+    resultRecordCount: '2000',  // ~9 stations × multi-year history
   });
 
   const resp = await fetch(`${ARCGIS_BASE}?${params}`, {
@@ -215,10 +205,10 @@ export async function runJraIngestion(): Promise<RunResult> {
 
   for (const { attributes: a } of features) {
     const collectedAt = parseCollectedAt(a);
-    if (!collectedAt) continue; // skip records with no parseable date
+    if (!collectedAt) continue; // skip records with no parseable timestamp
 
     rows.push({
-      station_name:              resolveDisplayName(a.StationName, a.name, byApiName, byCode),
+      station_name:              resolveStationName(a.StationName, a.name),
       station_code:              a.name ?? null,
       station_global_id:         a.GlobalID,
       organization:              a.Organization ?? null,
