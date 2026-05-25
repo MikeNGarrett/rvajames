@@ -31,24 +31,34 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT SELECT ON SEQUENCES TO agent_reader;
 ```
 
-## 2. Get the direct connection string
+## 2. Get the Session pooler connection string
 
-**Supabase Dashboard → Project Settings → Database → Connection string** → "URI" tab → **Direct connection** (port 5432, NOT the pooler).
+**Use Session mode, NOT Direct.** Supabase migrated the direct connection hostname (`db.<ref>.supabase.co`) to IPv6-only in 2024. Most home/office networks are IPv4, so direct connections fail with DNS resolution errors. The Session pooler is IPv4-compatible and supports all the session-level features `pg_dump` and ad-hoc queries need.
+
+**Supabase Dashboard → Project Settings → Database → Connection string** → switch the dropdown to **"Session"** mode (NOT "Transaction" or "Direct").
 
 You'll get a URI like:
 ```
-postgres://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres
+postgres://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
 ```
 
 Replace:
-- `postgres:` (user) → `agent_reader:`
+- `postgres.<project-ref>` (user) → `agent_reader.<project-ref>` (keep the project-ref suffix — the pooler uses it to route)
 - `<password>` → the hex you generated in step 1
 - Append `?sslmode=require` if not already present
 
 Final URL:
 ```
-postgres://agent_reader:<hex>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require
+postgres://agent_reader.<project-ref>:<hex>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require
 ```
+
+**Don't use port 6543 (Transaction mode).** Transaction-mode pooling breaks `pg_dump` — it relies on session-level features (consistent snapshots, prepared transactions) that transaction-mode doesn't preserve across queries. Session mode (port 5432) behaves like a direct connection from the client's perspective.
+
+### Why not Direct mode
+
+Supabase migrated direct connections to IPv6-only addresses in 2024. If you're on an IPv4-only network (most home/office), DNS resolution of `db.<ref>.supabase.co` fails before any connection attempt. Symptom: `psql: error: could not translate host name "db.<ref>.supabase.co" to address`. The Session pooler avoids this entirely.
+
+If you specifically need Direct mode (e.g., your network has IPv6 connectivity and you want lower latency), Supabase offers an "IPv4 add-on" (~$4/month) that restores an IPv4 record on the direct hostname. For agent verification workloads, Session pooler is fine.
 
 ## 3. Store in `.dev.vars`
 

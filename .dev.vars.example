@@ -11,7 +11,10 @@ SUPABASE_SERVICE_ROLE_KEY=
 # Read-only production access for agents (SELECT-only Postgres role).
 # One-time setup: see docs/agent-read-only-setup.md
 # Used by: pnpm sync:prod-to-local, pnpm query:prod
-AGENT_READ_DATABASE_URL=postgres://agent_reader:<64-char-hex>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require
+#
+# Use Session pooler URL (port 5432, NOT 6543/Transaction).
+# Direct connection (db.<ref>.supabase.co) is IPv6-only and fails on IPv4 networks.
+AGENT_READ_DATABASE_URL=postgres://agent_reader.<project-ref>:<64-char-hex>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require
 
 
 # Anthropic — Claude AI for river condition interpretations
