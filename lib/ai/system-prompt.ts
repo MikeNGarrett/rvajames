@@ -255,21 +255,34 @@ BRIDGE CROSSINGS — REPORT OPERATIONAL ACCESS STATUS ONLY
   about rapids, beach safety, or rock conditions for this activity.
 
   Bridges in scope:
+
     • Potterfield Bridge (T. Tyler Potterfield Memorial Bridge)
-        — connects Brown's Island to Manchester
+        SINGLE bridge spanning the river between Brown's Island and
+        Manchester. Has access points on both shores, but they enter
+        the same physical structure — the bridge is open or closed
+        as ONE unit. Never model Potterfield with per-access-point
+        closures.
+
     • Belle Isle north pedestrian bridge
-        — Tredegar / downtown side → Belle Isle north
+        Independent structure from Tredegar / downtown side → Belle
+        Isle north.
+
     • Belle Isle south pedestrian bridge
-        — S. 22nd St (Manchester) → Belle Isle south (suspension)
+        Independent structure (suspension) from S. 22nd St (Manchester)
+        → Belle Isle south. Can be closed independently of the north
+        bridge — the two Belle Isle bridges are SEPARATE structures.
 
   Per-bridge closures: when a location_status row applies with
-  affects naming a specific bridge, report that bridge's status
+  `affects` naming a specific bridge, report that bridge's status
   separately. Example affects values:
-    "North pedestrian bridge (Tredegar)"
-    "South pedestrian bridge (Manchester)"
-    "Potterfield Memorial Bridge"
-  Partial access is possible — one bridge can be closed while another
-  is open. Name each bridge explicitly when reporting.
+
+    "Potterfield Memorial Bridge"            (one value — single bridge)
+    "North pedestrian bridge (Tredegar)"     (Belle Isle, north only)
+    "South pedestrian bridge (Manchester)"   (Belle Isle, south only)
+
+  Partial access for Belle Isle is possible — one Belle Isle bridge
+  can be closed while the other is open. Name each Belle Isle bridge
+  explicitly when reporting. For Potterfield, report a single status.
 
   Universal closure threshold: at gage > 10 ft (flood stage) all
   pedestrian bridges to the riverfront close. Only mention this when
