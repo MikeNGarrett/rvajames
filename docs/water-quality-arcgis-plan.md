@@ -74,7 +74,7 @@ Multiple partner organizations collect the data — they all deserve attribution
 
 ### Audit existing ingest
 - Read `lib/ingest/jra.ts`. Document what URL(s) it currently scrapes and what it writes (or doesn't).
-- Query hosted Supabase: `SELECT count(*), max(effective_from) FROM advisories WHERE source LIKE 'jra%' OR kind = 'bacterial'`. Report what's actually in the DB today.
+- Query hosted Supabase: `SELECT count(*), max(effective_from) FROM advisories WHERE source LIKE 'jra%' OR kind = 'water_quality'`. Report what's actually in the DB today.
 - Report findings: is the scrape silently failing, returning zero rows, or producing rows that aren't surfaced?
 
 ### Station-to-access-point mapping
@@ -212,7 +212,7 @@ create policy "anon_read" on water_quality_readings for select to anon using (tr
 
 **Deliverables**
 
-- Inside `lib/ingest/jra.ts` (or a `lib/ingest/derive-bacterial-advisories.ts` helper invoked after the readings write):
+- Inside `lib/ingest/jra.ts` (or a `lib/ingest/derive-water-quality-advisories.ts` helper invoked after the readings write):
   - **Three-state classification per reading** (verified against the sub-goal 69 data, where JRA's `−9` sentinel is sanitized to `null`):
     - **No measurement** — both `ecoli_cfu_per_100ml IS NULL AND enterococci_cfu_per_100ml IS NULL`. Skip entirely. Do NOT create an advisory; do NOT mark the location safe. The UI will show the "off-season / no recent sample" state from sub-goal 71.
     - **Exceeds threshold** — `(ecoli_cfu_per_100ml IS NOT NULL AND ecoli_cfu_per_100ml > 235)` OR `(enterococci_cfu_per_100ml IS NOT NULL AND enterococci_cfu_per_100ml > 104)`. Create an advisory.
@@ -224,7 +224,7 @@ create policy "anon_read" on water_quality_readings for select to anon using (tr
     ```
   - **Recency window.** Only generate advisories from readings whose `collected_at` is within the last 14 days. Older readings have effective_to in the past anyway, but generating them clutters the table and the audit log with already-expired rows. Verified against sub-goal 69 data: 5 of 6 named stations have last reading from 2024-09-03 — those should produce zero advisories on first run.
   - **Advisory shape.** Upsert an `advisories` row with:
-    - `kind='bacterial'`
+    - `kind='water_quality'` (the canonical enum value in production for water-quality advisories of any type — bacterial today, room for non-bacterial later like turbidity spikes or salinity events)
     - `severity='medium'` if exceeds threshold, `severity='high'` if levels exceed 2× the threshold (E. coli > 470 OR Enterococci > 208)
     - `headline='Elevated bacteria at [station]'`
     - `body=<reading values + threshold context + sample date>`
@@ -340,12 +340,12 @@ create policy "anon_read" on water_quality_readings for select to anon using (tr
 - All AI prompt changes invalidate the cached system prompt once on first call after deploy. Acceptable cost.
 - Use `git` for all changes; commit per sub-goal.
 - Single deploy at the end of the round.
-- Do not modify the existing `advisories.kind` enum unless adding a new value requires a migration — `bacterial` is already a valid kind from Round 1 schema.
+- Do not modify the existing `advisories.kind` enum. The canonical value for water-quality advisories in production is `'water_quality'` (generic name, currently used for bacterial-derived advisories but reserved for future non-bacterial water-quality concerns too). Do not introduce `'bacterial'` — that value is not in the enum.
 
 ## Critical files
 
 - `lib/ingest/jra.ts` — sub-goal 69 (rewrite)
-- `lib/ingest/derive-bacterial-advisories.ts` — sub-goal 70 (new, optional helper)
+- `lib/ingest/derive-water-quality-advisories.ts` — sub-goal 70 (new, optional helper)
 - `lib/queries/water-quality.ts` — sub-goal 69 (new)
 - `lib/data/station-mapping.ts` — sub-goal 68 (new, typed constant)
 - `lib/safety/rules.ts` and `lib/safety/thresholds.json` — sub-goal 70 (extend `bacterialStatus`)
