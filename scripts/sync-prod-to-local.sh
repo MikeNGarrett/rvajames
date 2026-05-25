@@ -63,10 +63,48 @@ if ! supabase status >/dev/null 2>&1; then
   exit 1
 fi
 
-# Extract local DB URL from `supabase status`
-LOCAL_DB_URL="$(supabase status 2>/dev/null | sed -n 's/^[[:space:]]*DB URL:[[:space:]]*//p' | head -n 1)"
+# Extract local DB URL from `supabase status`. CLI output format varies
+# across versions, so try multiple strategies in order of reliability.
+LOCAL_DB_URL=""
+
+# Strategy 1: `-o env` produces KEY=value format designed for shell consumption.
+LOCAL_DB_URL="$(supabase status -o env 2>/dev/null \
+  | grep -E '^(DB_URL|DATABASE_URL)=' \
+  | head -n 1 \
+  | cut -d= -f2- \
+  | sed 's/^"\(.*\)"$/\1/')"
+
+# Strategy 2: parse the pretty human-readable output. Match "DB URL:", "Db Url:",
+# "Database URL:" case-insensitively, with optional leading whitespace.
 if [ -z "$LOCAL_DB_URL" ]; then
-  echo "Error: Could not parse local DB URL from \`supabase status\`." >&2
+  LOCAL_DB_URL="$(supabase status 2>/dev/null \
+    | grep -iE '^[[:space:]]*(db|database)[[:space:]_]?url[[:space:]]*:' \
+    | head -n 1 \
+    | sed -E 's/^[^:]*:[[:space:]]*//' \
+    | awk '{print $1}')"
+fi
+
+# Strategy 3: parse JSON output if jq is present.
+if [ -z "$LOCAL_DB_URL" ] && command -v jq >/dev/null 2>&1; then
+  LOCAL_DB_URL="$(supabase status -o json 2>/dev/null \
+    | jq -r '.DB_URL // .db_url // ."DB URL" // empty' 2>/dev/null)"
+fi
+
+if [ -z "$LOCAL_DB_URL" ]; then
+  echo "Error: Could not determine local DB URL from \`supabase status\`." >&2
+  echo "" >&2
+  echo "Diagnostic — \`supabase status\` output:" >&2
+  echo "----" >&2
+  supabase status 2>&1 | sed 's/^/  /' >&2
+  echo "----" >&2
+  echo "" >&2
+  echo "Diagnostic — \`supabase status -o env\` output:" >&2
+  echo "----" >&2
+  supabase status -o env 2>&1 | sed 's/^/  /' >&2
+  echo "----" >&2
+  echo "" >&2
+  echo "If your CLI version uses a different label or format, share these" >&2
+  echo "diagnostics — the parser strategies in this script need to be updated." >&2
   exit 1
 fi
 
