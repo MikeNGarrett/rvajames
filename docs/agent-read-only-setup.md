@@ -39,7 +39,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 
 You'll get a URI like:
 ```
-postgres://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
+postgres://postgres.<project-ref>:<password>@aws-<N>-<region>.pooler.supabase.com:5432/postgres
 ```
 
 Replace:
@@ -49,7 +49,7 @@ Replace:
 
 Final URL:
 ```
-postgres://agent_reader.<project-ref>:<hex>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require
+postgres://agent_reader.<project-ref>:<hex>@aws-<N>-<region>.pooler.supabase.com:5432/postgres?sslmode=require
 ```
 
 **Don't use port 6543 (Transaction mode).** Transaction-mode pooling breaks `pg_dump` — it relies on session-level features (consistent snapshots, prepared transactions) that transaction-mode doesn't preserve across queries. Session mode (port 5432) behaves like a direct connection from the client's perspective.

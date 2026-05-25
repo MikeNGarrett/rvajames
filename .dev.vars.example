@@ -14,7 +14,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 #
 # Use Session pooler URL (port 5432, NOT 6543/Transaction).
 # Direct connection (db.<ref>.supabase.co) is IPv6-only and fails on IPv4 networks.
-AGENT_READ_DATABASE_URL=postgres://agent_reader.<project-ref>:<64-char-hex>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require
+AGENT_READ_DATABASE_URL=postgres://agent_reader.<project-ref>:<64-char-hex>@aws-<N>-<region>.pooler.supabase.com:5432/postgres?sslmode=require
 
 
 # Anthropic — Claude AI for river condition interpretations

@@ -91,6 +91,11 @@ Reality is the source of truth. If verification shows the plan's assumptions don
 - **Single deploy at the end of each round.** Not after each sub-goal.
 - **Use `git` for all changes.** Commit per sub-goal with `feat(sub-goal N): ...` convention visible in `git log --oneline`.
 - **Modern web platform features** via `npx -y modern-web-guidance@latest search <query>` and `retrieve <id>` before implementing any UI pattern. The skill is installed locally per `skills-lock.json`.
+- **Supabase + Postgres guidance** auto-loaded from `.agents/skills/`:
+  - `supabase` — triggers on any Supabase work (Database, Auth, Edge Functions, Realtime, Storage, Vectors, Cron, Queues, supabase-js, RLS, CLI). Authoritative source from Supabase themselves; biases toward verifying against current docs over training data.
+  - `supabase-postgres-best-practices` — Postgres-specific schema patterns, RLS, migrations, extensions.
+
+  Both are passive SKILL.md content (no CLI to invoke) — Claude Code reads them at session start. Reference them when their triggers match; don't reinvent guidance the skill already covers.
 
 ---
 
