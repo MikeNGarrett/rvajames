@@ -29,7 +29,25 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT SELECT ON TABLES TO agent_reader;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT SELECT ON SEQUENCES TO agent_reader;
+
+-- Bypass RLS so the agent can read every row (drafts, audit logs, etc.)
+-- AND so pg_dump doesn't abort on RLS-protected tables.
+-- Writes are still rejected: the SELECT-only column grants above are the wall.
+ALTER ROLE agent_reader BYPASSRLS;
 ```
+
+### Why BYPASSRLS?
+
+Postgres has two independent permission layers:
+
+| Layer | Controls | `agent_reader` |
+|---|---|---|
+| `GRANT SELECT/INSERT/...` | Whether the role can touch a table at all | ✅ SELECT only |
+| Row-Level Security policies | Which *rows* the role sees once the table is accessible | Bypasses (sees all) |
+
+Without `BYPASSRLS`, `pg_dump` aborts with "query would be affected by row-level security policy" — its safety default when reading RLS-protected tables, to prevent silent partial dumps. Either the role bypasses RLS, or per-table policies must explicitly grant SELECT to `agent_reader`. BYPASSRLS is the simpler choice and aligns with what we actually want: agent verification needs to see drafts, audit logs, and any other RLS-hidden rows.
+
+The write-prevention guarantee is unaffected. `agent_reader` has SELECT-only at the column-grant layer, and INSERT/UPDATE/DELETE return "permission denied" regardless of RLS. `service_role` has both BYPASSRLS *and* write privileges; `agent_reader` has BYPASSRLS *only*. That asymmetry is the security boundary.
 
 ## 2. Get the Session pooler connection string
 
