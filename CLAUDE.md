@@ -22,7 +22,14 @@ If a command needs production credentials that aren't in `.env.local` or `.dev.v
 
 **If anything fails twice in a row, STOP.** Diagnose the root cause before trying a third approach. Don't churn.
 
-**If a verification requires production data and can't be run locally:** ask the user to verify, or do code review against the diff, or wait for the end-of-round deploy. Do not deploy mid-round to enable verification.
+**Production READS are available to you** via the `agent_reader` Postgres role (SELECT-only on `public` schema, enforced by Postgres). Use them; you don't need to stop and ask the user for production data.
+
+- `pnpm query:prod "<sql>"` — ad-hoc SELECT queries
+- `pnpm sync:prod-to-local` — snapshot prod data into local Supabase
+
+Writes to production remain impossible: the role is `SELECT`-only at the Postgres level. INSERT/UPDATE/DELETE return "permission denied" regardless of what client or command you use. See `docs/agent-read-only-setup.md` for the setup details and security posture.
+
+**If a verification needs to WRITE to prod, STOP.** That requires the user. Don't try to escalate to `service_role` or other paths.
 
 ---
 
@@ -68,6 +75,8 @@ Reality is the source of truth. If verification shows the plan's assumptions don
 | Preview Worker locally | `pnpm preview` |
 | Deploy | `pnpm deploy:cf` (END OF ROUND ONLY) |
 | Regenerate Supabase types | `supabase gen types typescript --linked > lib/supabase/types.ts` |
+| Read prod (SELECT only) | `pnpm query:prod "<sql>"` |
+| Snapshot prod → local | `pnpm sync:prod-to-local` (use `--yes` to skip prompt) |
 | Modern web guidance | `npx -y modern-web-guidance@latest search "<query>"` |
 
 ---
@@ -88,10 +97,12 @@ Reality is the source of truth. If verification shows the plan's assumptions don
 ## Verification preferences (in order)
 
 1. **Code review** against the diff. Trust this when the change is structural and the logic is verifiable by reading.
-2. **Local dev**: `supabase start && pnpm dev`. Requires Docker.
-3. **Wrangler preview** of the production worker build: `pnpm preview`.
-4. **End-of-round deploy** + Lighthouse + smoketest against the live URL.
-5. **Never**: hunt for production secrets to enable a verification.
+2. **Direct prod read** for quick checks: `pnpm query:prod "<sql>"`. Read-only via `agent_reader` Postgres role. Best for "what does the data actually look like?" verification.
+3. **Snapshot prod → local** for richer verification: `pnpm sync:prod-to-local`, then `supabase start && pnpm dev`. Local stack mirrors production data; full write access on local without touching prod. Best for testing migrations, scrape behavior, ingestion paths.
+4. **Local dev with empty data**: `supabase start && pnpm dev`. Use when you want a clean slate.
+5. **Wrangler preview** of the production worker build: `pnpm preview`.
+6. **End-of-round deploy** + Lighthouse + smoketest against the live URL.
+7. **Never**: hunt for production secrets, escalate to `service_role`, or try to write to prod via any path other than a deployed worker.
 
 ---
 

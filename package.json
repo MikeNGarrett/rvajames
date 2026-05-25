@@ -11,7 +11,9 @@
     "preview": "opennextjs-cloudflare preview",
     "deploy:cf": "node scripts/patch-worker.mjs && opennextjs-cloudflare deploy",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv env.d.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sync:prod-to-local": "./scripts/sync-prod-to-local.sh",
+    "query:prod": "./scripts/query-prod.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",
