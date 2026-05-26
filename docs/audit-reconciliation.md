@@ -2,7 +2,7 @@
 
 Cross-references each finding from `modern-web-evaluation-findings.md` against the staged plans, with **actual current state verified against the git history and codebase**.
 
-**Last reconciled: 2026-05-25** (complete — all 23 findings resolved; Finding 13 dark mode explicitly deferred; water-quality pipeline sub-goals 68–73 shipped). Earlier versions of this doc significantly understated what had shipped — the team had been executing in parallel sessions faster than the doc was being updated. This version is built from `git log` and direct codebase inspection.
+**Last reconciled: 2026-05-26** (complete — all 23 findings resolved; Finding 13 dark mode explicitly deferred; water-quality pipeline sub-goals 68–73 shipped; date-range-forecast sub-goals 74–79 shipped). Earlier versions of this doc significantly understated what had shipped — the team had been executing in parallel sessions faster than the doc was being updated. This version is built from `git log` and direct codebase inspection.
 
 ---
 
@@ -94,6 +94,12 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 | Water-quality sub-goal 72 | Wire water quality into AI reasoning — cached system prompt gained JRA program context, station roles (J24 upstream watch, single-bacteria stations), freshness rules (<7d / 7–14d / >14d), rain cross-reference rule, bacteria-vs-gage independence. Per-call uncached input now carries `waterQuality` block (primary + upstream watch readings). `computeLocationHash` includes waterQuality → natural lazy regeneration on new reading. 13 new unit tests. Smoketest verified cache hit (11240/11240 tokens) | ✅ COMPLETE | `25742cf` |
 | Water-quality sub-goal 73 | A11y verification on WQ surfaces — fixed WaterDropBadge color-only signal (added `!` glyph for caution state, satisfying WCAG 1.4.1), added `(opens in new tab)` sr-only text on JRA Watch links in WaterQualityPanel + DisclaimerFooter. Verified: contrast ratios on all 7 fg/bg pairs pass AA, `HorizontalGauge` exposes `role="meter"` with valuenow/min/max/text, axe-core 0 violations on `/` and `/locations/pony-pasture` | ✅ COMPLETE | `f99a08b` |
 | Deferred | Finding 13 — dark mode | ⏳ DEFERRED |
+| Date-range-forecast sub-goal 74 | Forecast window + chip labels — `getForecastWindow()`, `isInWindow()`, Richmond-TZ helpers, `formatRichmondDate`/`addDaysToIso` in `date-tz.ts` | ✅ COMPLETE | `6170bfc` |
+| Date-range-forecast sub-goal 75 | Forecast-aware `getTodayData` — mode field, `OutOfWindowError`, AHPS forecast data wired into query path | ✅ COMPLETE | `01aec0b` |
+| Date-range-forecast sub-goal 76 | `ForecastChipPicker` (4-chip date selector, role="tablist"), `DateUnavailableBanner` (`role="alert"` focus-on-mount), `buildRedirectUrl` helper, redirect-to-today on out-of-window dates | ✅ COMPLETE | `e6f2ae9` |
+| Date-range-forecast sub-goal 77 | AI forecast-mode language adaptation — cached system prompt mode section, per-call `mode`/`forecastConfidence`/`daysOut` inputs, `computeLocationHash`/`computeMetroHash` include mode+daysOut, water temp/data age suppressed in forecast | ✅ COMPLETE | `9d7a7e6` |
+| Date-range-forecast sub-goal 78 | `ForecastModeIndicator` component (`<details>/<summary>` tooltip), `formatForecastDate` export, mode-aware headers on `MetroSummaryPanel` + location page, `MetroSummaryPanel` ungated for forecast dates | ✅ COMPLETE | `6854222` |
+| Date-range-forecast sub-goal 79 | Final a11y + perf pass: fixed chip subtitle contrast (opacity-70 removed, was ~2.94:1), fixed label-content-name-mismatch (aria-label override dropped), deployed round. Lighthouse final: 98/100/96/100 observed, 95/100/96/100 forecast. pa11y 0 violations on 3 URLs. Pre-existing React #418 hydration warning (Best Practices 96) filed as follow-up. | ✅ COMPLETE | `17dde94`, `89f9f32` |
 
 ---
 
@@ -101,16 +107,21 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 
 ```
 ALL AUDIT FINDINGS RESOLVED (22/23 done; Finding 13 dark mode explicitly deferred).
+DATE-RANGE-FORECAST PLAN COMPLETE (sub-goals 74–79 shipped 2026-05-26).
 
 DONE   All sub-goals 49–62 complete (responsive, closure sources, Pipeline Trail)
 DONE   Finding 10 — preconnect + CSP beacon domains (14e8a00)
 DONE   water_temp_f — Cartersville upstream proxy (14e8a00)
 DONE   Sub-goals 58–61 — multi-source closure registry + Pipeline Trail (8740502, 5a86bcd)
 DONE   Supabase migration 0010 applied to production (Pipeline Trail row live)
-
 DONE   Sub-goal 62 — Brown's Island construction closure entered via /admin/closures/new (2026-05-25)
+DONE   Sub-goals 74–79 — date-range-forecast round (deployed 2026-05-26)
 
 DEFER  Finding 13 — dark mode (own round if/when prioritized)
+
+FOLLOW-UP  React #418 hydration mismatch console warning (pre-existing, not in this round)
+           Caused by text-node mismatch at SSR/hydration. Drags Best Practices to 96.
+           Investigate: nuqs state init in ForecastChipPicker, or dynamic content mismatch.
 ```
 
 ---
