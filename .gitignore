@@ -39,3 +39,4 @@ lib/supabase/types.ts
 tsconfig.tsbuildinfo
 
 .claude/
+.history/
