@@ -4,9 +4,12 @@ import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { searchParamsCache, isValidAgeBucket, formatDateParam, type AgeBucket } from '@/lib/url-state';
 import { getTodayData, OutOfWindowError } from '@/lib/queries/today';
 import { getMetroRiverState } from '@/lib/queries/river-segment';
+import { getForecastWindow, isInWindow } from '@/lib/queries/date-range';
+import { buildRedirectUrl } from '@/lib/utils/redirect-to-today';
 import { RiverLevelTile } from '@/components/tiles/RiverLevelTile';
 import { AdvisoriesBanner } from '@/components/tiles/AdvisoriesBanner';
 import { FloodBanner } from '@/components/banners/FloodBanner';
+import { DateUnavailableBanner } from '@/components/banners/DateUnavailableBanner';
 import { DisclaimerFooter } from '@/components/legal/DisclaimerFooter';
 import { FirstVisitModal } from '@/components/legal/FirstVisitModal';
 import { ConditionsForm } from '@/components/filters/ConditionsForm';
@@ -27,8 +30,20 @@ export default async function Home({ searchParams }: Props) {
   const ageBucket: AgeBucket = isValidAgeBucket(age) ? age : '6-9';
   const dateStr = formatDateParam(date);
 
+  // ── Proactive guard: redirect out-of-window dates before hitting the DB ──
+  if (!isInWindow(dateStr)) {
+    redirect(buildRedirectUrl('/', params));
+  }
+
+  // ── Forecast chips (server-computed, passed to ConditionsForm) ──
+  const chips = getForecastWindow();
+
+  // ── Notice banner ──
+  const notice = typeof params.notice === 'string' ? params.notice : undefined;
+
   // Fetch deterministic data in parallel — these render immediately.
-  // OutOfWindowError is thrown for past/beyond-window dates; redirect to today.
+  // OutOfWindowError is a belt-and-suspenders catch (proactive guard above
+  // should prevent this, but covers edge-cases like clock skew).
   let data: Awaited<ReturnType<typeof getTodayData>>;
   let metroState: Awaited<ReturnType<typeof getMetroRiverState>>;
   try {
@@ -38,7 +53,7 @@ export default async function Home({ searchParams }: Props) {
     ]);
   } catch (err) {
     if (err instanceof OutOfWindowError) {
-      redirect('/');
+      redirect(buildRedirectUrl('/', params));
     }
     throw err;
   }
@@ -53,6 +68,7 @@ export default async function Home({ searchParams }: Props) {
   return (
     <NuqsAdapter>
       {hasFlood && <FloodBanner />}
+      <DateUnavailableBanner notice={notice} />
       <FirstVisitModal />
 
       <main>
@@ -64,7 +80,7 @@ export default async function Home({ searchParams }: Props) {
           </p>
         </header>
 
-        <ConditionsForm currentDate={dateStr} currentAge={ageBucket} />
+        <ConditionsForm currentAge={ageBucket} chips={chips} />
 
         {data.activeAdvisories.length > 0 && (
           <AdvisoriesBanner advisories={data.activeAdvisories} />

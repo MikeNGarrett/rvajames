@@ -1,47 +1,42 @@
 'use client';
 
 /**
- * ConditionsForm — Round 7 rewrite.
+ * ConditionsForm — sub-goal 76 rewrite.
  *
- * Finding 15 — nuqs setters instead of router.push:
- *   useQueryStates({ date, age }) with shallow:false so the RSC re-render
- *   is triggered via nuqs's built-in history integration. This replaces the
- *   manual router.push() call and removes the `useRouter` import entirely.
- *   nuqs batches both params into a single history update.
+ * The date input has been replaced by <ForecastChipPicker />, which fires
+ * immediately on chip click (no buffering, no Show button needed for dates).
+ * The age-bucket select is still buffered — the Show button commits only the
+ * age param; the date is managed independently by the chip picker.
  *
- * Finding 16 — View Transitions for filter navigation:
- *   On submit, if the browser supports document.startViewTransition(), the
- *   param update is wrapped in a transition so shared elements (river panel,
- *   summary) morph in place instead of abruptly replacing.
- *   Pure progressive enhancement — falls back gracefully on older browsers.
+ * Earlier findings preserved:
+ *   Finding 15 — nuqs setters with shallow:false for RSC re-render
+ *   Finding 16 — View Transitions for progressive-enhancement animation
  */
 
 import { useState, useTransition } from 'react';
 import { useQueryStates, parseAsString } from 'nuqs';
-import { AGE_BUCKETS, AGE_BUCKET_LABELS, formatDateParam, type AgeBucket } from '@/lib/url-state';
+import { AGE_BUCKETS, AGE_BUCKET_LABELS, type AgeBucket } from '@/lib/url-state';
+import { ForecastChipPicker } from './ForecastChipPicker';
+import type { ForecastChip } from '@/lib/queries/date-range';
 
 interface Props {
   /** Current URL values — form initialises from these */
-  currentDate: string;   // YYYY-MM-DD
   currentAge: AgeBucket;
+  /** Precomputed 4-chip forecast window from the server */
+  chips: ForecastChip[];
 }
 
-export function ConditionsForm({ currentDate, currentAge }: Props) {
+export function ConditionsForm({ currentAge, chips }: Props) {
   // nuqs manages the URL params; shallow:false triggers RSC re-render.
   const [, setParams] = useQueryStates(
-    { date: parseAsString, age: parseAsString },
+    { age: parseAsString },
     { shallow: false },
   );
   const [isPending, startTransition] = useTransition();
 
-  const [localDate, setLocalDate] = useState(currentDate);
   const [localAge, setLocalAge] = useState<AgeBucket>(currentAge);
 
-  const hasChanged = localDate !== currentDate || localAge !== currentAge;
-
-  const today = new Date();
-  const minDate = formatDateParam(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000));
-  const maxDate = formatDateParam(new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000));
+  const hasChanged = localAge !== currentAge;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -49,13 +44,12 @@ export function ConditionsForm({ currentDate, currentAge }: Props) {
 
     const doUpdate = () => {
       startTransition(() => {
-        setParams({ date: localDate, age: localAge });
+        // Only commit age — date is managed by ForecastChipPicker
+        setParams({ age: localAge });
       });
     };
 
     // Finding 16: progressive-enhancement View Transition.
-    // startViewTransition captures the current DOM state, fires doUpdate()
-    // (which triggers the RSC re-render via nuqs), then morphs to the new DOM.
     if (
       typeof document !== 'undefined' &&
       'startViewTransition' in document
@@ -68,70 +62,51 @@ export function ConditionsForm({ currentDate, currentAge }: Props) {
   }
 
   return (
-    /*
-     * Mobile (< sm): 2-column grid — both labelled inputs share row 1,
-     * the Show button spans both columns on row 2.
-     * ≥ sm: single-row flex (original layout) — inputs grow, button is fixed.
-     */
-    <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-3 mb-5 sm:flex sm:items-end">
-      {/* Date */}
-      <div className="flex flex-col gap-1 sm:flex-1">
-        <label htmlFor="date-picker" className="text-sm font-medium text-text-secondary">
-          Date
-        </label>
-        <input
-          id="date-picker"
-          type="date"
-          value={localDate}
-          min={minDate}
-          max={maxDate}
-          onChange={(e) => {
-            if (e.target.value) setLocalDate(e.target.value);
-          }}
-          className="touch-target rounded-lg border border-border bg-surface-raised px-3 text-base font-medium text-text focus:outline-none focus:ring-2 focus:ring-rva-blue"
-        />
-      </div>
+    <div className="mb-5 space-y-3">
+      {/* ── Forecast chip picker — fires immediately on click ── */}
+      <ForecastChipPicker chips={chips} />
 
-      {/* Age bucket */}
-      <div className="flex flex-col gap-1 sm:flex-1">
-        <label htmlFor="age-bucket" className="text-sm font-medium text-text-secondary">
-          Youngest child
-        </label>
-        <select
-          id="age-bucket"
-          value={localAge}
-          onChange={(e) => setLocalAge(e.target.value as AgeBucket)}
-          className="touch-target rounded-lg border border-border bg-surface-raised px-3 text-base font-medium text-text focus:outline-none focus:ring-2 focus:ring-rva-blue"
+      {/* ── Age bucket + Show button ── */}
+      <form onSubmit={handleSubmit} className="flex items-end gap-3">
+        <div className="flex flex-col gap-1 flex-1">
+          <label htmlFor="age-bucket" className="text-sm font-medium text-text-secondary">
+            Youngest child
+          </label>
+          <select
+            id="age-bucket"
+            value={localAge}
+            onChange={(e) => setLocalAge(e.target.value as AgeBucket)}
+            className="touch-target rounded-lg border border-border bg-surface-raised px-3 text-base font-medium text-text focus:outline-none focus:ring-2 focus:ring-rva-blue"
+          >
+            {AGE_BUCKETS.map((bucket) => (
+              <option key={bucket} value={bucket}>
+                {AGE_BUCKET_LABELS[bucket]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          type="submit"
+          disabled={!hasChanged || isPending}
+          className={`touch-target rounded-lg px-4 text-base font-semibold transition-colors shrink-0
+            ${hasChanged && !isPending
+              ? 'bg-rva-blue text-white hover:bg-rva-blue/90 active:scale-95'
+              : 'bg-surface-raised border border-border text-text-muted cursor-not-allowed'
+            }`}
+          aria-label="Show conditions"
         >
-          {AGE_BUCKETS.map((bucket) => (
-            <option key={bucket} value={bucket}>
-              {AGE_BUCKET_LABELS[bucket]}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Submit — full-width on mobile (col-span-2), auto-width in the sm flex row */}
-      <button
-        type="submit"
-        disabled={!hasChanged || isPending}
-        className={`col-span-2 touch-target rounded-lg px-4 text-base font-semibold transition-colors sm:flex-shrink-0
-          ${hasChanged && !isPending
-            ? 'bg-rva-blue text-white hover:bg-rva-blue/90 active:scale-95'
-            : 'bg-surface-raised border border-border text-text-muted cursor-not-allowed'
-          }`}
-        aria-label="Show conditions"
-      >
-        {isPending ? (
-          <span className="flex items-center justify-center gap-1.5">
-            <svg className="animate-spin motion-reduce:animate-none h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3V4a10 10 0 100 20v-4l-3 3 3 3v-4a8 8 0 01-8-8z" />
-            </svg>
-            Loading
-          </span>
-        ) : 'Show'}
-      </button>
-    </form>
+          {isPending ? (
+            <span className="flex items-center justify-center gap-1.5">
+              <svg className="animate-spin motion-reduce:animate-none h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3V4a10 10 0 100 20v-4l-3 3 3 3v-4a8 8 0 01-8-8z" />
+              </svg>
+              Loading
+            </span>
+          ) : 'Show'}
+        </button>
+      </form>
+    </div>
   );
 }

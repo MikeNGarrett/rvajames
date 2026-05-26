@@ -69,7 +69,8 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 | Sub-goal 59 | Venture Richmond closure source — ventureRichmondSource registered; scrapes /news/ + /browns-island-improvement-plan/; checks robots.txt; keyword + location filter; draft rows only | ✅ COMPLETE (implemented in sub-goal 58 commit) | `8740502` |
 | Sub-goal 60 | Friends of JRPS closure source — jrpsSource registered; scrapes /news/ + /whats-going-on-with-pipeline/; honors JSON-LD datePublished; checks robots.txt; draft rows only | ✅ COMPLETE (implemented in sub-goal 58 commit) | `8740502` |
 | Sub-goal 61 | Pipeline Trail as 10th location — migration 0010 inserts location row + active closed_indefinite status (effective 2024-09-13, no end date) + 3 location_resources; AI system prompt updated with permanent closure context | ✅ COMPLETE | `5a86bcd` |
-| Sub-goal 62 | Manual admin entry — Brown's Island construction closure via /admin/closures/new (no code change needed) | ⏳ MANUAL STEP — No code change. Admin should create a location_status row: location=browns-island, kind=closed, affects='Entire island', reason='Closed for $30M improvement project. Reopens for Richmond Folk Festival October 9-11, 2026. Full completion early 2027.', source='Venture Richmond Brown\'s Island Improvement Plan', source_url='https://venturerichmond.com/browns-island-improvement-plan/', effective_from='2025-11-17', effective_to='2026-10-09', next_review_at='2026-09-01'. |
+| Sub-goal 62 | Manual admin entry — Brown's Island construction closure via /admin/closures/new (no code change needed) | ✅ COMPLETE 2026-05-25 — admin entry made via /admin/closures/new after the d275fa0 hotfix unblocked the page. |
+| Hotfix: edit-closure server-component error | EditClosurePage's Danger Zone form attached an inline onSubmit handler with window.confirm inside an async server component → React 19 threw at render time, surfacing as "Application error" digest 960521385. Fixed by extending ExpireButton with a `variant='full'` option and swapping out the broken form. Both list + edit surfaces now share the confirm-dialog + undo-toast flow | ✅ COMPLETE | `d275fa0` |
 | Round 5 (Items 1–9) | Audit quick wins | ✅ COMPLETE | `581c4be` |
 | Round 6 (Findings 3, 6–9) | Headers, caching, BF-Cache, security | ✅ COMPLETE | `dc16684` |
 | Round 9 sub-goal 48 | Responsive foundation + `docs/responsive-guidelines.md` | ✅ COMPLETE | `581c4be` |
@@ -107,13 +108,7 @@ DONE   water_temp_f — Cartersville upstream proxy (14e8a00)
 DONE   Sub-goals 58–61 — multi-source closure registry + Pipeline Trail (8740502, 5a86bcd)
 DONE   Supabase migration 0010 applied to production (Pipeline Trail row live)
 
-MANUAL Sub-goal 62 — Brown's Island construction closure via /admin/closures/new
-              location=browns-island, kind=closed, affects='Entire island'
-              reason='Closed for $30M improvement project. Reopens for Richmond Folk Festival
-              October 9-11, 2026. Full completion early 2027.'
-              source='Venture Richmond Brown's Island Improvement Plan'
-              source_url='https://venturerichmond.com/browns-island-improvement-plan/'
-              effective_from='2025-11-17', effective_to='2026-10-09', next_review_at='2026-09-01'
+DONE   Sub-goal 62 — Brown's Island construction closure entered via /admin/closures/new (2026-05-25)
 
 DEFER  Finding 13 — dark mode (own round if/when prioritized)
 ```

@@ -1,14 +1,18 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import type { Metadata } from 'next';
 import { getLocationDetail } from '@/lib/queries/location';
 import { searchParamsCache, isValidAgeBucket, formatDateParam, type AgeBucket } from '@/lib/url-state';
+import { isInWindow } from '@/lib/queries/date-range';
+import { OutOfWindowError } from '@/lib/queries/today';
+import { buildRedirectUrl } from '@/lib/utils/redirect-to-today';
 import { ActivityMatrix } from '@/components/location/ActivityMatrix';
 import { WaterQualityPanel } from '@/components/location/WaterQualityPanel';
 import { PrepChecklist } from '@/components/trip/PrepChecklist';
 import { ResourceList } from '@/components/location/ResourceList';
 import { AdvisoriesBanner } from '@/components/tiles/AdvisoriesBanner';
+import { DateUnavailableBanner } from '@/components/banners/DateUnavailableBanner';
 import { StatusBadge } from '@/components/tiles/StatusBadge';
 import { StaleState } from '@/components/states/Stale';
 import { DisclaimerFooter } from '@/components/legal/DisclaimerFooter';
@@ -55,10 +59,21 @@ export default async function LocationPage({ params, searchParams }: Props) {
   const ageBucket: AgeBucket = isValidAgeBucket(age) ? age : '6-9';
   const dateStr = formatDateParam(date);
 
+  // ── Proactive guard: redirect out-of-window dates before hitting the DB ──
+  if (!isInWindow(dateStr)) {
+    redirect(buildRedirectUrl(`/locations/${slug}`, raw));
+  }
+
+  // ── Notice banner ──
+  const notice = typeof raw.notice === 'string' ? raw.notice : undefined;
+
   let location;
   try {
     location = await getLocationDetail(slug, dateStr, ageBucket);
   } catch (err) {
+    if (err instanceof OutOfWindowError) {
+      redirect(buildRedirectUrl(`/locations/${slug}`, raw));
+    }
     console.error(`[/locations/${slug}] getLocationDetail threw:`, err);
     throw err;
   }
@@ -71,6 +86,7 @@ export default async function LocationPage({ params, searchParams }: Props) {
 
   return (
     <NuqsAdapter>
+      <DateUnavailableBanner notice={notice} />
       <main className="max-w-lg mx-auto px-4 py-5">
         {/* Back nav */}
         <Link
