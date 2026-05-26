@@ -91,3 +91,28 @@ export function isInWindow(iso: string, now: Date = new Date()): boolean {
   const maxIso   = addDaysToIso(todayIso, 3);
   return iso >= todayIso && iso <= maxIso;
 }
+
+/**
+ * Resolves mode, daysOut, and forecastConfidence for any ISO date string.
+ * Derives all three from the date so callers don't have to compute them manually.
+ *
+ * Used internally by getLocationDetail and getMetroSummary to thread
+ * forecast-awareness into AI prompt inputs without changing public API signatures.
+ */
+export function resolveDateMode(
+  iso: string,
+  now: Date = new Date(),
+): Pick<ForecastChip, 'mode' | 'daysOut' | 'forecastConfidence'> {
+  const todayIso = formatRichmondDate(now);
+  const [ty, tm, td] = todayIso.split('-').map(Number);
+  const [dy, dm, dd] = iso.split('-').map(Number);
+  const rawDaysOut = Math.round(
+    (Date.UTC(dy, dm - 1, dd) - Date.UTC(ty, tm - 1, td)) / 86_400_000,
+  );
+  const daysOut = Math.max(0, rawDaysOut);
+  const mode: DateMode = daysOut === 0 ? 'observed' : 'forecast';
+  // Clamp to [0, 3] for the confidence lookup; beyond-window dates use 'low'.
+  const confidenceIdx = Math.min(daysOut, 3);
+  const forecastConfidence = CONFIDENCE[confidenceIdx] ?? null;
+  return { mode, daysOut, forecastConfidence };
+}

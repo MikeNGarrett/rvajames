@@ -34,6 +34,9 @@ describe('computeWqFreshness', () => {
 
 const baseInput: InterpretLocationInput = {
   date: '2026-05-25',
+  mode: 'observed',
+  forecastConfidence: null,
+  daysOut: 0,
   locationSlug: 'pony-pasture',
   locationName: 'Pony Pasture Rapids',
   ageBucket: '6-9',
@@ -167,5 +170,53 @@ describe('buildUserMessage — water quality section', () => {
       },
     });
     expect(msg).toContain('1 day (current)');
+  });
+});
+
+// ─── buildUserMessage — mode rendering ───────────────────────────────────────
+
+describe('buildUserMessage — mode rendering', () => {
+  it('uses "Current conditions" header and "Mode: observed" for observed mode', () => {
+    const msg = buildUserMessage({ ...baseInput, mode: 'observed', forecastConfidence: null, daysOut: 0 });
+    expect(msg).toContain('Mode: observed');
+    expect(msg).toContain('--- Current conditions ---');
+    expect(msg).not.toContain('Forecast conditions');
+  });
+
+  it('uses "Forecast conditions (day +2)" header and medium-confidence mode label', () => {
+    const msg = buildUserMessage({
+      ...baseInput,
+      date: '2026-05-27',
+      mode: 'forecast',
+      forecastConfidence: 'medium',
+      daysOut: 2,
+      waterTempF: null,
+      dataAgeMinutes: null,
+    });
+    expect(msg).toContain('Mode: forecast (medium confidence, day +2)');
+    expect(msg).toContain('--- Forecast conditions (day +2) ---');
+    expect(msg).not.toContain('Current conditions');
+  });
+
+  it('omits water temp and data age lines for forecast mode', () => {
+    const msg = buildUserMessage({
+      ...baseInput,
+      date: '2026-05-28',
+      mode: 'forecast',
+      forecastConfidence: 'low',
+      daysOut: 3,
+      waterTempF: null,
+      dataAgeMinutes: null,
+    });
+    expect(msg).not.toContain('Water temp:');
+    expect(msg).not.toContain('Data age:');
+    // Gage height should still be present
+    expect(msg).toContain('Gage height:');
+  });
+
+  it('includes water temp and data age for observed mode', () => {
+    const msg = buildUserMessage({ ...baseInput, mode: 'observed', forecastConfidence: null, daysOut: 0 });
+    expect(msg).toContain('Water temp:');
+    expect(msg).toContain('Data age:');
   });
 });

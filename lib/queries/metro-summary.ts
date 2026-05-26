@@ -7,6 +7,7 @@ import { createServerClient } from '@/lib/supabase/server';
 import { getOrGenerateMetro } from '@/lib/ai/get-or-generate';
 import { getMetroRiverState } from './river-segment';
 import { getActiveStatuses } from './location-status';
+import { resolveDateMode } from './date-range';
 import type { AgeBucket } from '@/lib/url-state';
 import type { MetroSummary } from '@/lib/ai/prompts/summarize-metro';
 import { csoAdvisoryStatus } from '@/lib/safety/rules';
@@ -80,6 +81,8 @@ export async function getMetroSummary(
       }));
   }
 
+  const { mode, daysOut, forecastConfidence } = resolveDateMode(date);
+
   const result = await getOrGenerateMetro(
     {
       date,
@@ -87,6 +90,9 @@ export async function getMetroSummary(
       metroState,
       activeAdvisoryHeadlines: activeHeadlines,
       airTempF:              nwsSnap.data?.air_temp_f ?? null,
+      mode,
+      forecastConfidence,
+      daysOut,
       rain48hIn:             0,           // TODO: wire actual precip when NWS provides it
       activeCSOAdvisory,
       hasHighSeverityAdvisory: hasHighSeverity,

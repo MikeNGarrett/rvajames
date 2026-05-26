@@ -80,6 +80,12 @@ export interface MetroSummaryInput {
   metroState:              MetroRiverState;
   activeAdvisoryHeadlines: string[];
   airTempF:                number | null;
+  /** 'observed' for today (live gauge data); 'forecast' for days +1..+3. */
+  mode:                    'observed' | 'forecast';
+  /** Forecast confidence band; null when mode is 'observed'. */
+  forecastConfidence:      'high' | 'medium' | 'low' | null;
+  /** Calendar days from today. 0 = today (observed). */
+  daysOut:                 number;
   // Optional: pre-computed deterministic signals (injected in sub-goal 31)
   rain48hIn?:              number;
   activeCSOAdvisory?:      boolean;
@@ -110,8 +116,14 @@ export function buildMetroUserMessage(input: MetroSummaryInput): string {
     hasHighSeverityAdvisory,
   });
 
+  const isForecast = input.mode === 'forecast';
+  const modeLabel = isForecast
+    ? `forecast (${input.forecastConfidence ?? 'unknown'} confidence, day +${input.daysOut})`
+    : 'observed';
+
   const lines: string[] = [
     `Date: ${input.date}`,
+    `Mode: ${modeLabel}`,
     `Prompt version: ${PROMPT_VERSION}`,
     `Age context: ${
       input.ageBucket === 'none'
@@ -126,9 +138,11 @@ export function buildMetroUserMessage(input: MetroSummaryInput): string {
     `Westham discharge: ${
       upriver.dischargeCfs !== null ? `${upriver.dischargeCfs.toLocaleString()} cfs` : 'unavailable'
     }`,
-    `Westham water temp: ${
-      upriver.waterTempF !== null ? `${upriver.waterTempF}°F` : 'unavailable'
-    }`,
+    // Water temperature absent from AHPS forecast payload — only emit for observed mode.
+    ...(isForecast
+      ? []
+      : [`Westham water temp: ${upriver.waterTempF !== null ? `${upriver.waterTempF}°F` : 'unavailable'}`]
+    ),
     `City Locks tidal station (02037705) — water surface elev. above NAVD 1988: ${
       downriver.gageFt !== null ? `${downriver.gageFt} ft NAVD` : 'unavailable'
     }`,

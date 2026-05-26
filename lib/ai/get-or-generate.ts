@@ -68,6 +68,10 @@ function computeHash(normalized: string): string {
 function computeLocationHash(input: InterpretLocationInput): string {
   return computeHash(JSON.stringify({
     date: input.date,
+    // mode + daysOut distinguish a Saturday forecast generated on Thursday from
+    // a Saturday observation generated on Saturday — same date, different prompts.
+    mode: input.mode,
+    daysOut: input.daysOut,
     locationSlug: input.locationSlug,
     ageBucket: input.ageBucket,
     gageFt: input.gageFt,
@@ -85,6 +89,10 @@ function computeMetroHash(input: MetroSummaryInput): string {
   return computeHash(JSON.stringify({
     promptVersion: PROMPT_VERSION,        // bump orphans all pre-b2 cached rows
     date: input.date,
+    // mode + daysOut ensure a Saturday forecast (generated Thursday) never collides
+    // with a Saturday observation (generated Saturday).
+    mode: input.mode,
+    daysOut: input.daysOut,
     ageBucket: input.ageBucket,
     upriverGageFt: input.metroState.upriver.gageFt,
     upriverDischargeCfs: input.metroState.upriver.dischargeCfs,

@@ -75,6 +75,12 @@ export interface InterpretLocationInput {
   locationSlug: string;
   locationName: string;
   ageBucket: '0-2' | '3-5' | '6-9' | '10-13' | '14+' | 'none';
+  /** 'observed' for today (live gauge data); 'forecast' for days +1..+3. */
+  mode: 'observed' | 'forecast';
+  /** Forecast confidence band; null when mode is 'observed'. */
+  forecastConfidence: 'high' | 'medium' | 'low' | null;
+  /** Calendar days from today. 0 = today (observed). */
+  daysOut: number;
   gageFt: number | null;
   dischargeCfs: number | null;
   waterTempF: number | null;
@@ -98,18 +104,29 @@ function pluralDays(n: number): string {
 }
 
 export function buildUserMessage(input: InterpretLocationInput): string {
+  const isForecast = input.mode === 'forecast';
+  const modeLabel = isForecast
+    ? `forecast (${input.forecastConfidence ?? 'unknown'} confidence, day +${input.daysOut})`
+    : 'observed';
+  const conditionsHeader = isForecast
+    ? `--- Forecast conditions (day +${input.daysOut}) ---`
+    : '--- Current conditions ---';
+
   const lines: string[] = [
     `Date: ${input.date}`,
+    `Mode: ${modeLabel}`,
     `Location: ${input.locationName} (${input.locationSlug})`,
     `Age context: ${input.ageBucket === 'none' ? 'General audience — no children (adult visitors only)' : `Youngest family member: ${input.ageBucket}`}`,
     '',
-    '--- Current conditions ---',
+    conditionsHeader,
     `Gage height: ${input.gageFt !== null ? `${input.gageFt} ft` : 'unavailable'}`,
     `Discharge: ${input.dischargeCfs !== null ? `${input.dischargeCfs} cfs` : 'unavailable'}`,
-    `Water temp: ${input.waterTempF !== null ? `${input.waterTempF}°F` : 'unavailable'}`,
+    // Water temperature is absent from AHPS forecast payloads; only emit for observed mode.
+    ...(isForecast ? [] : [`Water temp: ${input.waterTempF !== null ? `${input.waterTempF}°F` : 'unavailable'}`]),
     `Air temp: ${input.airTempF !== null ? `${input.airTempF}°F` : 'unavailable'}`,
     `Precipitation last 24h: ${input.precip24hIn !== null ? `${input.precip24hIn} in` : 'unavailable'}`,
-    `Data age: ${input.dataAgeMinutes !== null ? `${input.dataAgeMinutes} minutes` : 'unknown'}`,
+    // Data age only meaningful for observed (live snapshot); forecast data has no age.
+    ...(isForecast ? [] : [`Data age: ${input.dataAgeMinutes !== null ? `${input.dataAgeMinutes} minutes` : 'unknown'}`]),
     '',
     '--- Active advisories ---',
     input.activeAdvisoryHeadlines.length

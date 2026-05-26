@@ -6,6 +6,7 @@ import { computeWqFreshness } from '@/lib/ai/prompts/interpret-location';
 import { combinedLocationStatus } from '@/lib/safety/rules';
 import { getLatestWaterQualityReading, getLatestReadingByStationCode, type WaterQualityReading } from './water-quality';
 import { getStationConfig } from '@/lib/data/station-mapping';
+import { resolveDateMode } from './date-range';
 
 export interface LocationDetail {
   id: string;
@@ -217,17 +218,24 @@ export async function getLocationDetail(
 
   const activitySlugs = activities.map((a) => a.slug);
 
+  const { mode, daysOut, forecastConfidence } = resolveDateMode(date);
+
   const interpretInput: InterpretLocationInput = {
     date,
     locationSlug: loc.slug,
     locationName: loc.name,
     ageBucket,
+    mode,
+    forecastConfidence,
+    daysOut,
     gageFt: snap?.gage_ft ?? null,
     dischargeCfs: snap?.discharge_cfs ?? null,
-    waterTempF: snap?.water_temp_f ?? null,
+    // Water temperature not available in AHPS forecast — omit so the AI doesn't
+    // report a stale or live reading as if it were forecast data.
+    waterTempF: mode === 'forecast' ? null : (snap?.water_temp_f ?? null),
     airTempF: snap?.air_temp_f ?? nwsSnap?.air_temp_f ?? null,
     precip24hIn: null, // NWS stores probability not measured inches; TODO: wire actual precip
-    dataAgeMinutes: latestSnapshot?.ageMinutes ?? null,
+    dataAgeMinutes: mode === 'forecast' ? null : (latestSnapshot?.ageMinutes ?? null),
     activeAdvisoryHeadlines: activeAdvisories.map((a) => a.headline),
     availableActivitySlugs: activitySlugs,
     waterQuality: waterQualityInput,
