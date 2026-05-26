@@ -76,7 +76,7 @@ export function ForecastChipPicker({ chips }: Props) {
               aria-selected={isActive}
               aria-label={
                 chip.mode === 'forecast'
-                  ? `${chip.label}, forecast`
+                  ? `${chip.label} Forecast`   // matches visible text exactly (WCAG 2.5.3)
                   : chip.label
               }
               disabled={isPending}
@@ -95,7 +95,7 @@ export function ForecastChipPicker({ chips }: Props) {
               {chip.mode === 'forecast' && (
                 <span
                   className={`text-[10px] uppercase tracking-wide leading-none ${
-                    isActive ? 'opacity-70' : 'text-text-muted opacity-70'
+                    isActive ? 'text-white' : 'text-text-muted'
                   }`}
                 >
                   Forecast
