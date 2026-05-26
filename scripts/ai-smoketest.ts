@@ -146,6 +146,7 @@ async function callMode(ai: Anthropic, label: string, input: InterpretLocationIn
     model: 'claude-haiku-4-5',
     max_tokens: 1024,
     system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+    // Use the per-fixture input, not the shared observed INPUT constant
     messages: [{ role: 'user', content: buildUserMessage(input) }],
   });
 
@@ -155,11 +156,14 @@ async function callMode(ai: Anthropic, label: string, input: InterpretLocationIn
 
   if (parsed.success) {
     console.log(`  zod parse: ✓ PASS (status=${parsed.data.status})`);
-    // For forecast modes, verify the body doesn't contain "water temp" if waterTempF=null
     if (input.mode === 'forecast') {
-      const bodyLower = parsed.data.body_md.toLowerCase();
-      const mentionsTemp = /water temp|water temperature/.test(bodyLower);
-      console.log(`  forecast rule — no water temp in body_md: ${mentionsTemp ? '✗ WARN (temp mentioned)' : '✓ OK'}`);
+      // "water temp" / "water temperature" as a phrase would indicate the AI is
+      // hallucinating or citing a value we didn't provide. Air temperature (85°F) is
+      // still in the fixture so generic "temperature" words are allowed; we only flag
+      // the specific phrases that would constitute a fabricated water reading.
+      const body = parsed.data.body_md;
+      const mentionsWaterTemp = /water temp(?:erature)?/i.test(body);
+      console.log(`  no fabricated water temp: ${mentionsWaterTemp ? '✗ FAIL (water temp mentioned)' : '✓ OK'}`);
     }
   } else {
     console.log(`  zod parse: ✗ FAIL`);
