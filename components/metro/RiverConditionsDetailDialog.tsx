@@ -44,6 +44,24 @@ function formatTs(ts: string | null): string {
   });
 }
 
+/**
+ * Format weekday + hour for the forecast peak readout — e.g. "Fri, 8 AM".
+ *
+ * Why not a single toLocaleString call: when `weekday + hour` are combined in
+ * en-US without `day:'numeric'`, ICU implementations disagree on the separator
+ * (Cloudflare Workers emits "Fri, 8 AM" — Chrome/Firefox emit "Fri 8 AM").
+ * That single comma was the React #418 hydration mismatch in production.
+ * Formatting each piece separately and joining ourselves makes the output
+ * byte-for-byte identical across every JS engine.
+ */
+function formatWeekdayHour(atMs: number): string {
+  const d = new Date(atMs);
+  const tz = 'America/New_York';
+  const weekday = d.toLocaleString('en-US', { weekday: 'short', timeZone: tz });
+  const hour = d.toLocaleString('en-US', { hour: 'numeric', timeZone: tz });
+  return `${weekday}, ${hour}`;
+}
+
 export function RiverConditionsDetailDialog({ metroState }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -217,7 +235,7 @@ export function RiverConditionsDetailDialog({ metroState }: Props) {
               {peak && (
                 <span>
                   Peak {peak.stage_ft.toFixed(1)} ft ·{' '}
-                  {new Date(peak.at_ms).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', timeZone: 'America/New_York' })}
+                  {formatWeekdayHour(peak.at_ms)}
                 </span>
               )}
               <span>
