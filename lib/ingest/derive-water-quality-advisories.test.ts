@@ -4,6 +4,12 @@
  * Two layers:
  *   1. classifyReading — pure function, no mocking needed.
  *   2. deriveWaterQualityAdvisories — integration, Supabase client mocked.
+ *
+ * Updated in the source_id refactor (structural dedup):
+ *   - existingAdvisories now carries { source_id } instead of { source }
+ *   - advisories mock chain: .eq().eq().gt() (source + kind exact match)
+ *   - upsert mock replaces insert mock
+ *   - Assertions check source='jra_water_quality' + source_id starts 'J23:...'
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -146,24 +152,24 @@ describe('classifyReading', () => {
  * deriveWaterQualityAdvisories:
  *   1. water_quality_readings → latest readings
  *   2. locations              → id/slug pairs
- *   3. advisories (select)    → existing source keys
- *   4. advisories (insert)    → write result
+ *   3. advisories (select)    → existing source_ids (.eq.eq.gt chain)
+ *   4. advisories (upsert)    → write result
  */
 function makeMockClient({
   readings                = [] as object[],
   locations               = [{ id: 'loc-pony', slug: 'pony-pasture' }],
-  existingAdvisories      = [] as { source: string }[],
+  existingAdvisories      = [] as { source_id: string | null }[],
   readingsError           = null as { message: string } | null,
-  insertError             = null as { message: string } | null,
+  upsertError             = null as { message: string } | null,
 } = {}) {
-  const insertMock = vi.fn().mockResolvedValue({ error: insertError });
+  const upsertMock = vi.fn().mockResolvedValue({ error: upsertError });
 
   const fromMock = vi.fn().mockImplementation((table: string) => {
     if (table === 'water_quality_readings') {
-      const limitMock = vi.fn().mockResolvedValue({ data: readings, error: readingsError });
-      const orderMock = vi.fn().mockReturnValue({ limit: limitMock });
-      const gteMock   = vi.fn().mockReturnValue({ order: orderMock });
-      const inMock    = vi.fn().mockReturnValue({ gte: gteMock });
+      const limitMock  = vi.fn().mockResolvedValue({ data: readings, error: readingsError });
+      const orderMock  = vi.fn().mockReturnValue({ limit: limitMock });
+      const gteMock    = vi.fn().mockReturnValue({ order: orderMock });
+      const inMock     = vi.fn().mockReturnValue({ gte: gteMock });
       const selectMock = vi.fn().mockReturnValue({ in: inMock });
       return { select: selectMock };
     }
@@ -175,17 +181,18 @@ function makeMockClient({
     }
 
     if (table === 'advisories') {
-      const gtMock   = vi.fn().mockResolvedValue({ data: existingAdvisories, error: null });
-      const likeMock = vi.fn().mockReturnValue({ gt: gtMock });
-      const eqMock   = vi.fn().mockReturnValue({ like: likeMock });
-      const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
-      return { select: selectMock, insert: insertMock };
+      // Chain: .select('source_id').eq('kind','water_quality').eq('source', SOURCE_SYSTEM).gt(...)
+      const gtMock    = vi.fn().mockResolvedValue({ data: existingAdvisories, error: null });
+      const eq2Mock   = vi.fn().mockReturnValue({ gt: gtMock });
+      const eq1Mock   = vi.fn().mockReturnValue({ eq: eq2Mock });
+      const selectMock = vi.fn().mockReturnValue({ eq: eq1Mock });
+      return { select: selectMock, upsert: upsertMock };
     }
 
     return {};
   });
 
-  return { from: fromMock, _insertMock: insertMock };
+  return { from: fromMock, _upsertMock: upsertMock };
 }
 
 describe('deriveWaterQualityAdvisories', () => {
@@ -199,7 +206,7 @@ describe('deriveWaterQualityAdvisories', () => {
 
     expect(result.ok).toBe(true);
     expect(result.rowsWritten).toBe(0);
-    expect(mockClient._insertMock).not.toHaveBeenCalled();
+    expect(mockClient._upsertMock).not.toHaveBeenCalled();
   });
 
   it('returns ok:false when reading query errors', async () => {
@@ -214,7 +221,7 @@ describe('deriveWaterQualityAdvisories', () => {
     expect(result.error).toContain('connection refused');
   });
 
-  it('writes one advisory when a primary station reading exceeds threshold', async () => {
+  it('upserts one advisory when a primary station reading exceeds threshold', async () => {
     // 300 > 235 but 300 < 470 → moderate
     const mockClient = makeMockClient({
       readings: [{
@@ -232,17 +239,19 @@ describe('deriveWaterQualityAdvisories', () => {
 
     expect(result.ok).toBe(true);
     expect(result.rowsWritten).toBe(1);
-    expect(mockClient._insertMock).toHaveBeenCalledOnce();
+    expect(mockClient._upsertMock).toHaveBeenCalledOnce();
 
-    const insertedRow = mockClient._insertMock.mock.calls[0][0] as Record<string, unknown>;
-    expect(insertedRow.kind).toBe('water_quality');
-    expect(insertedRow.severity).toBe('moderate');
-    expect(insertedRow.source).toMatch(/^jra:water_quality:J23:/);
-    expect((insertedRow.location_ids as string[]).length).toBeGreaterThan(0);
+    const upsertedRow = mockClient._upsertMock.mock.calls[0][0] as Record<string, unknown>;
+    expect(upsertedRow.kind).toBe('water_quality');
+    expect(upsertedRow.severity).toBe('moderate');
+    // source is now the canonical system name, source_id carries the natural key
+    expect(upsertedRow.source).toBe('jra_water_quality');
+    expect(upsertedRow.source_id).toMatch(/^J23:/);
+    expect((upsertedRow.location_ids as string[]).length).toBeGreaterThan(0);
   });
 
-  it('skips insert when source key already exists (idempotent on re-run)', async () => {
-    const sourceKey = 'jra:water_quality:J23:2026-05-22';
+  it('skips upsert when source_id already exists (idempotent on re-run)', async () => {
+    const sourceId = 'J23:2026-05-22';
     const mockClient = makeMockClient({
       readings: [{
         station_code:              'J23',
@@ -252,7 +261,7 @@ describe('deriveWaterQualityAdvisories', () => {
         ecoli_cfu_per_100ml:       500,
         enterococci_cfu_per_100ml: null,
       }],
-      existingAdvisories: [{ source: sourceKey }],
+      existingAdvisories: [{ source_id: sourceId }],
     });
     vi.mocked(createServerClient).mockResolvedValue(mockClient as never);
 
@@ -260,7 +269,7 @@ describe('deriveWaterQualityAdvisories', () => {
 
     expect(result.ok).toBe(true);
     expect(result.rowsWritten).toBe(0);
-    expect(mockClient._insertMock).not.toHaveBeenCalled();
+    expect(mockClient._upsertMock).not.toHaveBeenCalled();
   });
 
   it('writes no advisory when reading is within safe range', async () => {
@@ -316,8 +325,8 @@ describe('deriveWaterQualityAdvisories', () => {
 
     await deriveWaterQualityAdvisories();
 
-    const insertedRow = mockClient._insertMock.mock.calls[0][0] as Record<string, unknown>;
-    expect(insertedRow.severity).toBe('high');
+    const upsertedRow = mockClient._upsertMock.mock.calls[0][0] as Record<string, unknown>;
+    expect(upsertedRow.severity).toBe('high');
   });
 });
 

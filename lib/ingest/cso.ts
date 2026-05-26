@@ -15,6 +15,11 @@ import type { RunResult } from './run';
 // When a source returns 4xx we log a warning and return ok:true so the
 // ingestion_runs row reflects the unavailability rather than treating it as
 // "no advisory".
+//
+// Dedup: source_id = hashToHex16(headline + '\0' + effectiveFrom).
+// The DPU RSS does not expose a per-event GUID, so we derive a deterministic
+// 16-hex-char fingerprint. Re-running the same scrape produces the same
+// source_id → upsert is a no-op. New advisories get new source_ids.
 
 const DPU_RSS_URL  = 'https://www.rva.gov/taxonomy/term/92/feed';
 const DPU_HTML_URL = 'https://www.rva.gov/public-utilities/wastewater-utility';
@@ -29,6 +34,24 @@ interface CsoAdvisory {
   body: string;
   effectiveFrom: string;
   effectiveTo: string | null;
+}
+
+/**
+ * Deterministic 16-hex-char fingerprint of a string.
+ * Two DJB2 variants → 64 bits of output — sufficient for CSO dedup
+ * (there are at most a handful of active advisories at any time).
+ * Sync and dependency-free; avoids async Web Crypto for a tiny dataset.
+ */
+function hashToHex16(str: string): string {
+  let a = 5381, b = 52711;
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    a = Math.imul(a, 33) ^ c;
+    b = Math.imul(b, 65521) ^ c;
+  }
+  const hi = (a >>> 0).toString(16).padStart(8, '0');
+  const lo = (b >>> 0).toString(16).padStart(8, '0');
+  return hi + lo;
 }
 
 function parseRssDate(str: string): string {
@@ -152,14 +175,6 @@ export async function runCsoIngestion(): Promise<RunResult> {
     return { ok: true, rowsWritten: 0 };
   }
 
-  // ── Expire previous CSO advisories before writing fresh ones ─────────────
-  await supabase
-    .from('advisories')
-    .update({ effective_to: new Date().toISOString() })
-    .eq('source', 'rva_dpu')
-    .eq('kind', 'cso_overflow')
-    .is('effective_to', null);
-
   // CSO affects all swimming-tagged river-access locations
   const { data: riverLocations } = await supabase
     .from('locations')
@@ -174,8 +189,13 @@ export async function runCsoIngestion(): Promise<RunResult> {
     const effectiveTo = advisory.effectiveTo
       ?? new Date(new Date(advisory.effectiveFrom).getTime() + ttlMs).toISOString();
 
-    const { error } = await supabase.from('advisories').insert({
+    // Deterministic source_id: fingerprint of headline + effectiveFrom.
+    // Re-scraping the same event produces the same id → upsert is a no-op.
+    const source_id = hashToHex16(advisory.headline + '\0' + advisory.effectiveFrom);
+
+    const { error } = await supabase.from('advisories').upsert({
       source:         'rva_dpu',
+      source_id,
       kind:           'cso_overflow',
       severity:       'high',
       headline:       advisory.headline,
@@ -183,7 +203,8 @@ export async function runCsoIngestion(): Promise<RunResult> {
       effective_from: advisory.effectiveFrom,
       effective_to:   effectiveTo,
       location_ids:   locationIds,
-    });
+    }, { onConflict: 'source,source_id' });
+
     if (!error) rowsWritten++;
   }
 

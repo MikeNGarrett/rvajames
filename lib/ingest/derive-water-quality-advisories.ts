@@ -14,8 +14,11 @@
  * Upstream watch stations always produce 'low' severity advisories
  * (12–24h leading indicator, not a confirmed direct hit).
  *
- * Idempotency: source field encodes `stationCode + readingDate`.
- * Re-running the same day while an active advisory exists produces 0 new rows.
+ * Idempotency: upsert on (source, source_id) where
+ *   source    = 'jra_water_quality'   (canonical system name)
+ *   source_id = '{code}:{date}'        (primary stations)
+ *   source_id = 'upstream:{code}:{date}' (watch stations)
+ * Re-running the same day produces 0 new rows.
  */
 
 import { createServerClient } from '@/lib/supabase/server';
@@ -36,8 +39,8 @@ const ENTERO_HIGH  = 104 * 2;
 const RECENCY_DAYS = 14;  // only derive from readings within last 14 days
 const TTL_DAYS     = 7;   // advisory expires after next sampling cycle
 
-/** Prefix for all JRA water-quality source keys (used for dedup lookup). */
-const SOURCE_PREFIX = 'jra:water_quality:';
+/** Canonical source system name for all JRA water-quality advisories. */
+const SOURCE_SYSTEM = 'jra_water_quality';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -125,10 +128,11 @@ export function classifyReading(
  * Reads the latest in-window readings from `water_quality_readings`, applies
  * the classification rules, and upserts advisory rows into `advisories`.
  *
- * Idempotent: existing active advisories with the same source key are skipped.
+ * Idempotent: upsert on (source, source_id) is a no-op if the advisory for
+ * the same station + date already exists.
  *
- * Returns `{ ok: true, rowsWritten: N }` where N is the count of new advisory
- * rows inserted (0 on re-runs within the same sampling cycle).
+ * Returns `{ ok: true, rowsWritten: N }` where N is the count of upserted rows
+ * (0 on re-runs within the same sampling cycle).
  */
 export async function deriveWaterQualityAdvisories(): Promise<RunResult> {
   const supabase = await createServerClient('service');
@@ -188,32 +192,36 @@ export async function deriveWaterQualityAdvisories(): Promise<RunResult> {
     locationIdBySlug.set(loc.slug, loc.id);
   }
 
-  // ── Fetch existing active advisory source keys for dedup ─────────────────────
+  // ── Fetch existing active advisory source_ids for in-run dedup ──────────────
+  // (The DB-level UNIQUE constraint handles cross-run dedup; this set prevents
+  // double-inserts within the same run when multiple slugs share a station.)
 
   const { data: existingAdvisories } = await supabase
     .from('advisories')
-    .select('source')
+    .select('source_id')
     .eq('kind', 'water_quality')
-    .like('source', `${SOURCE_PREFIX}%`)
+    .eq('source', SOURCE_SYSTEM)
     .gt('effective_to', now.toISOString());
 
-  const existingSourceKeys = new Set(existingAdvisories?.map((a) => a.source) ?? []);
+  const existingSourceIds = new Set(
+    existingAdvisories?.map((a) => a.source_id).filter(Boolean) ?? [],
+  );
 
-  // ── Insert advisory rows for exceeding stations ──────────────────────────────
+  // ── Upsert advisory rows for exceeding stations ──────────────────────────────
 
   let rowsWritten = 0;
 
   /**
-   * Shared helper — inserts one advisory row if the source key is not
-   * already in the active-advisory set.
+   * Shared helper — upserts one advisory row keyed on (source, source_id).
+   * Skips within-run duplicates using existingSourceIds.
    */
-  async function maybeInsert(
-    sourceKey:    string,
-    spec:         AdvisorySpec,
-    reading:      ReadingRow,
-    locationIds:  string[],
+  async function maybeUpsert(
+    sourceId:    string,
+    spec:        AdvisorySpec,
+    reading:     ReadingRow,
+    locationIds: string[],
   ): Promise<void> {
-    if (existingSourceKeys.has(sourceKey)) return;
+    if (existingSourceIds.has(sourceId)) return;
     if (!locationIds.length) return;
 
     const effectiveFrom = new Date(reading.collected_at).toISOString();
@@ -221,8 +229,9 @@ export async function deriveWaterQualityAdvisories(): Promise<RunResult> {
       new Date(reading.collected_at).getTime() + TTL_DAYS * 24 * 60 * 60 * 1000,
     ).toISOString();
 
-    const { error } = await supabase.from('advisories').insert({
-      source:         sourceKey,
+    const { error } = await supabase.from('advisories').upsert({
+      source:         SOURCE_SYSTEM,
+      source_id:      sourceId,
       kind:           'water_quality',
       severity:       spec.severity,
       headline:       spec.headline,
@@ -230,12 +239,12 @@ export async function deriveWaterQualityAdvisories(): Promise<RunResult> {
       effective_from: effectiveFrom,
       effective_to:   effectiveTo,
       location_ids:   locationIds,
-    });
+    }, { onConflict: 'source,source_id' });
 
     if (!error) {
       rowsWritten++;
-      // Prevent duplicate within the same run (multiple slugs sharing a station)
-      existingSourceKeys.add(sourceKey);
+      // Prevent duplicate upsert within the same run (multiple slugs → same station)
+      existingSourceIds.add(sourceId);
     }
   }
 
@@ -249,13 +258,13 @@ export async function deriveWaterQualityAdvisories(): Promise<RunResult> {
     if (!spec) continue;
 
     const readingDate = new Date(reading.collected_at).toISOString().slice(0, 10);
-    const sourceKey   = `${SOURCE_PREFIX}${stationCode}:${readingDate}`;
+    const sourceId    = `${stationCode}:${readingDate}`;
     const locationIds = slugs.flatMap((s) => {
       const id = locationIdBySlug.get(s);
       return id ? [id] : [];
     });
 
-    await maybeInsert(sourceKey, spec, reading, locationIds);
+    await maybeUpsert(sourceId, spec, reading, locationIds);
   }
 
   // Upstream watch stations
@@ -268,13 +277,13 @@ export async function deriveWaterQualityAdvisories(): Promise<RunResult> {
     if (!spec) continue;
 
     const readingDate = new Date(reading.collected_at).toISOString().slice(0, 10);
-    const sourceKey   = `${SOURCE_PREFIX}${stationCode}:upstream:${readingDate}`;
+    const sourceId    = `upstream:${stationCode}:${readingDate}`;
     const locationIds = slugs.flatMap((s) => {
       const id = locationIdBySlug.get(s);
       return id ? [id] : [];
     });
 
-    await maybeInsert(sourceKey, spec, reading, locationIds);
+    await maybeUpsert(sourceId, spec, reading, locationIds);
   }
 
   return { ok: true, rowsWritten };

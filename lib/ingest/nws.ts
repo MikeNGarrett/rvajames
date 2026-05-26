@@ -30,6 +30,9 @@ const HourlyForecastSchema = z.object({
 });
 
 const AlertPropertiesSchema = z.object({
+  // NWS-supplied unique ID for this alert broadcast — used as source_id for
+  // upsert dedup so re-broadcasts of the same active alert produce 0 new rows.
+  id: z.string(),
   event: z.string(),
   severity: z.enum(['Extreme', 'Severe', 'Moderate', 'Minor', 'Unknown']),
   headline: z.string().nullable(),
@@ -130,38 +133,21 @@ export async function runNwsIngestion(): Promise<RunResult> {
         const kind = alertKind(p.event);
         const headline = p.headline ?? p.event;
 
-        // ── Heuristic dedup ──────────────────────────────────────────────
-        // NWS re-broadcasts the same alert on every hourly poll while it
-        // remains active. Without a captured natural key on `advisories`,
-        // we use (source, kind, headline, effective_from) — the headline
-        // text from NWS already encodes the issue + expiry timestamps, so
-        // distinct alerts get distinct headlines.
-        //
-        // A proper source_id column + UNIQUE(source, source_id) refactor
-        // is queued as a follow-up; this is the minimum-viable fix that
-        // stops duplicate rows accumulating in production.
-        const { data: existing } = await supabase
-          .from('advisories')
-          .select('id')
-          .eq('source', 'nws')
-          .eq('kind', kind)
-          .eq('headline', headline)
-          .eq('effective_from', p.effective)
-          .limit(1)
-          .maybeSingle();
-
-        if (existing) continue;
-
-        const { error } = await supabase.from('advisories').insert({
-          source: 'nws',
+        // Upsert on (source, source_id) — p.id is the NWS-supplied URN that
+        // remains stable across re-broadcasts of the same active alert.
+        // DO UPDATE means an alert body change is captured on re-broadcast.
+        const { error } = await supabase.from('advisories').upsert({
+          source:         'nws',
+          source_id:      p.id,
           kind,
-          severity: nwsSeverityToLocal(p.severity),
+          severity:       nwsSeverityToLocal(p.severity),
           headline,
-          body: p.description ?? '',
+          body:           p.description ?? '',
           effective_from: p.effective,
-          effective_to: p.expires ?? null,
-          location_ids: [],
-        });
+          effective_to:   p.expires ?? null,
+          location_ids:   [],
+        }, { onConflict: 'source,source_id' });
+
         if (!error) rowsWritten++;
       }
     }
