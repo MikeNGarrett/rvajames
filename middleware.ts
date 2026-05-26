@@ -4,8 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
  * Edge middleware — runs on every matched request in the Cloudflare Worker.
  *
  * Responsibilities:
- *   1. BF-Cache: strip `no-store` by emitting `no-cache` instead, so the browser
- *      can restore pages from the back/forward cache. (Finding 6)
+ *   1. Cache-Control: shared CDN cache for public pages (URL is the key, no
+ *      user-specific content), restrictive for /admin/*. Originally `no-cache`
+ *      per Finding 6 — that fixed BFCache but disabled all edge caching, which
+ *      made every chip click a cold worker hit + lazy AI generation (~10–20s
+ *      for uncached combos). With short s-maxage + SWR, repeat visits to the
+ *      same URL are served instantly from the Cloudflare edge.
  *   2. Security headers — Phase 1 quick wins. (Finding 8)
  *   3. CSP Report-Only — Finding 17. Report-Only mode means no blocking; the
  *      browser logs violations to the console so we can tighten up before
@@ -26,9 +30,34 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export function middleware(request: NextRequest) {
   const response = NextResponse.next();
+  const { pathname } = request.nextUrl;
 
-  // ── BF-Cache (Finding 6) ──────────────────────────────────────────────────
-  response.headers.set('Cache-Control', 'no-cache');
+  // ── Cache-Control ─────────────────────────────────────────────────────────
+  // Public pages: edge-cache 60s + stale-while-revalidate 300s.
+  //   - s-maxage=60: Cloudflare CDN holds the rendered HTML for 60s. USGS data
+  //     refreshes every 15 min, so 60s edge TTL is 15× over-sampled.
+  //   - stale-while-revalidate=300: serve stale up to 5 min beyond, regenerate
+  //     in background. Eliminates wait time on chip clicks that land just past
+  //     s-maxage.
+  //   - No `max-age`: browser revalidates on each navigation (fresh data when
+  //     user explicitly navigates). BFCache + prefetch are independent of
+  //     max-age and continue to work.
+  //   - `public`: allow shared caches. URL (including ?date and ?age) is the
+  //     cache key; same URL produces the same content for all users.
+  //   - No `no-store`: preserves BFCache (Finding 6 fix retained).
+  //
+  // Admin pages: restrictive. Behind Cloudflare Access but defense-in-depth.
+  if (pathname.startsWith('/admin')) {
+    response.headers.set(
+      'Cache-Control',
+      'private, no-cache, no-store, must-revalidate',
+    );
+  } else {
+    response.headers.set(
+      'Cache-Control',
+      'public, s-maxage=60, stale-while-revalidate=300',
+    );
+  }
 
   // ── Security headers (Finding 8) ─────────────────────────────────────────
   response.headers.set('X-Content-Type-Options', 'nosniff');
