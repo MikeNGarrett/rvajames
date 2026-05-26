@@ -119,9 +119,39 @@ DONE   Sub-goals 74–79 — date-range-forecast round (deployed 2026-05-26)
 
 DEFER  Finding 13 — dark mode (own round if/when prioritized)
 
+DEFER  AI pre-warm cron (Architectural — do NOT re-propose without revisiting the trade-off)
+       Considered 2026-05-26 in response to user-reported chip-click slowness. Rejected
+       in favor of the existing lazy-AI design. Rationale: pre-warming all (date, age,
+       location) combinations daily would generate AI content that may never be viewed,
+       defeating the original cost-discipline architecture that uses lazy on-demand
+       generation + prompt_hash dedup. The user explicitly chose "bit of slowness over
+       large monthly AI spend." Future agents: do not propose pre-warm without first
+       confirming the user wants to reverse this trade-off. Slow-path mitigation paths
+       that DO respect the design: (1) coarser prompt_hash bucketing (round gauge to
+       0.1ft etc. so observed-mode cache hits more often), (2) OpenNext incremental
+       cache adapter for HTML reuse when AI cache is already warm, (3) better skeleton
+       UI / progress signal during cold AI gen, (4) Speculation Rules / next/link
+       prefetch (mostly already in place).
+
+DEFER  CDN edge-cache of HTML pages on Cloudflare Workers
+       Investigation 2026-05-26 confirmed Cache Rules alone don't cache HTML from a
+       Worker — Workers run before cache, and OpenNext's SSR path is excluded from
+       Cloudflare's default HTML caching. Cache-Control header `public, s-maxage=60,
+       stale-while-revalidate=300` was shipped anyway (commit c7b0a46) because it
+       drives browser BFCache + Speculation Rules prefetch + would auto-activate if
+       OpenNext incremental cache is wired later. Real fix paths: OpenNext incremental
+       cache (KV/R2 backed, 2-4h effort) or explicit caches.default.put/match in worker
+       (4-6h, risk to SPA navigation). Both deferred until traffic or UX pain warrants.
+
 FOLLOW-UP  React #418 hydration mismatch console warning (pre-existing, not in this round)
            Caused by text-node mismatch at SSR/hydration. Drags Best Practices to 96.
            Investigate: nuqs state init in ForecastChipPicker, or dynamic content mismatch.
+
+FOLLOW-UP  Skip-to-content link missing (WCAG 2.4.1 Level A)
+           No skip link anywhere in the codebase. Keyboard users must tab through header
+           on every page. Level A — conformance-blocking for any formal a11y claim.
+           Fix: one <a href="#main" class="sr-only focus:not-sr-only ..."> in app/layout.tsx
+           + matching id="main" on <main> elements.
 ```
 
 ---
