@@ -29,7 +29,15 @@ If a command needs production credentials that aren't in `.env.local` or `.dev.v
 
 Writes to production remain impossible: the role is `SELECT`-only at the Postgres level. INSERT/UPDATE/DELETE return "permission denied" regardless of what client or command you use. See `docs/agent-read-only-setup.md` for the setup details and security posture.
 
-**If a verification needs to WRITE to prod, STOP.** That requires the user. Don't try to escalate to `service_role` or other paths.
+**"Write" includes schema changes.** Migrations (`supabase db push`, `supabase migration apply`, raw DDL like `ALTER TABLE`/`CREATE INDEX`) are writes and must NOT be applied to production from the agent context. These would require admin DB credentials that the agent does not have and must not seek out. The pattern for any migration is:
+
+1. Agent writes the migration file in `supabase/migrations/`.
+2. Agent applies + verifies the migration LOCALLY only (`supabase db reset` + `pnpm sync:prod-to-local --yes`).
+3. Agent commits the migration file alongside the dependent code changes.
+4. **Agent stops and hands off.** The human applies the migration to production via Supabase Studio SQL editor or their own admin CLI session.
+5. Only after the human confirms migration is live does the dependent code deploy.
+
+**If a verification needs to WRITE to prod, STOP.** That requires the user. Don't try to escalate to `service_role`, `supabase link`, or other paths.
 
 ---
 
@@ -120,6 +128,7 @@ Reality is the source of truth. If verification shows the plan's assumptions don
 - Do not use `window.confirm()` (replaced by `<ConfirmDialog>` in sub-goal 53).
 - Do not introduce AI generation outside the `lib/ai/get-or-generate.ts` pipeline.
 - Do not commit production secrets or session tokens to git.
+- **Do not apply migrations to production.** Write the migration file, verify locally, commit, then stop. The human applies it manually. See "Stop-and-ask discipline" above for the full handoff pattern.
 
 ---
 
