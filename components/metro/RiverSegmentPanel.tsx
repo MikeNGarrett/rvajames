@@ -21,20 +21,12 @@ import { rapidsClass } from '@/lib/safety/rules';
 import type { RapidsClassValue } from '@/lib/safety/rules';
 import { HorizontalGauge } from '@/components/ui/HorizontalGauge';
 import { Sparkline } from '@/components/ui/Sparkline';
-import { TrendArrow } from '@/components/ui/TrendArrow';
 import { StatusBadge } from '@/components/tiles/StatusBadge';
 import { RiverConditionsDetailDialog } from '@/components/metro/RiverConditionsDetailDialog';
+import { RelativeAgeText, ClientTrendArrow } from '@/components/metro/RelativeTime';
 
 interface Props {
   metroState: MetroRiverState;
-}
-
-function ageLabel(fetchedAt: string | null): string {
-  if (!fetchedAt) return '';
-  const m = Math.round((Date.now() - new Date(fetchedAt).getTime()) / 60_000);
-  if (m < 2) return 'just now';
-  if (m < 60) return `${m}m ago`;
-  return `${Math.floor(m / 60)}h ago`;
 }
 
 const RAPIDS_BADGE_STYLES: Record<RapidsClassValue, string> = {
@@ -44,27 +36,10 @@ const RAPIDS_BADGE_STYLES: Record<RapidsClassValue, string> = {
   'IV-V':   'bg-status-danger text-status-danger-fg',
 };
 
-/** 1-hour-ago reading from the 72h sparkline array */
-function oneHourAgoValue(
-  recent72h: { t: number; v: number }[],
-): number | null {
-  const targetMs = Date.now() - 60 * 60 * 1000;
-  // Find the point closest to 1 h ago
-  let best: { t: number; v: number } | null = null;
-  for (const p of recent72h) {
-    const diff = Math.abs(p.t - targetMs);
-    if (!best || diff < Math.abs(best.t - targetMs)) best = p;
-  }
-  // Only use it if it's within 15 min of the target
-  if (!best || Math.abs(best.t - targetMs) > 15 * 60 * 1000) return null;
-  return best.v;
-}
-
 export function RiverSegmentPanel({ metroState }: Props) {
   const { upriver, summary, recent72h, lastUpdatedAt } = metroState;
 
   const classResult = upriver.gageFt !== null ? rapidsClass(upriver.gageFt) : null;
-  const valueOneHourAgo = oneHourAgoValue(recent72h);
 
   // Thresholds for the HorizontalGauge — static bands from thresholds.json
   const gaugeMin = 0;
@@ -112,12 +87,22 @@ export function RiverSegmentPanel({ metroState }: Props) {
             i
           </span>
         </summary>
-        <p
-          className="mt-2 text-xs text-text-secondary leading-relaxed max-w-prose"
-          suppressHydrationWarning
-        >
+        <p className="mt-2 text-xs text-text-secondary leading-relaxed max-w-prose">
           Real-time gauge readings from the USGS Westham station, refreshed every 15
-          minutes. {lastUpdatedAt && `Last update ${ageLabel(lastUpdatedAt)}.`}
+          minutes.
+          {/*
+           * Relative age rendered client-only via useEffect (prefix + suffix
+           * also conditional). Rendering "Last update 5m ago." inline would
+           * cause React #418 — server's `Date.now()` at request time and the
+           * browser's `Date.now()` at hydration time produce different strings,
+           * and React 19 production builds don't honor `suppressHydrationWarning`
+           * for that mismatch reliably.
+           */}
+          <RelativeAgeText
+            timestamp={lastUpdatedAt}
+            prefix=" Last update "
+            suffix="."
+          />
         </p>
       </details>
 
@@ -147,22 +132,21 @@ export function RiverSegmentPanel({ metroState }: Props) {
         <p className="text-lg font-medium text-text-muted mb-1">No reading</p>
       )}
 
-      {/* Trend arrow (sub-hour change) */}
+      {/* Trend arrow (sub-hour change) — value-one-hour-ago is computed
+          client-side from Date.now() and would otherwise cause React #418. */}
       {upriver.gageFt !== null && (
         <div className="mb-3">
           {summary.deltaLabel ? (
             <span className="text-xs text-text-muted">{summary.deltaLabel}</span>
           ) : null}
-          {valueOneHourAgo !== null && (
-            <span className="inline-flex items-center gap-1 ml-2">
-              <TrendArrow
-                currentValue={upriver.gageFt}
-                valueOneHourAgo={valueOneHourAgo}
-                unit="ft"
-                semantics="safety"
-              />
-            </span>
-          )}
+          <span className="inline-flex items-center gap-1 ml-2">
+            <ClientTrendArrow
+              currentValue={upriver.gageFt}
+              recent72h={recent72h}
+              unit="ft"
+              semantics="safety"
+            />
+          </span>
         </div>
       )}
 
