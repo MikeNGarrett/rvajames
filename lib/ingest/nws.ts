@@ -127,11 +127,36 @@ export async function runNwsIngestion(): Promise<RunResult> {
 
       for (const alert of richmondAlerts) {
         const p = alert.properties;
+        const kind = alertKind(p.event);
+        const headline = p.headline ?? p.event;
+
+        // ── Heuristic dedup ──────────────────────────────────────────────
+        // NWS re-broadcasts the same alert on every hourly poll while it
+        // remains active. Without a captured natural key on `advisories`,
+        // we use (source, kind, headline, effective_from) — the headline
+        // text from NWS already encodes the issue + expiry timestamps, so
+        // distinct alerts get distinct headlines.
+        //
+        // A proper source_id column + UNIQUE(source, source_id) refactor
+        // is queued as a follow-up; this is the minimum-viable fix that
+        // stops duplicate rows accumulating in production.
+        const { data: existing } = await supabase
+          .from('advisories')
+          .select('id')
+          .eq('source', 'nws')
+          .eq('kind', kind)
+          .eq('headline', headline)
+          .eq('effective_from', p.effective)
+          .limit(1)
+          .maybeSingle();
+
+        if (existing) continue;
+
         const { error } = await supabase.from('advisories').insert({
           source: 'nws',
-          kind: alertKind(p.event),
+          kind,
           severity: nwsSeverityToLocal(p.severity),
-          headline: p.headline ?? p.event,
+          headline,
           body: p.description ?? '',
           effective_from: p.effective,
           effective_to: p.expires ?? null,

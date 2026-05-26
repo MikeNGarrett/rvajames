@@ -9,6 +9,31 @@ import { combinedLocationStatus, type SafetyStatus } from '@/lib/safety/rules';
 import { formatRichmondDate } from '@/lib/utils/date-tz';
 import { isInWindow } from '@/lib/queries/date-range';
 
+/**
+ * Belt-and-suspenders dedup. NWS ingest historically blind-inserted on every
+ * hourly cron, accumulating duplicates of the same active alert. The ingest
+ * is now patched (lib/ingest/nws.ts), but legacy duplicate rows can still be
+ * in the DB until they expire. This filter ensures the UI never shows the
+ * same advisory twice regardless of source-side correctness.
+ *
+ * Key: (kind, headline) — the NWS headline already encodes timestamps, so
+ * genuinely distinct alerts get distinct headlines. Other ingest sources
+ * (CSO bulk-expire, JRA derive) have their own dedup but cost nothing here.
+ */
+function dedupAdvisories<T extends { kind: string; headline: string }>(
+  rows: T[],
+): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const row of rows) {
+    const key = `${row.kind}::${row.headline}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
+}
+
 export interface DeterministicStatus {
   status: SafetyStatus;
   /** 2–5 word pill label, e.g. "Normal flow" */
@@ -200,9 +225,9 @@ async function getObservedTodayData(
     };
   }
 
-  const activeAdvisoryList = (advisories ?? []).map((a) => ({
+  const activeAdvisoryList = dedupAdvisories((advisories ?? []).map((a) => ({
     id: a.id, kind: a.kind, severity: a.severity, headline: a.headline, body: a.body,
-  }));
+  })));
   const advisoriesForRules = activeAdvisoryList.map((a) => ({
     kind: a.kind, severity: a.severity, headline: a.headline,
   }));
@@ -293,9 +318,9 @@ async function getForecastTodayData(
   const forecastPoint = forecast ? pickForecastPoint(forecast, date) : null;
   const upriverGageFt = forecastPoint?.stage_ft ?? null;
 
-  const activeAdvisoryList = (advisories ?? []).map((a) => ({
+  const activeAdvisoryList = dedupAdvisories((advisories ?? []).map((a) => ({
     id: a.id, kind: a.kind, severity: a.severity, headline: a.headline, body: a.body,
-  }));
+  })));
   const advisoriesForRules = activeAdvisoryList.map((a) => ({
     kind: a.kind, severity: a.severity, headline: a.headline,
   }));
