@@ -2,7 +2,7 @@
 
 Cross-references each finding from `modern-web-evaluation-findings.md` against the staged plans, with **actual current state verified against the git history and codebase**.
 
-**Last reconciled: 2026-05-26** (complete — all 23 findings resolved; Finding 13 dark mode explicitly deferred; water-quality pipeline sub-goals 68–73 shipped; date-range-forecast sub-goals 74–79 shipped). Earlier versions of this doc significantly understated what had shipped — the team had been executing in parallel sessions faster than the doc was being updated. This version is built from `git log` and direct codebase inspection.
+**Last reconciled: 2026-05-26** (complete — all 23 findings resolved; Finding 13 dark mode explicitly deferred; water-quality pipeline sub-goals 68–73 shipped; date-range-forecast sub-goals 74–79 shipped; advisory structural dedup shipped; React #418 hydration mismatch root-caused and fixed). Earlier versions of this doc significantly understated what had shipped — the team had been executing in parallel sessions faster than the doc was being updated. This version is built from `git log` and direct codebase inspection.
 
 ---
 
@@ -100,6 +100,8 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 | Date-range-forecast sub-goal 77 | AI forecast-mode language adaptation — cached system prompt mode section, per-call `mode`/`forecastConfidence`/`daysOut` inputs, `computeLocationHash`/`computeMetroHash` include mode+daysOut, water temp/data age suppressed in forecast | ✅ COMPLETE | `9d7a7e6` |
 | Date-range-forecast sub-goal 78 | `ForecastModeIndicator` component (`<details>/<summary>` tooltip), `formatForecastDate` export, mode-aware headers on `MetroSummaryPanel` + location page, `MetroSummaryPanel` ungated for forecast dates | ✅ COMPLETE | `6854222` |
 | Date-range-forecast sub-goal 79 | Final a11y + perf pass: fixed chip subtitle contrast (opacity-70 removed, was ~2.94:1), fixed label-content-name-mismatch (aria-label override dropped), deployed round. Lighthouse final: 98/100/96/100 observed, 95/100/96/100 forecast. pa11y 0 violations on 3 URLs. Pre-existing React #418 hydration warning (Best Practices 96) filed as follow-up. | ✅ COMPLETE | `17dde94`, `89f9f32` |
+| Structural advisory dedup | Migration 0012: `source_id text NULL` + partial UNIQUE index `ON advisories (source, source_id) WHERE source_id IS NOT NULL`. One-time cleanup DELETE collapses NWS blind-insert duplicates. All three ingest paths refactored: NWS upserts on `alert.properties.id`, CSO upserts on `hashToHex16(headline+effectiveFrom)` (bulk-expire removed), JRA splits composite source key into `source='jra_water_quality'` + `source_id='{code}:{date}'`. Types regenerated. Commit 1 kept `dedupAdvisories()` as safety net. Commit 2 removed it once UNIQUE constraint was live. `8f65cdd` hotfix read-side defense **RETIRED** — structural constraint supersedes it. | ✅ COMPLETE — migration applied to prod; code deployed in sub-goal 79 deploy; 0 `(source, source_id)` duplicates in prod | `2950e4b`, `929ce08` |
+| React #418 hydration mismatch fix | Root cause: `RiverConditionsDetailDialog` (Client Component) called `new Date(ts).toLocaleString('en-US', { hour: 'numeric', … })` without a `timeZone` option. Server (Cloudflare Worker = UTC) and client (user's browser = local TZ) produced different time strings, causing React to throw #418 on the text node mismatch. Fix: added `timeZone: 'America/New_York'` to all four datetime `toLocaleString` calls in `RiverConditionsDetailDialog`; pinned number `.toLocaleString()` calls to `'en-US'` locale to prevent locale-default divergence on Cloudflare. | ✅ COMPLETE | pending commit |
 
 ---
 
@@ -116,6 +118,8 @@ DONE   Sub-goals 58–61 — multi-source closure registry + Pipeline Trail (874
 DONE   Supabase migration 0010 applied to production (Pipeline Trail row live)
 DONE   Sub-goal 62 — Brown's Island construction closure entered via /admin/closures/new (2026-05-25)
 DONE   Sub-goals 74–79 — date-range-forecast round (deployed 2026-05-26)
+DONE   Advisory structural dedup — source_id column + UNIQUE index + upsert refactor (2950e4b, 929ce08)
+DONE   React #418 hydration fix — RiverConditionsDetailDialog timezone-naive toLocaleString (pending commit)
 
 DEFER  Finding 13 — dark mode (own round if/when prioritized)
 
@@ -143,9 +147,12 @@ DEFER  CDN edge-cache of HTML pages on Cloudflare Workers
        cache (KV/R2 backed, 2-4h effort) or explicit caches.default.put/match in worker
        (4-6h, risk to SPA navigation). Both deferred until traffic or UX pain warrants.
 
-FOLLOW-UP  React #418 hydration mismatch console warning (pre-existing, not in this round)
-           Caused by text-node mismatch at SSR/hydration. Drags Best Practices to 96.
-           Investigate: nuqs state init in ForecastChipPicker, or dynamic content mismatch.
+FIXED      React #418 hydration mismatch (root-caused 2026-05-26)
+           Root cause: RiverConditionsDetailDialog (Client Component) used toLocaleString()
+           without timeZone — Cloudflare UTC vs. browser local TZ produced different strings.
+           Fix: timeZone: 'America/New_York' on all four datetime calls; 'en-US' pinned on
+           number calls. RiverSegmentPanel.ageLabel() was already guarded by
+           suppressHydrationWarning. See commit (pending).
 
 FOLLOW-UP  Skip-to-content link missing (WCAG 2.4.1 Level A)
            No skip link anywhere in the codebase. Keyboard users must tab through header

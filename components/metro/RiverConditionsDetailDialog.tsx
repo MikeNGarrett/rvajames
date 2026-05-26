@@ -40,6 +40,7 @@ function formatTs(ts: string | null): string {
   return new Date(ts).toLocaleString('en-US', {
     month: 'short', day: 'numeric',
     hour: 'numeric', minute: '2-digit',
+    timeZone: 'America/New_York',
   });
 }
 
@@ -119,7 +120,7 @@ export function RiverConditionsDetailDialog({ metroState }: Props) {
             <dt className="text-text-muted">Discharge</dt>
             <dd className="font-medium text-text">
               {upriver.dischargeCfs !== null
-                ? `${upriver.dischargeCfs.toLocaleString()} cfs`
+                ? `${upriver.dischargeCfs.toLocaleString('en-US')} cfs`
                 : '—'}
             </dd>
             <dt className="text-text-muted">Water temperature</dt>
@@ -153,15 +154,15 @@ export function RiverConditionsDetailDialog({ metroState }: Props) {
               <div className="grid grid-cols-3 gap-2 text-center text-xs">
                 <div>
                   <p className="text-text-muted">p10</p>
-                  <p className="font-semibold text-text">{Math.round(normalRange.p10).toLocaleString()}</p>
+                  <p className="font-semibold text-text">{Math.round(normalRange.p10).toLocaleString('en-US')}</p>
                 </div>
                 <div>
                   <p className="text-text-muted">median</p>
-                  <p className="font-semibold text-rva-blue">{Math.round(normalRange.p50).toLocaleString()}</p>
+                  <p className="font-semibold text-rva-blue">{Math.round(normalRange.p50).toLocaleString('en-US')}</p>
                 </div>
                 <div>
                   <p className="text-text-muted">p90</p>
-                  <p className="font-semibold text-text">{Math.round(normalRange.p90).toLocaleString()}</p>
+                  <p className="font-semibold text-text">{Math.round(normalRange.p90).toLocaleString('en-US')}</p>
                 </div>
               </div>
               <p className="text-xs text-text-muted mt-1">Discharge (cfs) for this day of year — USGS historical stats</p>
@@ -193,7 +194,7 @@ export function RiverConditionsDetailDialog({ metroState }: Props) {
                   : 'bg-status-caution-subtle text-status-caution-fg border border-status-caution/30'
               }`}>
                 {crossing.label === 'flood' ? '🚨 Forecast to reach flood stage' : '⚠️ Forecast to reach action stage'} ({crossing.stage_ft.toFixed(1)} ft) by{' '}
-                {new Date(crossing.at_ms).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                {new Date(crossing.at_ms).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' })}
               </div>
             ) : (
               <p className="text-xs text-status-safe-fg font-medium mb-2">
@@ -216,12 +217,12 @@ export function RiverConditionsDetailDialog({ metroState }: Props) {
               {peak && (
                 <span>
                   Peak {peak.stage_ft.toFixed(1)} ft ·{' '}
-                  {new Date(peak.at_ms).toLocaleString('en-US', { weekday: 'short', hour: 'numeric' })}
+                  {new Date(peak.at_ms).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', timeZone: 'America/New_York' })}
                 </span>
               )}
               <span>
                 Issued{' '}
-                {new Date(forecast.issued_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                {new Date(forecast.issued_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' })}
               </span>
             </div>
 
