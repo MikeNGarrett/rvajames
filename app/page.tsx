@@ -90,8 +90,18 @@ export default async function Home({ searchParams }: Props) {
           </div>
         )}
 
-        {/* ── Metro region ── Deterministic gauge panel renders instantly */}
-        <RiverSegmentPanel metroState={metroState} />
+        {/*
+         * ── Metro region ── Deterministic gauge panel renders instantly.
+         *
+         * Only shown for observed mode (i.e., today). The panel displays live
+         * USGS gauge readings, which by definition don't apply to forecast
+         * dates — leaving it visible on a forecast day caused the data to look
+         * stuck when other parts of the page updated. The forecast date's
+         * conditions surface through MetroSummaryPanel + location tiles below.
+         */}
+        {data.mode === 'observed' && (
+          <RiverSegmentPanel metroState={metroState} />
+        )}
 
         {/* ── Metro AI summary ── Suspense boundary so cards below render immediately */}
         <Suspense fallback={<MetroSummaryPanelSkeleton />}>

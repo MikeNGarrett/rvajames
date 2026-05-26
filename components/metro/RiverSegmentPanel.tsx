@@ -86,24 +86,40 @@ export function RiverSegmentPanel({ metroState }: Props) {
       className="rounded-xl border border-border bg-surface-raised p-4 mb-4"
       style={{ viewTransitionName: 'river-conditions' }}
     >
-      {/* ── Header row ── */}
-      <div className="flex items-center justify-between mb-3">
-        <h2
-          id="river-conditions-heading"
-          className="text-sm font-semibold text-text-secondary uppercase tracking-wide"
-        >
-          River conditions
-        </h2>
-        {lastUpdatedAt && (
-          <span
-            className="text-xs text-text-muted"
-            aria-label={`Data updated ${ageLabel(lastUpdatedAt)}`}
-            suppressHydrationWarning
-          >
-            Updated {ageLabel(lastUpdatedAt)}
+      {/* ── Header: title + observed-mode indicator (mirrors MetroSummaryPanel pattern) ── */}
+      <h2
+        id="river-conditions-heading"
+        className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-1"
+      >
+        Today&apos;s river conditions
+      </h2>
+
+      {/*
+       * Live-observations pill + (i) tooltip — visual parallel to
+       * ForecastModeIndicator's "Forecast confidence: high" pill. Native
+       * <details>/<summary> so keyboard users can toggle with Enter/Space
+       * and screen readers announce the disclosed content inline.
+       */}
+      <details className="mt-1.5 mb-3">
+        <summary className="inline-flex items-center gap-2 min-h-[2.75rem] list-none cursor-pointer select-none rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rva-blue">
+          <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-status-safe-subtle text-status-safe-fg">
+            Live observations
           </span>
-        )}
-      </div>
+          <span
+            className="inline-flex items-center justify-center w-5 h-5 rounded-full border border-text-muted/50 text-[0.625rem] font-bold text-text-muted flex-shrink-0"
+            aria-hidden="true"
+          >
+            i
+          </span>
+        </summary>
+        <p
+          className="mt-2 text-xs text-text-secondary leading-relaxed max-w-prose"
+          suppressHydrationWarning
+        >
+          Real-time gauge readings from the USGS Westham station, refreshed every 15
+          minutes. {lastUpdatedAt && `Last update ${ageLabel(lastUpdatedAt)}.`}
+        </p>
+      </details>
 
       {/* ── Status pill + headline ── */}
       <div className="flex items-center gap-2 mb-2">
