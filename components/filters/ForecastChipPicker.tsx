@@ -74,11 +74,9 @@ export function ForecastChipPicker({ chips }: Props) {
               type="button"
               role="tab"
               aria-selected={isActive}
-              aria-label={
-                chip.mode === 'forecast'
-                  ? `${chip.label} Forecast`   // matches visible text exactly (WCAG 2.5.3)
-                  : chip.label
-              }
+              // Forecast chips: no override — accessible name = text content ("Tue, May 26\nForecast").
+              // Today chip: aria-label="Today" matches visible text. Both pass WCAG 2.5.3.
+              aria-label={chip.mode === 'observed' ? chip.label : undefined}
               disabled={isPending}
               onClick={() => selectChip(chip.iso)}
               className={[
