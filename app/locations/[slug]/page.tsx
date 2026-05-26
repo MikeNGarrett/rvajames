@@ -4,7 +4,8 @@ import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import type { Metadata } from 'next';
 import { getLocationDetail } from '@/lib/queries/location';
 import { searchParamsCache, isValidAgeBucket, formatDateParam, type AgeBucket } from '@/lib/url-state';
-import { isInWindow } from '@/lib/queries/date-range';
+import { isInWindow, resolveDateMode, formatForecastDate } from '@/lib/queries/date-range';
+import { ForecastModeIndicator } from '@/components/forecast/ForecastModeIndicator';
 import { OutOfWindowError } from '@/lib/queries/today';
 import { buildRedirectUrl } from '@/lib/utils/redirect-to-today';
 import { ActivityMatrix } from '@/components/location/ActivityMatrix';
@@ -83,6 +84,8 @@ export default async function LocationPage({ params, searchParams }: Props) {
   const isDataStale = location.latestSnapshot
     ? isStale('usgs', location.latestSnapshot.ageMinutes)
     : false;
+  const { mode, forecastConfidence } = resolveDateMode(dateStr);
+  const dateLabel = mode === 'forecast' ? formatForecastDate(dateStr) : null;
 
   return (
     <NuqsAdapter>
@@ -131,7 +134,7 @@ export default async function LocationPage({ params, searchParams }: Props) {
         {location.latestSnapshot && (
           <section className="rounded-xl border border-border bg-surface-raised p-4 mb-4">
             <h2 className="text-sm font-semibold text-text-secondary mb-3 uppercase tracking-wide">
-              Current conditions
+              {mode === 'forecast' ? 'Forecast conditions' : 'Current conditions'}
             </h2>
             <div className="grid grid-cols-2 gap-3">
               {location.latestSnapshot.gageFt !== null && (
@@ -181,9 +184,12 @@ export default async function LocationPage({ params, searchParams }: Props) {
         {location.interpretation && (
           <section className="rounded-xl border border-border bg-surface-raised p-4 mb-4">
             <h2 className="text-sm font-semibold text-text-secondary mb-2 uppercase tracking-wide">
-              Conditions summary
+              {mode === 'forecast' && dateLabel ? `Forecast for ${dateLabel}` : 'Conditions summary'}
             </h2>
-            <p className="text-base font-medium text-text mb-2">
+            {mode === 'forecast' && (
+              <ForecastModeIndicator mode={mode} forecastConfidence={forecastConfidence} />
+            )}
+            <p className={`text-base font-medium text-text mb-2${mode === 'forecast' ? ' mt-2' : ''}`}>
               {location.interpretation.headline}
             </p>
             <p className="text-sm text-text-secondary leading-relaxed">

@@ -30,6 +30,21 @@ export interface ForecastChip {
   forecastConfidence: 'high' | 'medium' | 'low' | null;
 }
 
+/**
+ * Format an ISO date string ('YYYY-MM-DD') as 'Mon, May 25'.
+ * Exported for use in forecast mode indicators on panel headers.
+ */
+export function formatForecastDate(iso: string): string {
+  const [year, month, day] = iso.split('-').map(Number);
+  const d = new Date(Date.UTC(year, month - 1, day));
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month:   'short',
+    day:     'numeric',
+    timeZone: 'UTC',
+  }).format(d);
+}
+
 /** Format an ISO date string ('YYYY-MM-DD') as 'Mon, May 25'. */
 function formatChipLabel(iso: string): string {
   const [year, month, day] = iso.split('-').map(Number);

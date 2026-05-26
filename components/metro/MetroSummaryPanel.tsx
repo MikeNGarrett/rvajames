@@ -6,6 +6,8 @@
 
 import Link from 'next/link';
 import { getMetroSummary } from '@/lib/queries/metro-summary';
+import { resolveDateMode, formatForecastDate } from '@/lib/queries/date-range';
+import { ForecastModeIndicator } from '@/components/forecast/ForecastModeIndicator';
 import { RiverWideActivityGrid } from './RiverWideActivityGrid';
 import type { AgeBucket } from '@/lib/url-state';
 
@@ -16,6 +18,8 @@ interface Props {
 
 export async function MetroSummaryPanel({ date, ageBucket }: Props) {
   const { summary } = await getMetroSummary(date, ageBucket);
+  const { mode, forecastConfidence } = resolveDateMode(date);
+  const dateLabel = mode === 'forecast' ? formatForecastDate(date) : null;
 
   if (!summary) {
     return (
@@ -27,7 +31,15 @@ export async function MetroSummaryPanel({ date, ageBucket }: Props) {
 
   return (
     <section aria-label="River conditions summary" className="rounded-xl border border-border bg-surface-raised p-4 mb-4" style={{ viewTransitionName: 'metro-summary' }}>
-      <p className="text-base font-semibold text-text mb-2">{summary.headline}</p>
+      {mode === 'forecast' && dateLabel ? (
+        <>
+          <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-1">
+            Forecast for {dateLabel}
+          </p>
+          <ForecastModeIndicator mode={mode} forecastConfidence={forecastConfidence} />
+        </>
+      ) : null}
+      <p className={`text-base font-semibold text-text mb-2${mode === 'forecast' ? ' mt-2' : ''}`}>{summary.headline}</p>
 
       {/* Body markdown rendered as plain text (strips Markdown syntax) */}
       <p className="text-sm text-text-secondary leading-relaxed mb-3 max-w-prose">

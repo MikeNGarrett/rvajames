@@ -63,8 +63,6 @@ export default async function Home({ searchParams }: Props) {
   const staleSnapshotAge = data.locations[0]?.snapshotAge ?? null;
   const showStaleWarning = staleSnapshotAge !== null && isStale('usgs', staleSnapshotAge);
 
-  const isForecast = data.mode === 'forecast';
-
   return (
     <NuqsAdapter>
       {hasFlood && <FloodBanner />}
@@ -96,11 +94,9 @@ export default async function Home({ searchParams }: Props) {
         <RiverSegmentPanel metroState={metroState} />
 
         {/* ── Metro AI summary ── Suspense boundary so cards below render immediately */}
-        {!isForecast && (
-          <Suspense fallback={<MetroSummaryPanelSkeleton />}>
-            <MetroSummaryPanel date={dateStr} ageBucket={ageBucket} />
-          </Suspense>
-        )}
+        <Suspense fallback={<MetroSummaryPanelSkeleton />}>
+          <MetroSummaryPanel date={dateStr} ageBucket={ageBucket} />
+        </Suspense>
 
         {/* ── Locations region ── 9 deterministic cards */}
         <section aria-labelledby="locations-heading">
