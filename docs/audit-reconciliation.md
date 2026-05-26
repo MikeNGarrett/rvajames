@@ -119,7 +119,9 @@ DONE   Supabase migration 0010 applied to production (Pipeline Trail row live)
 DONE   Sub-goal 62 — Brown's Island construction closure entered via /admin/closures/new (2026-05-25)
 DONE   Sub-goals 74–79 — date-range-forecast round (deployed 2026-05-26)
 DONE   Advisory structural dedup — source_id column + UNIQUE index + upsert refactor (2950e4b, 929ce08)
-DONE   React #418 hydration fix — RiverConditionsDetailDialog timezone-naive toLocaleString (36f5166)
+DONE   React #418 hydration fix — three commits across three angles; root cause was Intl ICU divergence
+       in RiverConditionsDetailDialog's forecast-peak weekday+hour formatter (final fix: 0ba07ce, see
+       "FIXED" entry below for full diagnostic history)
 
 DEFER  Finding 13 — dark mode (own round if/when prioritized)
 
@@ -147,12 +149,42 @@ DEFER  CDN edge-cache of HTML pages on Cloudflare Workers
        cache (KV/R2 backed, 2-4h effort) or explicit caches.default.put/match in worker
        (4-6h, risk to SPA navigation). Both deferred until traffic or UX pain warrants.
 
-FIXED      React #418 hydration mismatch (root-caused 2026-05-26)
-           Root cause: RiverConditionsDetailDialog (Client Component) used toLocaleString()
-           without timeZone — Cloudflare UTC vs. browser local TZ produced different strings.
-           Fix: timeZone: 'America/New_York' on all four datetime calls; 'en-US' pinned on
-           number calls. RiverSegmentPanel.ageLabel() was already guarded by
-           suppressHydrationWarning. Commit: 36f5166.
+FIXED      React #418 hydration mismatch (final root cause confirmed 2026-05-26 via dev unminified diff)
+
+           THREE commits, each addressing a real but DIFFERENT hydration risk:
+
+             36f5166 — RiverConditionsDetailDialog: pinned timeZone:'America/New_York' on all
+                       four toLocaleString() calls + locale to 'en-US' on numeric calls. Closed
+                       one class of risk (UTC-server vs local-browser divergence) but was not
+                       the trigger for the user-reported error.
+
+             67a061d — Extracted Date.now()-dependent rendering in RiverSegmentPanel into two
+                       client-only components (RelativeAgeText, ClientTrendArrow in
+                       components/metro/RelativeTime.tsx) so server emits no time-relative
+                       text and the values populate via useEffect after hydration. Closed
+                       a second class of risk (render-time Date.now() drift between SSR and
+                       hydration timestamps) but also was not the trigger.
+
+             0ba07ce — REAL trigger: a single comma. formatToParts-style ICU divergence on
+                       toLocaleString with `weekday:'short' + hour:'numeric'` (no day-numeric):
+                         Cloudflare Workers ICU: "Fri, 8 AM"
+                         Browser V8 ICU:         "Fri 8 AM"
+                       Fix: formatWeekdayHour() helper that calls toLocaleString twice (one
+                       for weekday, one for hour, both tz-pinned) and joins with explicit
+                       ", ". Output is byte-identical across engines.
+
+           Diagnostic key: dev mode against a sync:prod-to-local'd database shows the
+           unminified hydration error with tree diff. Production's minified `#418` strips
+           that context entirely. The other two attempts addressed real defects but missed
+           the actual trigger because we couldn't see what was differing.
+
+           Future-debugging notes:
+             - `suppressHydrationWarning` does NOT reliably suppress hydration ERRORS in
+               React 19 production builds. Only the dev warning. For Date.now()-style
+               render-time non-determinism, use the client-only useEffect pattern.
+             - Whenever toLocaleString uses a SUBSET of format options (weekday alone,
+               hour alone, etc.), format each piece separately and concatenate explicitly.
+               ICU separator rules vary between V8 builds.
 
 FOLLOW-UP  Skip-to-content link missing (WCAG 2.4.1 Level A)
            No skip link anywhere in the codebase. Keyboard users must tab through header
