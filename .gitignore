@@ -38,5 +38,9 @@ lib/supabase/types.ts
 
 tsconfig.tsbuildinfo
 
-.claude/
+.claude/*
+# .claude/settings.json holds team-wide agent permissions (deny rules etc.) —
+# COMMIT this file so the rules apply on every fresh clone and every agent
+# session. Personal overrides go in .claude/settings.local.json (still ignored).
+!.claude/settings.json
 .history/
