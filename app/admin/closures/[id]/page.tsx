@@ -3,11 +3,11 @@ import { notFound } from 'next/navigation';
 import { requireAdminEmail } from '@/lib/admin/auth';
 import { createServerClient } from '@/lib/supabase/server';
 import { ClosureForm } from '@/components/admin/ClosureForm';
+import { ExpireButton } from '../ExpireButton';
 import {
   updateClosure,
   approveDraft,
   discardDraft,
-  expireClosure,
 } from '../actions';
 
 interface Props {
@@ -129,21 +129,7 @@ export default async function EditClosurePage({ params }: Props) {
       {isActive && (
         <div className="rounded-lg border border-status-danger/30 bg-status-danger-subtle p-4">
           <h3 className="text-sm font-semibold text-status-danger mb-2">Danger zone</h3>
-          <form
-            action={expireClosure.bind(null, id)}
-            onSubmit={(e) => {
-              if (!window.confirm('Mark this closure as expired? It will no longer appear to users.')) {
-                e.preventDefault();
-              }
-            }}
-          >
-            <button
-              type="submit"
-              className="inline-flex items-center rounded-md border border-status-danger text-status-danger text-sm font-medium px-4 py-2 hover:bg-status-danger hover:text-white transition-colors min-h-[2.75rem]"
-            >
-              Expire this closure
-            </button>
-          </form>
+          <ExpireButton id={id} locationName={locationName} variant="full" />
           <p className="mt-2 text-xs text-text-muted">
             Sets effective_to to now and changes state to &ldquo;expired&rdquo;. The row is kept for
             audit history but will no longer affect location status.
