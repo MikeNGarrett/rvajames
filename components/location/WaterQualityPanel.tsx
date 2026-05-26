@@ -279,7 +279,7 @@ export function WaterQualityPanel({ reading, testsEnterococcus }: Props) {
           rel="noopener noreferrer"
           className="underline"
         >
-          James River Watch
+          James River Watch<span className="sr-only"> (opens in new tab)</span>
         </a>.{' '}
         VDH Bacteria Action Values apply. Recreational water guidance is a single-sample
         threshold — not a guarantee of safety.

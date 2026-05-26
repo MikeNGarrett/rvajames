@@ -51,7 +51,7 @@ export function DisclaimerFooter({ ageBucket }: Props = {}) {
           rel="noopener noreferrer"
           className="underline"
         >
-          James River Watch
+          James River Watch<span className="sr-only"> (opens in new tab)</span>
         </a>
         , a program of the James River Association with data collected by volunteers from the
         James River Association, Rivanna Conservation Alliance, Rockbridge Area Conservation,

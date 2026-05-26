@@ -10,7 +10,11 @@ interface Props {
  * Small water-drop indicator shown alongside the status pill when a fresh
  * JRA water-quality reading is available.
  *   - Blue drop:  within VDH thresholds (safe)
- *   - Amber drop: exceeds VDH single-sample max (caution)
+ *   - Amber drop with "!" mark: exceeds VDH single-sample max (caution)
+ *
+ * A11y: aria-label on the <span> covers screen readers. The "!" glyph inside
+ * the caution SVG is a shape-based distinction so colorblind users don't rely
+ * solely on hue to distinguish the two states (WCAG 1.4.1).
  */
 function WaterDropBadge({ status }: { status: 'safe' | 'caution' }) {
   const isCaution = status === 'caution';
@@ -22,7 +26,8 @@ function WaterDropBadge({ status }: { status: 'safe' | 'caution' }) {
         isCaution ? 'text-status-caution-fg' : 'text-rva-blue/60'
       }`}
     >
-      {/* Simple water-drop SVG */}
+      {/* Water-drop SVG. Caution state adds an "!" glyph inside the drop
+          so the two states differ by shape as well as color. */}
       <svg
         aria-hidden="true"
         viewBox="0 0 8 11"
@@ -30,6 +35,18 @@ function WaterDropBadge({ status }: { status: 'safe' | 'caution' }) {
         fill="currentColor"
       >
         <path d="M4 0 C3 2 0 5.5 0 7.5 a4 4 0 0 0 8 0 C8 5.5 5 2 4 0 Z" />
+        {isCaution && (
+          <text
+            x="4"
+            y="9.5"
+            textAnchor="middle"
+            fontSize="5"
+            fontWeight="900"
+            fill="white"
+          >
+            !
+          </text>
+        )}
       </svg>
     </span>
   );
