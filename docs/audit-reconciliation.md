@@ -123,11 +123,26 @@ DONE   React #418 hydration fix — three commits across three angles; root caus
        in RiverConditionsDetailDialog's forecast-peak weekday+hour formatter (final fix: 0ba07ce, see
        "FIXED" entry below for full diagnostic history)
 
-NEXT   Sub-goals 80–85: CSO event ingestion via EmNet (Cloudflare Browser Rendering)
+IN PROGRESS   Sub-goals 80–85: CSO event ingestion via EmNet (Cloudflare Browser Rendering)
        See docs/cso-emnet-plan.md. Launch-blocking — CSO is the top family-safety signal
        and our scraper has been silently finding zero rows for weeks because the city
-       moved authoritative CSO data to apps.emnet.net/richmond-pub-map-app. Sub-goal 80
-       (schema only) is staged and ready for a fresh agent session.
+       moved authoritative CSO data to apps.emnet.net/richmond-pub-map-app.
+
+       Sub-goal 80 (schema) ✅ COMPLETE — commit 38bdd79 created
+       supabase/migrations/0013_cso_outfalls.sql with cso_outfalls catalog table +
+       advisories.outfall_id FK + RLS + agent_reader grant. Migration is NOT yet applied
+       to production (verified via pnpm query:prod). Human applies via Supabase Studio
+       per the Phase B handoff in cso-emnet-plan.md.
+
+       Sub-goals 81–85 (Cloudflare Browser Rendering binding, EmNet ingest, upstream
+       spatial rules, UI, AI) — staged; sequence after Phase B confirmation.
+
+       Note (process): commit 38bdd79 landed via a parallel agent session while I was
+       editing the plan doc, and I subsequently committed 8c1c1df claiming sub-goal 80
+       was "staged and ready" — wrong; it was already shipped. This is the second time
+       I missed an in-flight commit by not running `git log --oneline -20` before
+       declaring something staged. CLAUDE.md already mandates this verification at
+       session start; I need to also run it before any reconciliation status update.
 
 QUEUED (after 80–85)
        Sub-goals 63–67: dynamic content loading
@@ -140,6 +155,28 @@ QUEUED (after 80–85)
        stale-while-revalidate on filter changes. Lighthouse currently 100/100/100/100
        so this is UX polish, not perf-critical. Future agents: DO NOT skip again. The
        plan doc is current; no rewrite needed before execution.
+
+UNRESOLVED   Richmond Conditions Section (sub-goal range CONFLICTS with CSO/EmNet 80–85)
+       See docs/richmond-conditions-section-plan.md. Plan is fully spec'd (21KB) and
+       claims "Continues sub-goal numbering: 80 → 85" — SAME RANGE as CSO/EmNet.
+       Zero implementation in codebase: no <RichmondConditionsSection> component, no
+       UV ingest extension in NWS, no Happiness Index logic, no Swim Today categorical,
+       no Feels Like consolidation, no richmond_microcopy AI field.
+
+       The plan was authored 2026-05-24 before CSO/EmNet was identified as a launch-
+       blocker. Earlier on 2026-05-26 the user picked CSO/EmNet over Richmond Conditions
+       when asked, but Richmond Conditions was never explicitly deferred or renumbered
+       — just sat in docs/ as a ghost plan.
+
+       Decision required from user:
+         (a) Defer post-launch — renumber 86–91, queue after dynamic-content (63–67)
+         (b) Drop indefinitely — existing tiny stat row is sufficient
+         (c) Reprioritize before CSO/EmNet — only sensible if it's higher user-value
+             than CSO bacterial safety (unlikely given launch-blocker designation)
+
+       Until resolved: the sub-goal 80–85 numbering collision is a documentation
+       hazard. Both plans claim the same range; if a future agent reads both without
+       reconciliation context, they could conflict.
 
 DEFER  Finding 13 — dark mode (own round if/when prioritized)
 
