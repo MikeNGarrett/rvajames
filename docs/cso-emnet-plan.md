@@ -350,26 +350,55 @@ Set to non-null only if `count > 0`. Populate via parallel query in both
 
 **Why:** Make the data visible.
 
+**UX direction (confirmed by user):** Mirror the water-quality pattern
+exactly. NO map UI anywhere — no Mapbox, no embedded EmNet iframe, no
+spatial diagrams. The EmNet map is our data source via headless browser;
+users never see it inside our app. The upstream/downstream relationship
+lives in code (longitude comparison) and surfaces in the UI as plain
+text + count + amber-color cue, identical vocabulary to water quality.
+
+Pattern alignment:
+
+| Surface          | Water Quality (existing)        | CSO (this sub-goal)              |
+|------------------|----------------------------------|----------------------------------|
+| Metro            | (n/a — per-station only)         | Aggregated count + caution copy  |
+| Tile badge       | WaterDropBadge (safe/caution)    | Small adjacent badge — amber     |
+| Detail panel     | WaterQualityPanel                | UpstreamCsoPanel (parallel)      |
+
 **Deliverables**
 
 `components/tiles/RiverLevelTile.tsx`:
 - When `location.upstreamCso` is non-null and `count > 0`, render a small
-  "CSO ↑" badge next to the WaterDropBadge — amber color, screen-reader
-  label "CSO event upstream in past 48h"
+  "CSO" badge next to the WaterDropBadge — amber color (same token as
+  WaterDropBadge's caution state), `aria-label="CSO event upstream in
+  past 48h"`. Icon shape MUST differ from the water-drop so colorblind
+  users can distinguish (WCAG 1.4.1 — same discipline as sub-goal 73).
+  Suggested glyph: a triangle or "!" inside an amber circle.
 
-`components/location/UpstreamCsoPanel.tsx` (new):
+`components/location/UpstreamCsoPanel.tsx` (new — patterned on
+`components/location/WaterQualityPanel.tsx`):
 - Renders on `/locations/[slug]` detail page when there's an upstream
-  CSO signal
-- Lists outfall names with most-recent timestamps
-- Plain-language explanation: "X CSO outfall(s) upstream of this access
-  point have discharged in the last 48 hours. Bacterial levels are
-  likely elevated for ~48h after each event."
-- Links to the city's CSO map: apps.emnet.net/...
+  CSO signal. Returns null otherwise (same null-render pattern as
+  WaterQualityPanel for off-season).
+- Header: "Combined Sewer Overflow upstream"
+- Plain-language explanation paragraph: "Combined sewer overflows
+  discharge into the James River during heavy rain. When an outfall
+  upstream of this location releases, bacteria (E. coli, Enterococci)
+  spike here for about 48 hours. Levels can be elevated even if the
+  river looks clear."
+- List of upstream outfalls with most-recent timestamps (compact,
+  like WaterQualityPanel's reading list)
+- Attribution footer: "Source: City of Richmond DPU / EmNet realtime
+  monitoring" with a small outbound text link to the EmNet map for
+  users who want to verify (same role as the "James River Watch"
+  attribution on WaterQualityPanel — text-link only, no embed)
 
 `components/metro/MetroSummaryPanel.tsx`:
-- When ANY location has upstream CSO, render an amber-tinted block above
-  the AI summary: "X CSO outfalls discharged in the last 48 hours. Swim
-  with caution at all downstream access points."
+- When ANY location has upstream CSO, render an amber-tinted block
+  above the AI summary: "X CSO outfalls discharged in the last 48
+  hours. Swim with caution at all downstream access points."
+- Use the same amber/caution token as the tile badge for visual
+  consistency.
 
 **Tests**
 
