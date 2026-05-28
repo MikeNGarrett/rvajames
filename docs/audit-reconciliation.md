@@ -123,6 +123,24 @@ DONE   React #418 hydration fix — three commits across three angles; root caus
        in RiverConditionsDetailDialog's forecast-peak weekday+hour formatter (final fix: 0ba07ce, see
        "FIXED" entry below for full diagnostic history)
 
+NEXT   Sub-goals 80–85: CSO event ingestion via EmNet (Cloudflare Browser Rendering)
+       See docs/cso-emnet-plan.md. Launch-blocking — CSO is the top family-safety signal
+       and our scraper has been silently finding zero rows for weeks because the city
+       moved authoritative CSO data to apps.emnet.net/richmond-pub-map-app. Sub-goal 80
+       (schema only) is staged and ready for a fresh agent session.
+
+QUEUED (after 80–85)
+       Sub-goals 63–67: dynamic content loading
+       See docs/dynamic-content-loading-plan.md. Authored before water quality, queued
+       behind multiple priority rounds, never executed. User confirmed 2026-05-28 the
+       sequencing: run AFTER CSO/EmNet (80–85) ships. Premise still holds — the work
+       moves AI content from Suspense streaming to client-side fetch via new
+       /api/metro-summary and /api/location-interpretation routes, adds a reusable
+       LazyContent wrapper, gives visible loading + retry affordances, and enables
+       stale-while-revalidate on filter changes. Lighthouse currently 100/100/100/100
+       so this is UX polish, not perf-critical. Future agents: DO NOT skip again. The
+       plan doc is current; no rewrite needed before execution.
+
 DEFER  Finding 13 — dark mode (own round if/when prioritized)
 
 DEFER  AI pre-warm cron (Architectural — do NOT re-propose without revisiting the trade-off)
