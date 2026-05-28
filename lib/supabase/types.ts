@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -79,6 +74,7 @@ export type Database = {
           id: string
           kind: Database["public"]["Enums"]["advisory_kind"]
           location_ids: string[]
+          outfall_id: string | null
           severity: Database["public"]["Enums"]["advisory_severity"]
           source: string
           source_id: string | null
@@ -92,6 +88,7 @@ export type Database = {
           id?: string
           kind: Database["public"]["Enums"]["advisory_kind"]
           location_ids?: string[]
+          outfall_id?: string | null
           severity: Database["public"]["Enums"]["advisory_severity"]
           source: string
           source_id?: string | null
@@ -105,11 +102,20 @@ export type Database = {
           id?: string
           kind?: Database["public"]["Enums"]["advisory_kind"]
           location_ids?: string[]
+          outfall_id?: string | null
           severity?: Database["public"]["Enums"]["advisory_severity"]
           source?: string
           source_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "advisories_outfall_id_fkey"
+            columns: ["outfall_id"]
+            isOneToOne: false
+            referencedRelation: "cso_outfalls"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ai_interpretations: {
         Row: {
@@ -210,6 +216,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      cso_outfalls: {
+        Row: {
+          affects_james_mainstem: boolean
+          bodies: string[]
+          created_at: string
+          emnet_id: string
+          id: string
+          last_seen_at: string
+          lat: number
+          lng: number
+          name: string
+          site_type: string
+        }
+        Insert: {
+          affects_james_mainstem?: boolean
+          bodies?: string[]
+          created_at?: string
+          emnet_id: string
+          id?: string
+          last_seen_at?: string
+          lat: number
+          lng: number
+          name: string
+          site_type: string
+        }
+        Update: {
+          affects_james_mainstem?: boolean
+          bodies?: string[]
+          created_at?: string
+          emnet_id?: string
+          id?: string
+          last_seen_at?: string
+          lat?: number
+          lng?: number
+          name?: string
+          site_type?: string
+        }
+        Relationships: []
       }
       ingestion_runs: {
         Row: {
@@ -765,3 +810,4 @@ export const Constants = {
     },
   },
 } as const
+
