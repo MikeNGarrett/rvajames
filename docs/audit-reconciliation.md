@@ -162,7 +162,19 @@ IN PROGRESS   Sub-goals 80–85: CSO event ingestion via EmNet (Cloudflare Brows
        doesn't try to execute the Workers-only module. 24 new unit tests on
        all 5 pure helper functions.
 
-       Sub-goals 83–85 (upstream spatial rules, UI, AI) — sequenced next.
+       Sub-goal 83 ✅ COMPLETE — commit aae9e69. lib/safety/upstream-cso.ts:
+       getUpstreamCsoForLocation(locationLng, windowHours=48) queries
+       advisories joined !inner to cso_outfalls, filtering kind='cso_overflow',
+       source='emnet_cso', effective_from window, outfall.lng < locationLng,
+       affects_james_mainstem=true; returns UpstreamCsoSignal {count,
+       mostRecentAt, outfalls[]}. LocationSummary gains upstreamCso field;
+       both getObservedTodayData + getForecastTodayData resolve it in
+       Promise.all per location. combinedLocationStatus: swimming locations
+       with upstreamCso.count > 0 escalate to 'caution' ("CSO upstream —
+       bacterial levels likely elevated"); closures and danger conditions win.
+       12 new tests (7 upstream-cso + 5 rules CSO override). 225/225 total.
+
+       Sub-goals 84–85 (UI, AI) — sequenced next.
 
        Note (process): commit 38bdd79 landed via a parallel agent session while I was
        editing the plan doc, and I subsequently committed 8c1c1df claiming sub-goal 80

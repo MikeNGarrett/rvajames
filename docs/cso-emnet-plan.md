@@ -284,7 +284,7 @@ testing via `pnpm dev` + manual cron trigger.
 
 ---
 
-## Sub-goal 83 — Upstream spatial rules + per-location signals
+## Sub-goal 83 — Upstream spatial rules + per-location signals ✅
 
 **Why:** Make the data actionable.
 
