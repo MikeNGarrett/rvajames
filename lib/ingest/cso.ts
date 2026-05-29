@@ -98,6 +98,21 @@ export async function runCsoIngestion(): Promise<RunResult> {
   let rowsWritten = 0;
   const now = new Date().toISOString();
 
+  // Pre-load existing emnet_cso advisory source_ids so we can dedupe via a
+  // natural-key SELECT-then-INSERT pattern. We can't use ON CONFLICT here:
+  // the advisories.(source, source_id) uniqueness is enforced by a PARTIAL
+  // unique index (WHERE source_id IS NOT NULL, per migration 0012), and
+  // supabase-js's onConflict option only matches full unique constraints
+  // — Postgres rejects with 42P10 ("no unique or exclusion constraint
+  // matching the ON CONFLICT specification") otherwise.
+  const { data: existingAdvisoryRows } = await supabase
+    .from('advisories')
+    .select('source_id')
+    .eq('source', 'emnet_cso');
+  const existingSourceIds = new Set(
+    (existingAdvisoryRows ?? []).map((r) => r.source_id).filter((id) => id != null),
+  );
+
   // ── Process each site ──────────────────────────────────────────────────────
   for (const site of sites) {
     // 1. Upsert the outfall catalog entry.
@@ -141,35 +156,42 @@ export async function runCsoIngestion(): Promise<RunResult> {
     }
 
     const source_id = buildSourceId(site.emnetId, site.csoLastOccurrence);
+
+    // Natural-key dedup (see existingSourceIds setup above for why we can't
+    // use ON CONFLICT against the partial unique index).
+    if (existingSourceIds.has(source_id)) {
+      continue; // same event already recorded; csoLastOccurrence is the dedup axis
+    }
+
     const effectiveTo = new Date(
       new Date(site.csoLastOccurrence).getTime() +
         CSO_WINDOW_HOURS * 60 * 60 * 1000,
     ).toISOString();
 
-    const { error: advError } = await supabase.from('advisories').upsert(
-      {
-        source: 'emnet_cso',
-        source_id,
-        kind: 'cso_overflow',
-        severity: 'high',
-        outfall_id: outfallRow.id,
-        headline: buildAdvisoryHeadline(site.name),
-        body: buildAdvisoryBody(site.name, site.csoLastOccurrence),
-        effective_from: site.csoLastOccurrence,
-        effective_to: effectiveTo,
-        location_ids: [], // upstream check happens at query time (sub-goal 83)
-      },
-      { onConflict: 'source,source_id' },
-    );
+    const { error: advError } = await supabase.from('advisories').insert({
+      source: 'emnet_cso',
+      source_id,
+      kind: 'cso_overflow',
+      severity: 'high',
+      outfall_id: outfallRow.id,
+      headline: buildAdvisoryHeadline(site.name),
+      body: buildAdvisoryBody(site.name, site.csoLastOccurrence),
+      effective_from: site.csoLastOccurrence,
+      effective_to: effectiveTo,
+      location_ids: [], // upstream check happens at query time (sub-goal 83)
+    });
 
     if (advError) {
       console.error(
-        `[cso] advisory upsert failed for source_id ${source_id}:`,
+        `[cso] advisory insert failed for source_id ${source_id}:`,
         advError.message,
       );
     } else {
-      rowsWritten++; // count the advisory upsert
-      console.log(`[cso] active CSO at ${site.name} — advisory upserted`);
+      rowsWritten++;
+      // Record the new source_id so subsequent iterations within this run
+      // (e.g. if EmNet listed the same outfall twice — defensive) dedupe too.
+      existingSourceIds.add(source_id);
+      console.log(`[cso] active CSO at ${site.name} — advisory inserted`);
     }
   }
 
