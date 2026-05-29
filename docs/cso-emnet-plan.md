@@ -169,7 +169,7 @@ parallel as long as they don't depend on prod-side migration application.
 
 ---
 
-## Sub-goal 82 — Emnet ingest: lib/ingest/cso-emnet.ts
+## Sub-goal 82 — Emnet ingest: lib/ingest/cso-emnet.ts ✅
 
 **Why:** The actual data fetcher.
 
@@ -272,14 +272,15 @@ swap is internal.
 Cannot test the puppeteer integration in vitest. That gets manual smoke
 testing via `pnpm dev` + manual cron trigger.
 
-**Success**
-- pnpm tsc / lint / test clean (existing 151 + new tests)
-- Local smoke test: trigger /api/cron/cso, confirm:
-  - `cso_outfalls` table populated with all Richmond CSO sites
-  - `advisories` table has new `cso_overflow` rows IF the live emnet map
-    shows recent events
-- ingestion_runs row: `source='cso'`, `ok=true`, `rows_written=N` where
-  N = (outfalls upserted) + (advisories upserted)
+**Shipped (commit 32139cc):**
+- 175/175 tests (24 new), tsc clean, lint clean, next build clean
+- Dual extraction: network response interception (primary) + React fiber BFS (fallback)
+- Data structure confirmed from bundle: cso_last_occurrence is double-nested at
+  `analysis_results.analysis_results.cso_last_occurrence`; coordinates are WGS84
+  (`lon`/`lat`); `bodies` is at `site_config.bodies`
+- next.config.mjs serverExternalPackages fix prevents SSG from choking on
+  the Workers-only @cloudflare/puppeteer module
+- Manual smoke test via pnpm preview + /api/cron/cso still required before deploy
 
 ---
 

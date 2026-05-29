@@ -148,10 +148,21 @@ IN PROGRESS   Sub-goals 80–85: CSO event ingestion via EmNet (Cloudflare Brows
        `pnpm wrangler types`). No deploy in 81; binding is declared but unused
        until 82 ships an ingest that calls it.
 
-       Sub-goals 82–85 (EmNet ingest, upstream spatial rules, UI, AI) — sequenced
-       next. Sub-goal 82 is the chunky one (Cloudflare Browser Rendering ingest
-       implementation against the live EmNet React app + OpenLayers feature
-       extraction).
+       Sub-goal 82 ✅ COMPLETE — commit 32139cc. lib/ingest/cso-emnet.ts
+       implements fetchEmnetSites(browserBinding) with dual extraction strategy:
+       network response interception (primary — captures the JSON API response
+       the React app fetches on load before React processes it) + React fiber
+       traversal fallback (BFS through the memoizedState chain to find siteList).
+       lib/ingest/cso.ts internals replaced: now gets BROWSER binding via
+       getCloudflareContext, calls fetchEmnetSites, upserts sites into
+       cso_outfalls, upserts advisories (source='emnet_cso', source_id=
+       '{emnet_id}:{occurrence}', outfall_id FK, location_ids=[]) for any
+       mainstem site with cso_last_occurrence within 48h. next.config.mjs got
+       serverExternalPackages:['@cloudflare/puppeteer'] so `next build` SSG
+       doesn't try to execute the Workers-only module. 24 new unit tests on
+       all 5 pure helper functions.
+
+       Sub-goals 83–85 (upstream spatial rules, UI, AI) — sequenced next.
 
        Note (process): commit 38bdd79 landed via a parallel agent session while I was
        editing the plan doc, and I subsequently committed 8c1c1df claiming sub-goal 80
