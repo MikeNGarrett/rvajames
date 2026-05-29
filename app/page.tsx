@@ -105,7 +105,11 @@ export default async function Home({ searchParams }: Props) {
 
         {/* ── Metro AI summary ── Suspense boundary so cards below render immediately */}
         <Suspense fallback={<MetroSummaryPanelSkeleton />}>
-          <MetroSummaryPanel date={dateStr} ageBucket={ageBucket} />
+          <MetroSummaryPanel
+            date={dateStr}
+            ageBucket={ageBucket}
+            activeCsoOutfalls={data.activeCsoOutfalls}
+          />
         </Suspense>
 
         {/* ── Locations region ── 9 deterministic cards */}

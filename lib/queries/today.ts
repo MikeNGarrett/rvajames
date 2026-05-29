@@ -68,6 +68,12 @@ export interface TodayData {
   }[];
   /** True when we have upriver gauge data (observed or forecast) to base status on */
   hasConditions: boolean;
+  /**
+   * Deduplicated set of active CSO outfalls across ALL locations (for the metro warning block).
+   * Flattened from location.upstreamCso.outfalls, deduplicated by outfall name, sorted by
+   * hoursAgo ASC (most recent first). Empty array when no active events.
+   */
+  activeCsoOutfalls: Array<{ name: string; hoursAgo: number }>;
 }
 
 /**
@@ -135,6 +141,33 @@ function pickForecastPoint(
   return pool.reduce((best, pt) =>
     Math.abs(pt.t - noonApproxMs) < Math.abs(best.t - noonApproxMs) ? pt : best,
   );
+}
+
+/**
+ * Flattens upstream CSO outfalls from all location summaries, deduplicates by
+ * outfall name (keeping the minimum hoursAgo), and sorts ascending by hoursAgo
+ * (most recent first). Returns an empty array when no active events exist.
+ *
+ * Exported for unit testing.
+ */
+export function computeActiveCsoOutfalls(
+  locations: Pick<LocationSummary, 'upstreamCso'>[],
+): Array<{ name: string; hoursAgo: number }> {
+  const bestByName = new Map<string, number>();
+
+  for (const loc of locations) {
+    if (!loc.upstreamCso) continue;
+    for (const outfall of loc.upstreamCso.outfalls) {
+      const existing = bestByName.get(outfall.name);
+      if (existing === undefined || outfall.hoursAgo < existing) {
+        bestByName.set(outfall.name, outfall.hoursAgo);
+      }
+    }
+  }
+
+  return Array.from(bestByName.entries())
+    .map(([name, hoursAgo]) => ({ name, hoursAgo }))
+    .sort((a, b) => a.hoursAgo - b.hoursAgo);
 }
 
 const STATUS_SORT_ORDER: Record<SafetyStatus, number> = {
@@ -205,6 +238,7 @@ async function getObservedTodayData(
       date, ageBucket,
       mode: 'observed', forecastConfidence: null,
       locations: [], activeAdvisories: [], hasConditions: false,
+      activeCsoOutfalls: [],
     };
   }
 
@@ -274,6 +308,7 @@ async function getObservedTodayData(
     locations: summarized,
     activeAdvisories: activeAdvisoryList,
     hasConditions: upriverGageFt !== null,
+    activeCsoOutfalls: computeActiveCsoOutfalls(summarized),
   };
 }
 
@@ -311,6 +346,7 @@ async function getForecastTodayData(
       date, ageBucket,
       mode: 'forecast', forecastConfidence,
       locations: [], activeAdvisories: [], hasConditions: false,
+      activeCsoOutfalls: [],
     };
   }
 
@@ -381,6 +417,7 @@ async function getForecastTodayData(
     locations: summarized,
     activeAdvisories: activeAdvisoryList,
     hasConditions: upriverGageFt !== null,
+    activeCsoOutfalls: computeActiveCsoOutfalls(summarized),
   };
 }
 

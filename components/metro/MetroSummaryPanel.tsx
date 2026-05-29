@@ -14,23 +14,70 @@ import type { AgeBucket } from '@/lib/url-state';
 interface Props {
   date: string;
   ageBucket: AgeBucket;
+  /**
+   * Deduplicated set of active CSO outfalls across all locations.
+   * When non-empty, an amber warning block is rendered above the AI summary.
+   * Empty array (or omitted) = no block shown.
+   */
+  activeCsoOutfalls?: Array<{ name: string; hoursAgo: number }>;
 }
 
-export async function MetroSummaryPanel({ date, ageBucket }: Props) {
+/**
+ * Amber metro-wide CSO warning block. Displayed above the AI summary when
+ * one or more upstream outfall events are active across any river location.
+ * Not rendered when outfalls is empty.
+ */
+function CsoMetroBlock({ outfalls }: { outfalls: Array<{ name: string; hoursAgo: number }> }) {
+  if (!outfalls.length) return null;
+  return (
+    <div
+      role="alert"
+      className="rounded-lg bg-status-caution/10 border border-status-caution/30 p-3 mb-4 text-sm"
+    >
+      <p className="font-semibold text-status-caution-fg mb-1">
+        Upstream sewer overflow{outfalls.length !== 1 ? 's' : ''} active
+      </p>
+      <p className="text-xs text-text-muted mb-2">
+        {outfalls.length} outfall{outfalls.length !== 1 ? 's' : ''} reported in the past 48 hours.
+        Bacterial contamination may be elevated — consider postponing water contact.
+      </p>
+      <ul className="space-y-0.5">
+        {outfalls.map((o) => (
+          <li key={o.name} className="text-xs text-text-secondary flex items-center justify-between">
+            <span>{o.name}</span>
+            <span className="text-text-muted ml-2 flex-shrink-0">
+              {o.hoursAgo < 1 ? '<1 hr ago' : `${o.hoursAgo}h ago`}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export async function MetroSummaryPanel({ date, ageBucket, activeCsoOutfalls = [] }: Props) {
   const { summary } = await getMetroSummary(date, ageBucket);
   const { mode, forecastConfidence } = resolveDateMode(date);
   const dateLabel = mode === 'forecast' ? formatForecastDate(date) : null;
 
   if (!summary) {
     return (
-      <div className="rounded-xl border border-border bg-surface-raised p-4 mb-4 text-sm text-text-muted">
-        River summary unavailable — check gauge readings above for current conditions.
-      </div>
+      <>
+        {activeCsoOutfalls.length > 0 && (
+          <CsoMetroBlock outfalls={activeCsoOutfalls} />
+        )}
+        <div className="rounded-xl border border-border bg-surface-raised p-4 mb-4 text-sm text-text-muted">
+          River summary unavailable — check gauge readings above for current conditions.
+        </div>
+      </>
     );
   }
 
   return (
     <section aria-label="River conditions summary" className="rounded-xl border border-border bg-surface-raised p-4 mb-4" style={{ viewTransitionName: 'metro-summary' }}>
+      {activeCsoOutfalls.length > 0 && (
+        <CsoMetroBlock outfalls={activeCsoOutfalls} />
+      )}
       {mode === 'forecast' && dateLabel ? (
         <>
           <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-1">

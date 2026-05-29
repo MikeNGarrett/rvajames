@@ -10,6 +10,7 @@ import { OutOfWindowError } from '@/lib/queries/today';
 import { buildRedirectUrl } from '@/lib/utils/redirect-to-today';
 import { ActivityMatrix } from '@/components/location/ActivityMatrix';
 import { WaterQualityPanel } from '@/components/location/WaterQualityPanel';
+import { UpstreamCsoPanel } from '@/components/location/UpstreamCsoPanel';
 import { PrepChecklist } from '@/components/trip/PrepChecklist';
 import { ResourceList } from '@/components/location/ResourceList';
 import { AdvisoriesBanner } from '@/components/tiles/AdvisoriesBanner';
@@ -207,6 +208,11 @@ export default async function LocationPage({ params, searchParams }: Props) {
             reading={location.waterQuality.reading}
             testsEnterococcus={location.waterQuality.testsEnterococcus}
           />
+        )}
+
+        {/* Upstream CSO panel */}
+        {location.upstreamCso && (
+          <UpstreamCsoPanel upstreamCso={location.upstreamCso} />
         )}
 
         {/* Activity matrix */}

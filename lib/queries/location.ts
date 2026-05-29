@@ -7,6 +7,7 @@ import { combinedLocationStatus } from '@/lib/safety/rules';
 import { getLatestWaterQualityReading, getLatestReadingByStationCode, type WaterQualityReading } from './water-quality';
 import { getStationConfig } from '@/lib/data/station-mapping';
 import { resolveDateMode } from './date-range';
+import { getUpstreamCsoForLocation, type UpstreamCsoSignal } from '@/lib/safety/upstream-cso';
 
 export interface LocationDetail {
   id: string;
@@ -64,6 +65,12 @@ export interface LocationDetail {
     /** True when the primary station tests enterococcus (currently always false — all JRA stations are E. coli–only). */
     testsEnterococcus: boolean;
   } | null;
+  /**
+   * Upstream CSO signal. null when no active advisories from upstream outfalls
+   * within the 48-hour window, or when the location has no lng (defensive).
+   * null is equivalent to count === 0.
+   */
+  upstreamCso: UpstreamCsoSignal | null;
 }
 
 const UPRIVER_STATION = '02037500';
@@ -89,12 +96,16 @@ export async function getLocationDetail(
   // parallel fetches before entering the Promise.all.
   const stationConfig = getStationConfig(slug);
 
-  // Kick off water quality fetches before the Promise.all so they run in parallel.
+  // Kick off water quality and upstream CSO fetches before the Promise.all so
+  // they run in parallel with the main DB queries.
   const wqPromise = getLatestWaterQualityReading(slug);
   const upstreamWatchCode = stationConfig?.upstreamWatchStations?.[0]?.code ?? null;
   const upstreamWatchPromise: Promise<WaterQualityReading | null> = upstreamWatchCode
     ? getLatestReadingByStationCode(upstreamWatchCode)
     : Promise.resolve(null);
+  const upstreamCsoPromise = loc.lng != null
+    ? getUpstreamCsoForLocation(Number(loc.lng))
+    : Promise.resolve({ count: 0, mostRecentAt: null, outfalls: [] } as UpstreamCsoSignal);
 
   // Run parallel queries
   const [
@@ -150,8 +161,13 @@ export async function getLocationDetail(
     return a ? [{ slug: a.slug, name: a.name, minAge: a.min_age, requiresSwim: a.requires_swim }] : [];
   });
 
-  // Await the water quality fetches (both kicked off in parallel above).
-  const [wqReading, upstreamWatchReading] = await Promise.all([wqPromise, upstreamWatchPromise]);
+  // Await the water quality and CSO fetches (all kicked off in parallel above).
+  const [wqReading, upstreamWatchReading, upstreamCsoRaw] = await Promise.all([
+    wqPromise,
+    upstreamWatchPromise,
+    upstreamCsoPromise,
+  ]);
+  const upstreamCso: UpstreamCsoSignal | null = upstreamCsoRaw.count > 0 ? upstreamCsoRaw : null;
 
   const testsEnterococcus =
     stationConfig?.primaryStations.some((s) => s.bacteria.includes('enterococcus')) ?? false;
@@ -209,6 +225,9 @@ export async function getLocationDetail(
     },
     activeAdvisories,
     loc.slug,
+    undefined, // operationalOverride — handled via advisories table
+    upstreamCso ?? undefined,
+    loc.tags,
   );
 
   // Lazy AI interpretation for the detail page
@@ -275,6 +294,7 @@ export async function getLocationDetail(
       sort_order: r.sort_order,
     })),
     waterQuality,
+    upstreamCso,
   };
 }
 

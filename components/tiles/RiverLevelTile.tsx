@@ -7,6 +7,43 @@ interface Props {
 }
 
 /**
+ * Small amber circle with "!" shown on tiles when there is an active CSO
+ * upstream of this access point in the past 48 hours.
+ *
+ * A11y: aria-label on the <span> covers screen readers. The circle shape
+ * differs from WaterDropBadge so the two badges are distinguishable by
+ * shape alone (WCAG 1.4.1).
+ */
+function CsoBadge() {
+  return (
+    <span
+      aria-label="CSO event upstream in past 48 hours"
+      title="Upstream sewer overflow — bacterial levels may be elevated"
+      className="inline-flex items-center shrink-0 text-status-caution-fg"
+    >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 10 10"
+        className="w-3 h-3"
+        fill="currentColor"
+      >
+        <circle cx="5" cy="5" r="5" />
+        <text
+          x="5"
+          y="7.8"
+          textAnchor="middle"
+          fontSize="7"
+          fontWeight="900"
+          fill="white"
+        >
+          !
+        </text>
+      </svg>
+    </span>
+  );
+}
+
+/**
  * Small water-drop indicator shown alongside the status pill when a fresh
  * JRA water-quality reading is available.
  *   - Blue drop:  within VDH thresholds (safe)
@@ -70,6 +107,9 @@ export function RiverLevelTile({ location }: Props) {
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-base font-semibold text-text leading-tight">{location.name}</h3>
         <div className="flex items-center gap-1.5 shrink-0">
+          {location.upstreamCso && location.upstreamCso.count > 0 && (
+            <CsoBadge />
+          )}
           {location.waterQuality && (
             <WaterDropBadge status={location.waterQuality.status} />
           )}
