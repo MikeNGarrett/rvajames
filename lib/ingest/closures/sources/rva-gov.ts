@@ -13,10 +13,9 @@
  * The DPU press-release index is also scraped to catch infrastructure-related
  * closures (e.g. Pipeline Trail) that are announced via DPU rather than Parks.
  *
- * Dedup strategy: before creating a draft, check whether an existing
- * active or draft row already has the same source_url + reason text.
- * If so, skip — no change upstream. This avoids spamming the review
- * queue on each daily scrape when nothing has changed.
+ * Dedup (2026-05-28 refactor): natural key = `${source_url}::${location_id}`.
+ * One draft per (page URL, location). Replaces text-hash comparison which
+ * was fragile and could silently re-insert on minor text changes.
  *
  * Cron: piggybacked on the usgs-percentiles 0 3 * * * daily trigger
  * via runAllClosureSources() in lib/ingest/closures/run-all.ts.
@@ -25,10 +24,10 @@
 // Use cheerio/slim to avoid the undici dependency (cheerio's fromURL helper
 // pulls in undici which references MessagePort — not available in CF Workers).
 import * as cheerio from 'cheerio/slim';
-import * as crypto from 'node:crypto';
 import { createServerClient } from '@/lib/supabase/server';
 import type { RunResult } from '@/lib/ingest/run';
 import type { ClosureSource } from '@/lib/ingest/closures/registry';
+import { naturalKey, loadExistingKeys } from '@/lib/ingest/closures/dedup';
 
 const SOURCE_NAME = 'rva.gov parks scrape';
 
@@ -84,19 +83,13 @@ function matchLocationSlug(text: string): string | null {
   return null;
 }
 
-function sha256(text: string): string {
-  return crypto.createHash('sha256').update(text).digest('hex');
-}
-
-interface ScrapeHit {
-  url: string;
+export interface ScrapeHit {
   locationSlug: string | null;
   text: string;
-  hash: string;
   sourceUrl: string;
 }
 
-async function scrapePage(url: string): Promise<ScrapeHit[]> {
+export async function scrapePage(url: string): Promise<ScrapeHit[]> {
   const res = await fetch(url, {
     headers: {
       'User-Agent': 'rva-james-bot (mike.garrett@teamcolab.com)',
@@ -110,7 +103,9 @@ async function scrapePage(url: string): Promise<ScrapeHit[]> {
 
   const html = await res.text();
   const $ = cheerio.load(html);
-  const hits: ScrapeHit[] = [];
+
+  // Map: locationSlug (or 'null') → first matching text, one hit per location
+  const slugToFirstText = new Map<string, string>();
 
   // Drupal CMS selectors — rva.gov uses several paragraph/section patterns:
   //   .field--name-body          classic body field (paragraphs, list items)
@@ -140,23 +135,23 @@ async function scrapePage(url: string): Promise<ScrapeHit[]> {
       if (!text || text.length < 15) return;
       if (!isClosure(text)) return;
 
-      hits.push({
-        url,
-        locationSlug: matchLocationSlug(text),
-        text,
-        hash: sha256(text),
-        sourceUrl: url,
-      });
+      const slug = matchLocationSlug(text) ?? '__park_wide__';
+      if (!slugToFirstText.has(slug)) {
+        slugToFirstText.set(slug, text);
+      }
     });
   }
 
-  // De-duplicate hits by hash within this page
-  const seen = new Set<string>();
-  return hits.filter((h) => {
-    if (seen.has(h.hash)) return false;
-    seen.add(h.hash);
-    return true;
-  });
+  const hits: ScrapeHit[] = [];
+  for (const [slug, text] of slugToFirstText) {
+    hits.push({
+      locationSlug: slug === '__park_wide__' ? null : slug,
+      text,
+      sourceUrl: url,
+    });
+  }
+
+  return hits;
 }
 
 async function runRvaGovSource(): Promise<RunResult> {
@@ -189,28 +184,13 @@ async function runRvaGovSource(): Promise<RunResult> {
     return { ok: true, rowsWritten: 0 };
   }
 
-  // For each hit, check whether we already have an active or draft row
-  // with the same source_url + reason (hash-identical text).
-  const { data: existingRows } = await supabase
-    .from('location_status')
-    .select('id, source_url, reason')
-    .eq('source', SOURCE_NAME)
-    .in('state', ['draft', 'active']);
-
-  const existingHashes = new Set(
-    (existingRows ?? []).map((r) => sha256(`${r.source_url}||${r.reason}`)),
-  );
+  // Natural-key dedup: one draft per (source_url, location_id)
+  const existingKeys = await loadExistingKeys(supabase, SOURCE_NAME);
 
   let rowsWritten = 0;
   const errors: string[] = [];
 
   for (const hit of allHits) {
-    const dedupeKey = sha256(`${hit.sourceUrl}||${hit.text}`);
-    if (existingHashes.has(dedupeKey)) {
-      // Already captured — no change upstream
-      continue;
-    }
-
     // Try to resolve a location_id from the hit text
     const locationId = hit.locationSlug ? slugToId.get(hit.locationSlug) ?? null : null;
 
@@ -222,6 +202,9 @@ async function runRvaGovSource(): Promise<RunResult> {
       errors.push(`no location_id available for hit: ${hit.text.slice(0, 60)}`);
       continue;
     }
+
+    const key = naturalKey(hit.sourceUrl, fallbackLocationId);
+    if (existingKeys.has(key)) continue;
 
     const { error: insertErr } = await supabase.from('location_status').insert({
       location_id: fallbackLocationId,

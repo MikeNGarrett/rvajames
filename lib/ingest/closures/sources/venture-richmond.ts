@@ -15,13 +15,17 @@
  *   No parallel fetches
  *
  * Draft rows only — never auto-approved. Admin reviews at /admin/closures.
+ *
+ * Dedup (2026-05-28 refactor): natural key = `${source_url}::${location_id}`.
+ * One draft per (article URL, location). Replaces text-hash comparison which
+ * was fragile across reason-text reformatting.
  */
 
 import * as cheerio from 'cheerio/slim';
-import * as crypto from 'node:crypto';
 import { createServerClient } from '@/lib/supabase/server';
 import type { RunResult } from '@/lib/ingest/run';
 import type { ClosureSource } from '@/lib/ingest/closures/registry';
+import { naturalKey, loadExistingKeys } from '@/lib/ingest/closures/dedup';
 
 const SOURCE_NAME = 'Venture Richmond';
 const BOT_UA = 'rva-james-bot (mike.garrett@teamcolab.com)';
@@ -57,10 +61,6 @@ const CLOSURE_KEYWORDS = [
   /\breopen/i,
   /\binaccessible\b/i,
 ];
-
-function sha256(text: string): string {
-  return crypto.createHash('sha256').update(text).digest('hex');
-}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -120,13 +120,13 @@ async function isAllowedByRobots(robotsUrl: string, targetPaths: string[]): Prom
   }
 }
 
-interface ScrapeHit {
-  locationSlug: string | null;
+export interface ScrapeHit {
+  locationSlug: string;
   text: string;
   sourceUrl: string;
 }
 
-async function scrapePage(url: string): Promise<ScrapeHit[]> {
+export async function scrapePage(url: string): Promise<ScrapeHit[]> {
   const res = await fetch(url, {
     headers: { 'User-Agent': BOT_UA },
   });
@@ -138,8 +138,9 @@ async function scrapePage(url: string): Promise<ScrapeHit[]> {
 
   const html = await res.text();
   const $ = cheerio.load(html);
-  const hits: ScrapeHit[] = [];
-  const seen = new Set<string>();
+
+  // Map: locationSlug → first matching text (one hit per location per page)
+  const slugToFirstText = new Map<string, string>();
 
   // Article titles and excerpts on the news index
   const selectors = [
@@ -163,12 +164,16 @@ async function scrapePage(url: string): Promise<ScrapeHit[]> {
       // Must match a location AND have a closure keyword
       if (!locationSlug || !closureMatch) return;
 
-      const dedupeKey = sha256(text);
-      if (seen.has(dedupeKey)) return;
-      seen.add(dedupeKey);
-
-      hits.push({ locationSlug, text, sourceUrl: url });
+      // Keep only the first match per location
+      if (!slugToFirstText.has(locationSlug)) {
+        slugToFirstText.set(locationSlug, text);
+      }
     });
+  }
+
+  const hits: ScrapeHit[] = [];
+  for (const [locationSlug, text] of slugToFirstText) {
+    hits.push({ locationSlug, text, sourceUrl: url });
   }
 
   return hits;
@@ -209,31 +214,23 @@ async function runVentureRichmondSource(): Promise<RunResult> {
     return { ok: true, rowsWritten: 0 };
   }
 
-  // Dedup against existing draft/active rows for this source
-  const { data: existingRows } = await supabase
-    .from('location_status')
-    .select('id, source_url, reason')
-    .eq('source', SOURCE_NAME)
-    .in('state', ['draft', 'active']);
-
-  const existingHashes = new Set(
-    (existingRows ?? []).map((r) => sha256(`${r.source_url}||${r.reason}`)),
-  );
+  // Natural-key dedup: one draft per (source_url, location_id)
+  const existingKeys = await loadExistingKeys(supabase, SOURCE_NAME);
 
   let rowsWritten = 0;
   const errors: string[] = [];
 
   for (const hit of allHits) {
-    const dedupeKey = sha256(`${hit.sourceUrl}||${hit.text}`);
-    if (existingHashes.has(dedupeKey)) continue;
-
-    const locationId = hit.locationSlug ? slugToId.get(hit.locationSlug) ?? null : null;
+    const locationId = slugToId.get(hit.locationSlug) ?? null;
     const fallbackId = locationId ?? slugToId.get('belle-isle') ?? slugToId.values().next().value ?? null;
 
     if (!fallbackId) {
       errors.push(`no location_id for hit: ${hit.text.slice(0, 60)}`);
       continue;
     }
+
+    const key = naturalKey(hit.sourceUrl, fallbackId);
+    if (existingKeys.has(key)) continue;
 
     const { error: insertErr } = await supabase.from('location_status').insert({
       location_id: fallbackId,
@@ -242,7 +239,7 @@ async function runVentureRichmondSource(): Promise<RunResult> {
       reason:      hit.text,
       source:      SOURCE_NAME,
       source_url:  hit.sourceUrl,
-      affects:     hit.locationSlug ? null : 'See source URL for details',
+      affects:     locationId ? null : 'See source URL for details',
       created_by:  'scraper',
     });
 

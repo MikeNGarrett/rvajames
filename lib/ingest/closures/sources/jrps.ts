@@ -21,13 +21,18 @@
  * JSON-LD Article schema with datePublished + headline. The site also has a
  * dedicated Pipeline Trail post at /whats-going-on-with-pipeline/ which is
  * included as a high-value one-off scrape target.
+ *
+ * Dedup (2026-05-28 refactor): natural key = `${source_url}::${location_id}`.
+ * One draft per (article URL, location). Multi-paragraph matches for the same
+ * (article, location) are collapsed into a single hit — reason prefers the
+ * JSON-LD headline over an excerpt paragraph.
  */
 
 import * as cheerio from 'cheerio/slim';
-import * as crypto from 'node:crypto';
 import { createServerClient } from '@/lib/supabase/server';
 import type { RunResult } from '@/lib/ingest/run';
 import type { ClosureSource } from '@/lib/ingest/closures/registry';
+import { naturalKey, loadExistingKeys } from '@/lib/ingest/closures/dedup';
 
 const SOURCE_NAME = 'Friends of James River Park';
 const BOT_UA = 'rva-james-bot (mike.garrett@teamcolab.com)';
@@ -65,10 +70,6 @@ const CLOSURE_KEYWORDS = [
   /\binaccessible\b/i,
   /\bwhat.s\s+going\s+on\b/i, // matches "What's Going On With Pipeline"
 ];
-
-function sha256(text: string): string {
-  return crypto.createHash('sha256').update(text).digest('hex');
-}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -126,10 +127,15 @@ async function isAllowedByRobots(robotsUrl: string, targetPaths: string[]): Prom
   }
 }
 
-interface ScrapeHit {
-  locationSlug: string | null;
-  text: string;
-  headline: string;
+/**
+ * One hit per (article URL, location slug). Reason is the JSON-LD headline
+ * if available; otherwise the first matching paragraph for that location.
+ * Multiple paragraphs from the same article mentioning the same location are
+ * collapsed into this single record.
+ */
+export interface ScrapeHit {
+  locationSlug: string;
+  reason: string;       // headline > first matching paragraph
   datePublished: string | null;
   sourceUrl: string;
 }
@@ -151,7 +157,12 @@ function extractJsonLd(html: string): { headline?: string; datePublished?: strin
   }
 }
 
-async function scrapePage(url: string): Promise<ScrapeHit[]> {
+/**
+ * Scrape a single page and return one ScrapeHit per (url, locationSlug).
+ * Multi-paragraph hits for the same location are collapsed: if we already
+ * have a hit for that slug on this page, we keep the first one.
+ */
+export async function scrapePage(url: string): Promise<ScrapeHit[]> {
   const res = await fetch(url, {
     headers: { 'User-Agent': BOT_UA },
   });
@@ -164,8 +175,9 @@ async function scrapePage(url: string): Promise<ScrapeHit[]> {
   const html = await res.text();
   const $ = cheerio.load(html);
   const { headline: jsonLdHeadline, datePublished } = extractJsonLd(html);
-  const hits: ScrapeHit[] = [];
-  const seen = new Set<string>();
+
+  // Map: locationSlug → first matching paragraph text (used as fallback reason)
+  const slugToFirstParagraph = new Map<string, string>();
 
   // WordPress typical selectors for news index + individual posts
   const selectors = [
@@ -188,38 +200,34 @@ async function scrapePage(url: string): Promise<ScrapeHit[]> {
       if (!locationSlug) return;
       if (!hasClosureKeyword(text)) return;
 
-      const dedupeKey = sha256(text);
-      if (seen.has(dedupeKey)) return;
-      seen.add(dedupeKey);
-
-      hits.push({
-        locationSlug,
-        text,
-        headline:      jsonLdHeadline ?? text.slice(0, 120),
-        datePublished: datePublished ?? null,
-        sourceUrl:     url,
-      });
+      // Keep only the first paragraph match for each location
+      if (!slugToFirstParagraph.has(locationSlug)) {
+        slugToFirstParagraph.set(locationSlug, text);
+      }
     });
   }
 
   // Special case: the pipeline trail page should always produce a hit even if
   // its body text doesn't have a classic closure keyword in a short paragraph.
   // Check the page title / h1 directly.
-  if (hits.length === 0 && url.includes('pipeline')) {
+  if (slugToFirstParagraph.size === 0 && url.includes('pipeline')) {
     const h1 = $('h1').first().text().replace(/\s+/g, ' ').trim();
     if (h1 && matchesLocationKeyword(h1)) {
-      const dedupeKey = sha256(h1 + url);
-      if (!seen.has(dedupeKey)) {
-        seen.add(dedupeKey);
-        hits.push({
-          locationSlug: 'pipeline-trail',
-          text:         h1,
-          headline:     jsonLdHeadline ?? h1,
-          datePublished: datePublished ?? null,
-          sourceUrl:     url,
-        });
-      }
+      slugToFirstParagraph.set('pipeline-trail', h1);
     }
+  }
+
+  // Build one ScrapeHit per (url, locationSlug). Reason = JSON-LD headline
+  // (most informative, page-level title) if available, else the first
+  // matching paragraph for that location.
+  const hits: ScrapeHit[] = [];
+  for (const [locationSlug, firstParagraph] of slugToFirstParagraph) {
+    hits.push({
+      locationSlug,
+      reason:        jsonLdHeadline ?? firstParagraph,
+      datePublished: datePublished ?? null,
+      sourceUrl:     url,
+    });
   }
 
   return hits;
@@ -259,39 +267,32 @@ async function runJrpsSource(): Promise<RunResult> {
     return { ok: true, rowsWritten: 0 };
   }
 
-  const { data: existingRows } = await supabase
-    .from('location_status')
-    .select('id, source_url, reason')
-    .eq('source', SOURCE_NAME)
-    .in('state', ['draft', 'active']);
-
-  const existingHashes = new Set(
-    (existingRows ?? []).map((r) => sha256(`${r.source_url}||${r.reason}`)),
-  );
+  // Natural-key dedup: one draft per (source_url, location_id)
+  const existingKeys = await loadExistingKeys(supabase, SOURCE_NAME);
 
   let rowsWritten = 0;
   const errors: string[] = [];
 
   for (const hit of allHits) {
-    const dedupeKey = sha256(`${hit.sourceUrl}||${hit.text}`);
-    if (existingHashes.has(dedupeKey)) continue;
-
-    const locationId = hit.locationSlug ? slugToId.get(hit.locationSlug) ?? null : null;
+    const locationId = slugToId.get(hit.locationSlug) ?? null;
     const fallbackId = locationId ?? slugToId.get('belle-isle') ?? slugToId.values().next().value ?? null;
 
     if (!fallbackId) {
-      errors.push(`no location_id for hit: ${hit.text.slice(0, 60)}`);
+      errors.push(`no location_id for hit: ${hit.reason.slice(0, 60)}`);
       continue;
     }
+
+    const key = naturalKey(hit.sourceUrl, fallbackId);
+    if (existingKeys.has(key)) continue;
 
     const { error: insertErr } = await supabase.from('location_status').insert({
       location_id:    fallbackId,
       kind:           'closed',
       state:          'draft',
-      reason:         hit.headline || hit.text,
+      reason:         hit.reason,
       source:         SOURCE_NAME,
       source_url:     hit.sourceUrl,
-      affects:        hit.locationSlug ? null : 'See source URL for details',
+      affects:        locationId ? null : 'See source URL for details',
       effective_from: hit.datePublished ? hit.datePublished.slice(0, 10) : undefined,
       created_by:     'scraper',
     });
