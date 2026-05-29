@@ -415,6 +415,77 @@ describe('combinedLocationStatus', () => {
     );
     expect(result.status).toBe('safe');
   });
+
+  // ── Upstream CSO override (sub-goal 83) ───────────────────────────────────
+
+  const csoSignal = {
+    count: 2,
+    mostRecentAt: '2026-05-28T10:00:00Z',
+    outfalls: [
+      { name: 'Manchester CSO', csoOccurredAt: '2026-05-28T10:00:00Z', hoursAgo: 2 },
+    ],
+  };
+
+  it('swimming location + upstreamCso.count > 0 → caution', () => {
+    const result = combinedLocationStatus(
+      { gageFt: 3.5 },
+      noAdvisories,
+      'pony-pasture',
+      null,
+      csoSignal,
+      ['swimming', 'tubing'],
+    );
+    expect(result.status).toBe('caution');
+    expect(result.reason).toMatch(/CSO upstream/i);
+  });
+
+  it('swimming location + upstreamCso null → no override (safe)', () => {
+    const result = combinedLocationStatus(
+      { gageFt: 3.5 },
+      noAdvisories,
+      'pony-pasture',
+      null,
+      null,
+      ['swimming'],
+    );
+    expect(result.status).toBe('safe');
+  });
+
+  it('non-swimming location (trail) + upstreamCso.count > 0 → no change', () => {
+    const result = combinedLocationStatus(
+      { gageFt: 3.5 },
+      noAdvisories,
+      'northbank-trail',
+      null,
+      csoSignal,
+      ['hiking', 'trail'],
+    );
+    expect(result.status).toBe('safe');
+  });
+
+  it('closed location + upstreamCso.count > 0 → still closed (closures win)', () => {
+    const result = combinedLocationStatus(
+      { gageFt: 3.5 },
+      noAdvisories,
+      'pony-pasture',
+      { kind: 'closed', reason: 'Park closure', affects: null },
+      csoSignal,
+      ['swimming'],
+    );
+    expect(result.status).toBe('closed');
+  });
+
+  it('swimming location with danger gage + upstreamCso.count > 0 → still danger (CSO cannot downgrade)', () => {
+    const result = combinedLocationStatus(
+      { gageFt: 9.5 },
+      noAdvisories,
+      'pony-pasture',
+      null,
+      csoSignal,
+      ['swimming'],
+    );
+    expect(result.status).toBe('danger');
+  });
 });
 
 // ─── riverConditionSummary (sub-goal 37) ─────────────────────────────────────

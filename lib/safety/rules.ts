@@ -5,6 +5,7 @@
  */
 
 import thresholds from './thresholds.json';
+import type { UpstreamCsoSignal } from './upstream-cso';
 
 /**
  * SafetyStatus includes 'closed' for locations that are operationally
@@ -245,12 +246,17 @@ export interface OperationalStatusOverride {
  *   - 'closed' / 'closed_indefinite': returns { status: 'closed' } immediately.
  *   - 'restricted': escalates to caution + prepends the restriction note.
  *   - 'open': no override.
+ *
+ * When `upstreamCso` is provided and count > 0, swimming locations are
+ * escalated to 'caution' (but never below an existing 'danger' or 'closed').
  */
 export function combinedLocationStatus(
   metro: MetroStateInput,
   advisories: Array<{ kind: string; severity: string; headline: string }>,
   locationSlug: string,
   operationalStatus?: OperationalStatusOverride | null,
+  upstreamCso?: UpstreamCsoSignal | null,
+  locationTags?: string[],
 ): CombinedStatus {
   // ── Operational closure takes precedence over everything ──────────────────
   if (
@@ -327,6 +333,17 @@ export function combinedLocationStatus(
         reason = `Water ${metro.waterTempF}°F — cold shock risk, no swimming`;
       }
     }
+  }
+
+  // 7. Upstream CSO override — swimming locations only.
+  // Escalates to 'caution' but cannot override 'danger' or 'closed'.
+  // Priority: closures > CSO > water-conditions (handled by applying after
+  // water rules but before the label derivation; closures are already returned
+  // early at the top of this function).
+  const isSwimmingLocation = locationTags?.includes('swimming') ?? false;
+  if (isSwimmingLocation && upstreamCso && upstreamCso.count > 0 && status === 'safe') {
+    status = 'caution';
+    reason = 'CSO upstream — bacterial levels likely elevated';
   }
 
   // ── Restricted operational status: escalate to caution, prepend note ────

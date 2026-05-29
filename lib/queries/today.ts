@@ -8,6 +8,7 @@ import type { NoaaAhpsForecastPoint, NoaaAhpsPayload } from '@/lib/ingest/noaa-a
 import { combinedLocationStatus, type SafetyStatus } from '@/lib/safety/rules';
 import { formatRichmondDate } from '@/lib/utils/date-tz';
 import { isInWindow } from '@/lib/queries/date-range';
+import { getUpstreamCsoForLocation, type UpstreamCsoSignal } from '@/lib/safety/upstream-cso';
 
 export interface DeterministicStatus {
   status: SafetyStatus;
@@ -41,6 +42,13 @@ export interface LocationSummary {
    *   - Most recent reading has no bacteria measurement (both null)
    */
   waterQuality: WaterQualityBadge | null;
+  /**
+   * Upstream CSO signal. null when:
+   *   - No active CSO advisories from upstream outfalls within the window
+   *   - Location has no lng (defensive — none currently)
+   * null is equivalent to count === 0.
+   */
+  upstreamCso: UpstreamCsoSignal | null;
 }
 
 export interface TodayData {
@@ -179,7 +187,7 @@ async function getObservedTodayData(
   const [{ data: locations }, { data: advisories }, metroState, statusMap, wqReadings] = await Promise.all([
     supabase
       .from('locations')
-      .select('id, slug, name, tags')
+      .select('id, slug, name, tags, lng')
       .eq('kind', 'access_point')
       .order('name'),
     supabase
@@ -214,17 +222,33 @@ async function getObservedTodayData(
     ? Math.round((Date.now() - new Date(upriverFetchedAt).getTime()) / 60_000)
     : null;
 
+  // Fetch upstream CSO signals for all locations in parallel
+  const upstreamCsoMap = new Map<string, UpstreamCsoSignal | null>();
+  await Promise.all(
+    locations.map(async (loc) => {
+      if (loc.lng == null) {
+        upstreamCsoMap.set(loc.id, null);
+        return;
+      }
+      const signal = await getUpstreamCsoForLocation(loc.lng);
+      upstreamCsoMap.set(loc.id, signal.count > 0 ? signal : null);
+    }),
+  );
+
   const summarized: LocationSummary[] = locations.map((loc) => {
     const opStatus = statusMap.get(loc.id) ?? null;
     const operationalOverride = opStatus
       ? { kind: opStatus.kind, reason: opStatus.reason, affects: opStatus.affects }
       : null;
+    const upstreamCso = upstreamCsoMap.get(loc.id) ?? null;
 
     const combined = combinedLocationStatus(
       { gageFt: upriverGageFt, waterTempF: upriverWaterTempF },
       advisoriesForRules,
       loc.slug,
       operationalOverride,
+      upstreamCso,
+      loc.tags,
     );
 
     return {
@@ -234,6 +258,7 @@ async function getObservedTodayData(
       deterministicStatus: { status: combined.status, label: combined.label, reason: combined.reason },
       snapshotAge,
       waterQuality: computeWaterQualityBadge(wqReadings[loc.slug] ?? null),
+      upstreamCso,
     };
   });
 
@@ -265,7 +290,7 @@ async function getForecastTodayData(
   const [{ data: locations }, { data: advisories }, forecast, statusMap] = await Promise.all([
     supabase
       .from('locations')
-      .select('id, slug, name, tags')
+      .select('id, slug, name, tags, lng')
       .eq('kind', 'access_point')
       .order('name'),
     // Advisories that are currently active; any still-active advisory is relevant
@@ -300,11 +325,25 @@ async function getForecastTodayData(
     kind: a.kind, severity: a.severity, headline: a.headline,
   }));
 
+  // Fetch upstream CSO signals for all locations in parallel
+  const upstreamCsoMapForecast = new Map<string, UpstreamCsoSignal | null>();
+  await Promise.all(
+    locations.map(async (loc) => {
+      if (loc.lng == null) {
+        upstreamCsoMapForecast.set(loc.id, null);
+        return;
+      }
+      const signal = await getUpstreamCsoForLocation(loc.lng);
+      upstreamCsoMapForecast.set(loc.id, signal.count > 0 ? signal : null);
+    }),
+  );
+
   const summarized: LocationSummary[] = locations.map((loc) => {
     const opStatus = statusMap.get(loc.id) ?? null;
     const operationalOverride = opStatus
       ? { kind: opStatus.kind, reason: opStatus.reason, affects: opStatus.affects }
       : null;
+    const upstreamCso = upstreamCsoMapForecast.get(loc.id) ?? null;
 
     const combined = combinedLocationStatus(
       {
@@ -315,6 +354,8 @@ async function getForecastTodayData(
       advisoriesForRules,
       loc.slug,
       operationalOverride,
+      upstreamCso,
+      loc.tags,
     );
 
     return {
@@ -324,6 +365,7 @@ async function getForecastTodayData(
       deterministicStatus: { status: combined.status, label: combined.label, reason: combined.reason },
       snapshotAge: null, // forecast data has no snapshot age
       waterQuality: null, // water quality is historical — not shown on forecast views
+      upstreamCso,
     };
   });
 
