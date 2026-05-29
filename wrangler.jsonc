@@ -8,6 +8,9 @@
 		"directory": ".open-next/assets",
 		"binding": "ASSETS"
 	},
+	"browser": {
+		"binding": "BROWSER"
+	},
 	"vars": {
 		"NEXT_PUBLIC_SUPABASE_URL": "https://buokjdntsitjpqfjxano.supabase.co",
 		"NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1b2tqZG50c2l0anBxZmp4YW5vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NjQ5MjQsImV4cCI6MjA5NTE0MDkyNH0.4KXgpNc0bquaUhOu6mNba0H65r2WfKYt4c8wIups3jw"

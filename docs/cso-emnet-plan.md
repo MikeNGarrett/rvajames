@@ -134,42 +134,38 @@ parallel as long as they don't depend on prod-side migration application.
 
 ---
 
-## Sub-goal 81 — Cloudflare Browser Rendering binding + wrangler config
+## Sub-goal 81 — Cloudflare Browser Rendering binding + wrangler config ✅
 
 **Why:** Need the platform feature enabled before any code can use it.
 
-**Deliverables**
+**What shipped (commit: see reconciliation):**
+- `@cloudflare/puppeteer@1.1.0` added to `dependencies` (runtime dep,
+  not dev dep — the ingest worker calls `puppeteer.launch(env.BROWSER)`)
+  Note: the plan expected a 0.0.x version; the package has since reached
+  1.1.0 with a stable API. No 0.0.x release is available.
+- `wrangler.jsonc` — BROWSER binding added:
+  ```jsonc
+  "browser": {
+    "binding": "BROWSER"
+  }
+  ```
+  Placed alongside `assets` for visual consistency.
+- `worker-configuration.d.ts` regenerated via `pnpm wrangler types` — now
+  includes `BROWSER: Fetcher` in `__BaseEnv_Env`. No new compatibility flags
+  needed; `nodejs_compat` (already set) covers `@cloudflare/puppeteer`'s
+  requirements.
+- No deploy — sub-goal 82 deploys once the ingest code exists.
 
-Documentation only (no agent code changes — this is human-side configuration):
-
-`docs/cso-emnet-plan.md` — append "Operational setup" section with:
-- Steps to enable Workers Paid on the account
-- Steps to enable Browser Rendering on the workers account
-- The wrangler.jsonc snippet to add the binding once enabled:
-
-```jsonc
-"browser": {
-  "binding": "BROWSER"
-}
-```
-
-Add `@cloudflare/puppeteer` to package.json (dev dep) — actual usage in
-sub-goal 82.
-
-**Human handoff:**
+**Human handoff (required BEFORE sub-goal 82 deploy):**
 1. Cloudflare dashboard → Workers & Pages → Plan → upgrade to Workers Paid
-   if not already
-2. Workers & Pages → Browser Rendering → Enable
-3. Confirm by running `wrangler browser-rendering list` (CLI v3+)
-4. Add the `browser` binding block to `wrangler.jsonc` and `wrangler deploy`
-   (the user runs `pnpm deploy:cf` — code change comes in sub-goal 82)
+   if not already ($5/mo, 10M requests + 10h browser time included)
+2. Workers & Pages → Browser Rendering → Enable (one-click)
+3. Confirm: `wrangler browser-rendering list` (returns empty list if no
+   sessions running — non-error response means it's active)
 
-**Success**
-- `@cloudflare/puppeteer` installed
-- Documentation matches the actual dashboard UX (verify by walking through
-  it once)
-- The binding is added to `wrangler.jsonc` but the worker that uses it
-  doesn't exist yet — so deploy works without errors
+**Success verified:**
+- pnpm install clean · tsc clean · lint clean · 151/151 tests · build:cf clean
+- `BROWSER: Fetcher` present in worker-configuration.d.ts
 
 ---
 
@@ -486,6 +482,15 @@ feature, which is included in the **Workers Paid** plan ($5/mo).
   ~2 invocations × ~30s each = ~1 minute/day → ~30 min/mo, well under
   the included quota
 - No additional cost expected
+
+**wrangler.jsonc binding (already committed by agent in sub-goal 81):**
+```jsonc
+"browser": {
+  "binding": "BROWSER"
+}
+```
+The binding is live in code. Once Workers Paid + Browser Rendering are
+enabled on the account and sub-goal 82 deploys, it activates automatically.
 
 **Apply migration to production:**
 
