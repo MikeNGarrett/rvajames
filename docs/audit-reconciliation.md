@@ -139,11 +139,19 @@ IN PROGRESS   Sub-goals 80–85: CSO event ingestion via EmNet (Cloudflare Brows
          - Cloudflare Workers Paid enabled on the rva-james account
          - Browser Rendering enabled in the Cloudflare dashboard
 
-       Sub-goal 81 IN PROGRESS — wrangler.jsonc BROWSER binding +
-       @cloudflare/puppeteer dependency. Pure config; no DB writes, no deploy.
+       Sub-goal 81 ✅ COMPLETE — commit 58c6b99 added @cloudflare/puppeteer@1.1.0
+       (graduated from the 0.0.x range the plan expected; API unchanged) to
+       `dependencies` (NOT devDependencies — the worker calls puppeteer.launch()
+       at runtime), added the `browser: { binding: "BROWSER" }` block to
+       wrangler.jsonc alongside the assets binding, and confirmed BROWSER: Fetcher
+       appears in worker-configuration.d.ts (gitignored, regenerated via
+       `pnpm wrangler types`). No deploy in 81; binding is declared but unused
+       until 82 ships an ingest that calls it.
 
-       Sub-goals 82–85 (EmNet ingest, upstream spatial rules, UI, AI) — staged in
-       sequence after 81.
+       Sub-goals 82–85 (EmNet ingest, upstream spatial rules, UI, AI) — sequenced
+       next. Sub-goal 82 is the chunky one (Cloudflare Browser Rendering ingest
+       implementation against the live EmNet React app + OpenLayers feature
+       extraction).
 
        Note (process): commit 38bdd79 landed via a parallel agent session while I was
        editing the plan doc, and I subsequently committed 8c1c1df claiming sub-goal 80
