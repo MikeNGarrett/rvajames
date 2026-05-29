@@ -106,11 +106,13 @@ supabase start
 # Note the printed URL, anon key, and service_role key
 
 # Copy env templates
-cp .env.local.example .env.local
-cp .dev.vars.example .dev.vars
+cp .env.development.local.example .env.development.local
+
+# Wrangler requires the filename .dev.vars — symlink it to the single source of truth
+ln -s .env.development.local .dev.vars
 ```
 
-Populate `.env.local` and `.dev.vars` with:
+Populate `.env.development.local` with:
 
 | Variable | Value |
 |---|---|

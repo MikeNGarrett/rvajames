@@ -78,13 +78,20 @@ Supabase migrated direct connections to IPv6-only addresses in 2024. If you're o
 
 If you specifically need Direct mode (e.g., your network has IPv6 connectivity and you want lower latency), Supabase offers an "IPv4 add-on" (~$4/month) that restores an IPv4 record on the direct hostname. For agent verification workloads, Session pooler is fine.
 
-## 3. Store in `.dev.vars`
+## 3. Store in `.env.read-prod`
 
-`.dev.vars` is gitignored. Add:
+`.env.read-prod` is gitignored and is the ONLY file on disk that holds a
+production credential. It carries this one variable and nothing else, so a
+filename grep is all that's needed to audit what production access exists
+locally. Template: `.env.read-prod.example`.
 
 ```
 AGENT_READ_DATABASE_URL=postgres://agent_reader:<hex>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require
 ```
+
+Do NOT put this variable in `.env.development.local` or `.dev.vars` — those
+files are reserved for local-dev credentials and must never mix scopes with
+production.
 
 ## 4. Install Postgres client tools
 
@@ -129,7 +136,7 @@ Every 90 days as hygiene:
 ALTER USER agent_reader WITH PASSWORD '<new-64-char-hex>';
 ```
 
-Update `.dev.vars` with the new password. No other changes needed.
+Update `.env.read-prod` with the new password. No other changes needed.
 
 ## What's safe with this credential
 
@@ -144,11 +151,11 @@ Update `.dev.vars` with the new password. No other changes needed.
 
 ## What's NOT safe
 
-- ✗ Committing `.dev.vars` to git (it's gitignored — keep it that way)
+- ✗ Committing `.env.read-prod` to git (it's gitignored — keep it that way)
 - ✗ Pasting the connection string into shared docs or chat
 - ✗ Reusing the credential across machines without rotation
 
-The connection string is still a credential. If it leaks, an attacker gets read access to data that's mostly public-derived (USGS, NWS, JRA, rva.gov are public sources) but still shouldn't be exposed casually. Rotate via the SQL above and update `.dev.vars`.
+The connection string is still a credential. If it leaks, an attacker gets read access to data that's mostly public-derived (USGS, NWS, JRA, rva.gov are public sources) but still shouldn't be exposed casually. Rotate via the SQL above and update `.env.read-prod`.
 
 ## Why not use the Supabase CLI for this?
 

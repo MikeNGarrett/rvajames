@@ -8,7 +8,7 @@ A James River conditions dashboard for Richmond, VA families. Next.js 15 (App Ro
 
 **Production credentials are not retrievable. Do not hunt for them.**
 
-If a command needs production credentials that aren't in `.env.local` or `.dev.vars`, STOP and ask the user. Wrangler secrets at Cloudflare are encrypted at the edge — `wrangler secret list` shows names only, never values. There is no "alternative path" that works: the Supabase management API, the Cloudflare API, scanning `node_modules`, reading `.wrangler/` cache files — none of these will yield production secrets. One "stop and ask" is correct; twelve attempts to find the same secret is wasted compute and bad behavior.
+If a command needs production credentials, STOP and ask the user. The ONLY production credential that lives on disk is `AGENT_READ_DATABASE_URL` in `.env.read-prod` — and that role is SELECT-only at the Postgres level. `.env.development.local` (and its `.dev.vars` symlink) hold local-dev credentials only — never production. Wrangler secrets at Cloudflare are encrypted at the edge — `wrangler secret list` shows names only, never values. There is no "alternative path" that works: the Supabase management API, the Cloudflare API, scanning `node_modules`, reading `.wrangler/` cache files — none of these will yield production secrets. One "stop and ask" is correct; twelve attempts to find the same secret is wasted compute and bad behavior.
 
 **Production secret inventory** (known to exist, none retrievable from this directory):
 

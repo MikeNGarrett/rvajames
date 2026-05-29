@@ -44,7 +44,7 @@ echo "you@example.com" | wrangler secret put ALLOWED_ADMIN_EMAILS
 
 ### Local testing
 
-In `.dev.vars`, set:
+In `.env.development.local` (Wrangler reads it via the `.dev.vars` symlink), set:
 
 ```
 ALLOWED_ADMIN_EMAILS=your.email@example.com

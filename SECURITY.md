@@ -73,7 +73,23 @@ Migration: `supabase/migrations/0002_rls.sql`
 In production, secrets are stored in Cloudflare Workers secrets via `wrangler secret put`.
 `NEXT_PUBLIC_*` vars are set as plain `vars` in `wrangler.jsonc` (build-time accessible, not secret).
 
-Never commit `.env.local` or `.dev.vars` — both are gitignored.
+Never commit `.env.development.local`, `.dev.vars`, or `.env.read-prod` — all
+three are gitignored. The legacy filename `.env.local` is also gitignored to
+catch accidental recreation; the canonical name is now `.env.development.local`
+(which Next.js auto-loads when `NODE_ENV=development`).
+
+### Env file tiers
+
+| File | Holds | Read by |
+|---|---|---|
+| `.env.development.local` | Local-dev credentials (local Supabase, dev Anthropic key, dev CRON_SECRET) | `next dev`, `wrangler dev` (via `.dev.vars` symlink), tsx scripts |
+| `.dev.vars` | Symlink to `.env.development.local` | `wrangler dev` (filename is Wrangler-mandated) |
+| `.env.read-prod` | **Only** `AGENT_READ_DATABASE_URL` — SELECT-only Postgres role | `pnpm sync:prod-to-local`, `pnpm query:prod` |
+| (none on disk) | Production write credentials | `wrangler secret put` only — encrypted at the edge |
+
+`.env.read-prod` is the only file on disk containing any production credential.
+The role it holds is enforced SELECT-only by Postgres, so even if the file
+leaked the blast radius is bounded to data read access.
 
 ## CRON_SECRET purpose
 

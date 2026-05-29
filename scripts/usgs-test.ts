@@ -3,10 +3,10 @@
 // Tests the two-gauge USGS ingestion against the LOCAL Supabase stack only.
 //
 // This script writes rows to Postgres. To eliminate any risk of pointing at
-// production (the previous version of this file loaded .env.local, which holds
+// production (the previous version of this file loaded .env.development.local, which holds
 // hosted credentials), it:
 //
-//   1. Does NOT load .env.local — production credentials never enter the process.
+//   1. Does NOT load .env.development.local — production credentials never enter the process.
 //   2. Reads the local Supabase URL + service-role key from `supabase status -o env`.
 //   3. Asserts the URL is 127.0.0.1 / localhost before proceeding — refuses to
 //      run against anything else as a belt-and-suspenders check.

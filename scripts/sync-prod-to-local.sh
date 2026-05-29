@@ -30,18 +30,22 @@ TS="$(date +%Y%m%d-%H%M%S)"
 DUMP_FILE="/tmp/rva-prod-snap-${TS}.sql"
 INFO_FILE="$REPO_ROOT/.local-snapshot-info"
 
-# ─── Load .dev.vars ──────────────────────────────────────────────────────────
-if [ -f "$REPO_ROOT/.dev.vars" ]; then
+# ─── Load .env.read-prod ─────────────────────────────────────────────────────
+# .env.read-prod holds ONLY the production read-only Postgres role connection
+# string. It's intentionally separate from .env.development.local — that file
+# carries local-dev credentials and must never mix scopes with production.
+if [ -f "$REPO_ROOT/.env.read-prod" ]; then
   set -a
   # shellcheck disable=SC1091
-  source "$REPO_ROOT/.dev.vars"
+  source "$REPO_ROOT/.env.read-prod"
   set +a
 fi
 
 # ─── Pre-flight checks ───────────────────────────────────────────────────────
 if [ -z "${AGENT_READ_DATABASE_URL:-}" ]; then
-  echo "Error: AGENT_READ_DATABASE_URL is not set in .dev.vars" >&2
+  echo "Error: AGENT_READ_DATABASE_URL is not set in .env.read-prod" >&2
   echo "       See docs/agent-read-only-setup.md for one-time setup." >&2
+  echo "       Template: .env.read-prod.example" >&2
   exit 1
 fi
 

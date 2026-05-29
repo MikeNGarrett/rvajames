@@ -50,7 +50,7 @@ A live `*.workers.dev` preview URL where:
 - Delete `app/supabase-check/` if still present (Goal 2 flagged it for removal in Goal 11). Confirm with `grep -r supabase-check`.
 - Gate `/brand` behind `if (process.env.NODE_ENV === 'production') notFound()` at the top of `app/brand/page.tsx`. Keep route available in dev.
 - Verify `initOpenNextCloudflareForDev()` in `next.config.mjs` is dev-only (`process.env.NODE_ENV !== 'production'`, or current OpenNext-idiomatic guard).
-- Audit `.env.local.example` and `.dev.vars.example`: every var read by `lib/env.ts` must be listed. Add any missing.
+- Audit `.env.development.local.example` and `.env.read-prod.example`: every var read by `lib/env.ts` must be listed in the appropriate scope file. Add any missing.
 - Audit `wrangler.jsonc` `triggers.crons` — must include every cron route:
   - USGS `*/15 * * * *`
   - NWS `0 * * * *`

@@ -12,7 +12,8 @@ import { getAllowedAdminEmails } from '@/lib/env';
  * Returns null in all other cases.
  *
  * In local `next dev` (no Cloudflare edge), the header won't be present.
- * Set `ALLOWED_ADMIN_EMAILS` in `.dev.vars` and pass the email via curl/Postman.
+ * Set `ALLOWED_ADMIN_EMAILS` in `.env.development.local` (Wrangler reads it via
+ * the `.dev.vars` symlink) and pass the email via curl/Postman.
  * See DEPLOYMENT.md § Local admin testing.
  */
 export async function getAdminEmail(): Promise<string | null> {
