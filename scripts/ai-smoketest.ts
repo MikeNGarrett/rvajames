@@ -4,7 +4,10 @@
 // Also exercises 3 mode/confidence variants to confirm forecast language rules are applied.
 
 import { config } from 'dotenv';
-config({ path: '.env.local' });
+// override: true so .env.local always wins over any pre-existing process.env value
+// (e.g. an empty ANTHROPIC_API_KEY injected by the agent runtime would otherwise
+// block the parsed value from being written — dotenv's default is to never clobber).
+config({ path: '.env.local', override: true });
 import Anthropic from '@anthropic-ai/sdk';
 import { SYSTEM_PROMPT } from '../lib/ai/system-prompt';
 import {

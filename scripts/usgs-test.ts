@@ -3,7 +3,11 @@
 // Expects SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in env (uses hosted values from .env.local).
 
 import { config } from 'dotenv';
-config({ path: '.env.local' });
+// override: true so .env.local always wins over any pre-existing process.env value
+// (e.g. an empty SUPABASE_SERVICE_ROLE_KEY injected by the agent runtime would
+// otherwise block the parsed value from being written — dotenv's default is to
+// never clobber). See scripts/ai-smoketest.ts for the same pattern.
+config({ path: '.env.local', override: true });
 import { runUsgsIngestion } from '../lib/ingest/usgs';
 
 async function main() {
