@@ -156,27 +156,20 @@ QUEUED (after 80–85)
        so this is UX polish, not perf-critical. Future agents: DO NOT skip again. The
        plan doc is current; no rewrite needed before execution.
 
-UNRESOLVED   Richmond Conditions Section (sub-goal range CONFLICTS with CSO/EmNet 80–85)
-       See docs/richmond-conditions-section-plan.md. Plan is fully spec'd (21KB) and
-       claims "Continues sub-goal numbering: 80 → 85" — SAME RANGE as CSO/EmNet.
-       Zero implementation in codebase: no <RichmondConditionsSection> component, no
-       UV ingest extension in NWS, no Happiness Index logic, no Swim Today categorical,
-       no Feels Like consolidation, no richmond_microcopy AI field.
+QUEUED (after 63–67)
+       Sub-goals 86–91: Richmond Conditions Section (post-launch enhancement)
+       See docs/richmond-conditions-section-plan.md. Plan is fully spec'd (21KB) — UV
+       ingest extension in NWS, Happiness Index logic, Swim Today categorical, Feels
+       Like + heat-stress consolidation, richmond_microcopy AI field, RichmondConditions
+       section reordered above River Conditions on the home page. Zero implementation
+       in codebase.
 
-       The plan was authored 2026-05-24 before CSO/EmNet was identified as a launch-
-       blocker. Earlier on 2026-05-26 the user picked CSO/EmNet over Richmond Conditions
-       when asked, but Richmond Conditions was never explicitly deferred or renumbered
-       — just sat in docs/ as a ghost plan.
+       Originally numbered 80–85 (collided with CSO/EmNet). User decision 2026-05-28:
+       defer post-launch, renumber 86–91 to clear the collision, queue AFTER dynamic-
+       content (63–67). Plan doc renumbered in the same commit as this update.
 
-       Decision required from user:
-         (a) Defer post-launch — renumber 86–91, queue after dynamic-content (63–67)
-         (b) Drop indefinitely — existing tiny stat row is sufficient
-         (c) Reprioritize before CSO/EmNet — only sensible if it's higher user-value
-             than CSO bacterial safety (unlikely given launch-blocker designation)
-
-       Until resolved: the sub-goal 80–85 numbering collision is a documentation
-       hazard. Both plans claim the same range; if a future agent reads both without
-       reconciliation context, they could conflict.
+       Execution order locked: CSO/EmNet (80–85) → dynamic-content (63–67) → Richmond
+       Conditions (86–91).
 
 DEFER  Finding 13 — dark mode (own round if/when prioritized)
 

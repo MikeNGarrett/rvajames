@@ -26,11 +26,11 @@ This round elevates that row into a proper **Richmond Conditions** section, **pl
 - **Two computation utilities.** Apparent temperature (heat index for warm; wind chill for cold; NWS standard formulas) and wet bulb temperature (Stull approximation). Pure functions, no new dependencies.
 - **Section gets a `<Suspense>` boundary around the AI microcopy only.** Headline and all six stats render instantly from the deterministic side. Only the 1–2 sentence microcopy waits. This keeps the LCP unaffected.
 
-## Continues sub-goal numbering: 80 → 85
+## Continues sub-goal numbering: 86 → 91
 
 ---
 
-## Sub-goal 80 — Data additions: UV ingest + heat computation utilities
+## Sub-goal 86 — Data additions: UV ingest + heat computation utilities
 
 **Why:** UV is the only new data we need. Apparent temperature and wet bulb are pure computation from data we already have.
 
@@ -93,7 +93,7 @@ Vitest cases covering known input/output pairs from NWS reference tables. Heat i
 
 ---
 
-## Sub-goal 81 — Rules engine: Happiness Index, Swim Today, 4h outlook
+## Sub-goal 87 — Rules engine: Happiness Index, Swim Today, 4h outlook
 
 **Why:** Single source of truth for the section's decision logic. All values derived deterministically.
 
@@ -214,7 +214,7 @@ Vitest cases for every band of each function. At least 30 cases total.
 
 ---
 
-## Sub-goal 82 — `<RichmondConditionsSection>` component
+## Sub-goal 88 — `<RichmondConditionsSection>` component
 
 **Why:** The visual surface. Six stats + headline + AI microcopy, organized for at-a-glance scanning at 375px.
 
@@ -299,7 +299,7 @@ Only around the AI microcopy. Headline, badges, tiles, and sparklines render ins
 
 ---
 
-## Sub-goal 83 — Extend MetroSummarySchema with `richmond_microcopy`
+## Sub-goal 89 — Extend MetroSummarySchema with `richmond_microcopy`
 
 **Why:** One AI call, two consumers. Avoid doubling AI cost.
 
@@ -344,11 +344,11 @@ Add a `PROMPT_VERSION = 'b3'` (up from `b2` in Round 2). Existing cached `metro_
 ### Consumer wiring
 
 - `<MetroSummaryPanel>` (existing): consumes the same fields it always did.
-- `<RichmondConditionsSection>` from sub-goal 82: consumes the new `richmond_microcopy` field via `getMetroSummary(date, ageBucket)`.
+- `<RichmondConditionsSection>` from sub-goal 88: consumes the new `richmond_microcopy` field via `getMetroSummary(date, ageBucket)`.
 
 ### Migration
 
-`supabase/migrations/0012_metro_richmond_microcopy.sql`:
+`supabase/migrations/00NN_metro_richmond_microcopy.sql`:
 
 ```sql
 alter table metro_summaries
@@ -365,7 +365,7 @@ Nullable so old rows continue to read; new generations require it via Zod.
 
 ---
 
-## Sub-goal 84 — Reorder homepage: Richmond Conditions above River Conditions
+## Sub-goal 90 — Reorder homepage: Richmond Conditions above River Conditions
 
 **Why:** Broad context first, river-specific second. This is the user's explicit reordering.
 
@@ -384,7 +384,7 @@ Nullable so old rows continue to read; new generations require it via Zod.
 
 ---
 
-## Sub-goal 85 — A11y, modern-web-guidance, perf verification
+## Sub-goal 91 — A11y, modern-web-guidance, perf verification
 
 **Why:** New interactive surfaces (tiles, sparklines, modal, mode chip) and a major page restructure deserve a full pass.
 
@@ -408,29 +408,29 @@ Nullable so old rows continue to read; new generations require it via Zod.
 ## Execution rules for the agent
 
 - Run 80 → 81 → 82 → 83 → 84 → 85 in order.
-- **After sub-goal 81: STOP.** Vitest must pass for every function before the UI is built on top. Headline decisions table is the easiest to get subtly wrong — verify cases by hand.
-- **After sub-goal 83: STOP.** Confirm an AI smoketest produces valid `b3` schema output including `richmond_microcopy` before the section depends on it.
-- After every sub-goal: `pnpm tsc --noEmit && pnpm lint && pnpm build:cf`. `pnpm test` after 80, 81, 83.
+- **After sub-goal 87: STOP.** Vitest must pass for every function before the UI is built on top. Headline decisions table is the easiest to get subtly wrong — verify cases by hand.
+- **After sub-goal 89: STOP.** Confirm an AI smoketest produces valid `b3` schema output including `richmond_microcopy` before the section depends on it.
+- After every sub-goal: `pnpm tsc --noEmit && pnpm lint && pnpm build:cf`. `pnpm test` after 86, 87, 89.
 - Lighthouse mobile must remain 100/100/100/100 after the final deploy.
 - Use `git` for all changes; commit per sub-goal.
 - Single deploy at the end.
-- Do not touch the River Conditions panel internals other than removing the now-redundant inline stats row (sub-goal 84).
+- Do not touch the River Conditions panel internals other than removing the now-redundant inline stats row (sub-goal 90).
 - Do not regress the Round 9 sub-goal 48 responsive contract — all new components respect the page container scale + reading-width tokens.
 
 ## Critical files
 
-- `lib/ingest/nws.ts` — sub-goal 80 (capture UV)
-- `lib/utils/apparent-temp.ts` — sub-goal 80 (new)
-- `lib/utils/wet-bulb.ts` — sub-goal 80 (new)
-- `lib/safety/thresholds.json` — sub-goal 81 (richmondConditions block)
-- `lib/safety/rules.ts` — sub-goal 81 (swimToday, happinessIndex, nextHoursOutlook, headlineForRichmondConditions)
-- `lib/safety/rules.test.ts` — sub-goals 80, 81 (extensive case coverage)
-- `components/richmond/RichmondConditionsSection.tsx` — sub-goal 82 (new)
-- `components/richmond/SwimTodayTile.tsx`, `FeelsLikeTile.tsx`, `NextHoursTile.tsx` — sub-goal 82 (new)
-- `lib/ai/prompts/summarize-metro.ts` — sub-goal 83 (schema + b3 hash bump)
-- `lib/ai/system-prompt.ts` — sub-goal 83 (Richmond microcopy instructions)
-- `supabase/migrations/0012_metro_richmond_microcopy.sql` — sub-goal 83 (nullable column)
-- `app/page.tsx` — sub-goal 84 (reorder, remove redundant inline stats)
+- `lib/ingest/nws.ts` — sub-goal 86 (capture UV)
+- `lib/utils/apparent-temp.ts` — sub-goal 86 (new)
+- `lib/utils/wet-bulb.ts` — sub-goal 86 (new)
+- `lib/safety/thresholds.json` — sub-goal 87 (richmondConditions block)
+- `lib/safety/rules.ts` — sub-goal 87 (swimToday, happinessIndex, nextHoursOutlook, headlineForRichmondConditions)
+- `lib/safety/rules.test.ts` — sub-goals 86, 87 (extensive case coverage)
+- `components/richmond/RichmondConditionsSection.tsx` — sub-goal 88 (new)
+- `components/richmond/SwimTodayTile.tsx`, `FeelsLikeTile.tsx`, `NextHoursTile.tsx` — sub-goal 88 (new)
+- `lib/ai/prompts/summarize-metro.ts` — sub-goal 89 (schema + b3 hash bump)
+- `lib/ai/system-prompt.ts` — sub-goal 89 (Richmond microcopy instructions)
+- `supabase/migrations/00NN_metro_richmond_microcopy.sql` — sub-goal 89 (nullable column)
+- `app/page.tsx` — sub-goal 90 (reorder, remove redundant inline stats)
 
 ## What this resolves
 
