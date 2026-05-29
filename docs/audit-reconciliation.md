@@ -130,12 +130,20 @@ IN PROGRESS   Sub-goals 80–85: CSO event ingestion via EmNet (Cloudflare Brows
 
        Sub-goal 80 (schema) ✅ COMPLETE — commit 38bdd79 created
        supabase/migrations/0013_cso_outfalls.sql with cso_outfalls catalog table +
-       advisories.outfall_id FK + RLS + agent_reader grant. Migration is NOT yet applied
-       to production (verified via pnpm query:prod). Human applies via Supabase Studio
-       per the Phase B handoff in cso-emnet-plan.md.
+       advisories.outfall_id FK + RLS + agent_reader grant. Phase B ✅ COMPLETE
+       2026-05-28 — migration applied to production via Supabase Studio. Verified
+       via `pnpm query:prod` that cso_outfalls (10 columns) and advisories.outfall_id
+       (uuid nullable) are live.
 
-       Sub-goals 81–85 (Cloudflare Browser Rendering binding, EmNet ingest, upstream
-       spatial rules, UI, AI) — staged; sequence after Phase B confirmation.
+       Operational prerequisites for sub-goal 82 ✅ COMPLETE 2026-05-28:
+         - Cloudflare Workers Paid enabled on the rva-james account
+         - Browser Rendering enabled in the Cloudflare dashboard
+
+       Sub-goal 81 IN PROGRESS — wrangler.jsonc BROWSER binding +
+       @cloudflare/puppeteer dependency. Pure config; no DB writes, no deploy.
+
+       Sub-goals 82–85 (EmNet ingest, upstream spatial rules, UI, AI) — staged in
+       sequence after 81.
 
        Note (process): commit 38bdd79 landed via a parallel agent session while I was
        editing the plan doc, and I subsequently committed 8c1c1df claiming sub-goal 80
