@@ -1,213 +1,182 @@
+/**
+ * Richmond DPU Combined Sewer Overflow ingest — EmNet headless-browser strategy
+ *
+ * DPU retired its rva.gov CSO advisory pages (RSS + HTML) in 2026. The
+ * authoritative real-time source is now the public EmNet map at
+ * apps.emnet.net/richmond-pub-map-app. We fetch it via Cloudflare Browser
+ * Rendering (headless Chrome) using the BROWSER binding.
+ *
+ * Sub-goal 82 (rva-james CSO plan)
+ *
+ * ── What this does ────────────────────────────────────────────────────────────
+ *
+ * 1. Launches a headless Chrome session to load the EmNet public map.
+ * 2. Extracts all Richmond CSO monitoring + modeled sites.
+ * 3. Upserts each site into the `cso_outfalls` catalog table.
+ * 4. For any site that:
+ *      a) affects the James River mainstem, AND
+ *      b) had a discharge (cso_last_occurrence) within the last 48 hours,
+ *    upserts an advisory into the `advisories` table with source='emnet_cso'.
+ *
+ * ── Advisory shape ────────────────────────────────────────────────────────────
+ *
+ *   source         = 'emnet_cso'
+ *   source_id      = '{emnet_id}:{cso_last_occurrence_iso}'  — unique per event
+ *   kind           = 'cso_overflow'
+ *   severity       = 'high'
+ *   outfall_id     = FK to cso_outfalls.id
+ *   location_ids   = []  — per-location upstream check happens at query time
+ *   effective_from = cso_last_occurrence
+ *   effective_to   = cso_last_occurrence + 48h
+ *
+ * ── Schedule ─────────────────────────────────────────────────────────────────
+ *
+ * Reuses the existing CSO cron trigger: 0 6,18 * * * (twice daily).
+ * The Cloudflare free-tier cron limit (5 triggers) is saturated — no new
+ * trigger is added; this ingest replaces the cso.ts internals only.
+ */
+
+import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { createServerClient } from '@/lib/supabase/server';
 import type { RunResult } from './run';
+import type { BrowserWorker } from '@cloudflare/puppeteer';
+import {
+  fetchEmnetSites,
+  buildSourceId,
+  buildAdvisoryHeadline,
+  buildAdvisoryBody,
+  isWithinWindow,
+} from './cso-emnet';
 
-// Richmond DPU Combined Sewer Overflow advisories
-//
-// The original URLs (combined-sewer-overflow-advisories RSS and
-// combined-sewer-overflow-advisory HTML) both return 404 as of 2026-05-24 —
-// these pages were never published or were removed.
-//
-// Current strategy:
-//   Primary:  DPU news RSS (taxonomy/term/92/feed) — filter for CSO keywords
-//   Fallback: Wastewater utility page — look for advisory notice text
-//
-// "0 rows written" is the correct outcome when there is no active CSO advisory.
-// When a source returns 4xx we log a warning and return ok:true so the
-// ingestion_runs row reflects the unavailability rather than treating it as
-// "no advisory".
-//
-// Dedup: source_id = hashToHex16(headline + '\0' + effectiveFrom).
-// The DPU RSS does not expose a per-event GUID, so we derive a deterministic
-// 16-hex-char fingerprint. Re-running the same scrape produces the same
-// source_id → upsert is a no-op. New advisories get new source_ids.
-
-const DPU_RSS_URL  = 'https://www.rva.gov/taxonomy/term/92/feed';
-const DPU_HTML_URL = 'https://www.rva.gov/public-utilities/wastewater-utility';
-
-// CSO advisories expire after 3 days if not renewed.
-// (Unlike JRA weekly samples, CSO events are tied to rain events and typically
-// resolve within hours; 3 days is a conservative upper bound.)
-const CSO_TTL_DAYS = 3;
-
-interface CsoAdvisory {
-  headline: string;
-  body: string;
-  effectiveFrom: string;
-  effectiveTo: string | null;
-}
-
-/**
- * Deterministic 16-hex-char fingerprint of a string.
- * Two DJB2 variants → 64 bits of output — sufficient for CSO dedup
- * (there are at most a handful of active advisories at any time).
- * Sync and dependency-free; avoids async Web Crypto for a tiny dataset.
- */
-function hashToHex16(str: string): string {
-  let a = 5381, b = 52711;
-  for (let i = 0; i < str.length; i++) {
-    const c = str.charCodeAt(i);
-    a = Math.imul(a, 33) ^ c;
-    b = Math.imul(b, 65521) ^ c;
-  }
-  const hi = (a >>> 0).toString(16).padStart(8, '0');
-  const lo = (b >>> 0).toString(16).padStart(8, '0');
-  return hi + lo;
-}
-
-function parseRssDate(str: string): string {
-  try {
-    return new Date(str).toISOString();
-  } catch {
-    return new Date().toISOString();
-  }
-}
-
-/**
- * Try the DPU news RSS feed. Filter items whose title or description
- * mention combined sewer overflow / CSO keywords.
- *
- * Returns:
- *   CsoAdvisory[] (possibly empty) — source reachable, may have CSO items
- *   null                           — source unreachable (HTTP error / network)
- */
-async function tryRssFeed(): Promise<CsoAdvisory[] | null> {
-  try {
-    const resp = await fetch(DPU_RSS_URL, {
-      headers: { 'User-Agent': 'rva-james (mike.garrett@teamcolab.com)' },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!resp.ok) {
-      console.warn(`[cso] DPU RSS returned HTTP ${resp.status}`);
-      return null;
-    }
-    const text = await resp.text();
-
-    const items = [...text.matchAll(/<item>([\s\S]*?)<\/item>/g)];
-    if (!items.length) return [];
-
-    const advisories: CsoAdvisory[] = [];
-    for (const [, itemXml] of items) {
-      const title   = itemXml.match(/<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/)?.[1]?.trim() ?? '';
-      const desc    = itemXml.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/)?.[1]?.trim() ?? '';
-      const pubDate = itemXml.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1]?.trim();
-
-      const combined = `${title} ${desc}`;
-      if (/cso|combined sewer|sewer overflow/i.test(combined)) {
-        advisories.push({
-          headline: title || 'CSO Advisory — Combined Sewer Overflow',
-          body:     desc.replace(/<[^>]+>/g, '').trim() ||
-                    'Richmond DPU has issued a combined sewer overflow advisory. Avoid contact with river water near outfall locations.',
-          effectiveFrom: pubDate ? parseRssDate(pubDate) : new Date().toISOString(),
-          effectiveTo:   null,
-        });
-      }
-    }
-
-    return advisories;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Scrape the wastewater utility page for an advisory notice.
- *
- * Returns:
- *   CsoAdvisory[] (possibly empty) — page loaded; empty = no active advisory
- *   null                           — page unreachable
- */
-async function tryHtmlScrape(): Promise<CsoAdvisory[] | null> {
-  try {
-    const resp = await fetch(DPU_HTML_URL, {
-      headers: { 'User-Agent': 'rva-james (mike.garrett@teamcolab.com)' },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!resp.ok) {
-      console.warn(`[cso] Wastewater page returned HTTP ${resp.status}`);
-      return null;
-    }
-    const html = await resp.text();
-
-    // Check for an explicit "no current advisory" statement
-    if (/no (current|active) (cso|advisory|overflow)/i.test(html)) {
-      return [];
-    }
-
-    // Check for signs of an active overflow advisory
-    const isActive = /combined sewer overflow (advisory|alert|warning|in effect|is active)/i.test(html);
-    if (!isActive) return [];
-
-    const dateMatch = html.match(/(\w+ \d{1,2},?\s+\d{4}|\d{4}-\d{2}-\d{2})/);
-    return [{
-      headline: 'CSO Advisory — Combined Sewer Overflow in effect',
-      body:     'Richmond DPU has issued a combined sewer overflow advisory. Avoid contact with river water near outfall locations.',
-      effectiveFrom: dateMatch ? parseRssDate(dateMatch[1]) : new Date().toISOString(),
-      effectiveTo:   null,
-    }];
-  } catch {
-    return null;
-  }
-}
+/** CSO advisory window: 48h from last discharge event */
+const CSO_WINDOW_HOURS = 48;
 
 export async function runCsoIngestion(): Promise<RunResult> {
-  const supabase = await createServerClient('service');
-  let rowsWritten = 0;
-
-  // Try RSS first; if it returns null (unreachable) try HTML scrape.
-  // If both return null, log a warning but don't write an advisory — we
-  // can't tell whether there's an active event or the source is just down.
-  const rssSamples  = await tryRssFeed();
-  const htmlSamples = rssSamples === null ? await tryHtmlScrape() : null;
-
-  if (rssSamples === null && htmlSamples === null) {
-    console.warn('[cso] Both DPU RSS and wastewater page were unreachable — skipping.');
+  // ── Get Cloudflare BROWSER binding ────────────────────────────────────────
+  // The BROWSER binding (wrangler.jsonc "browser": { "binding": "BROWSER" })
+  // is only available in the Workers runtime. In `next dev`, getCloudflareContext
+  // throws → return a clear error rather than crashing.
+  let browserBinding: BrowserWorker;
+  try {
+    const { env } = await getCloudflareContext({ async: true });
+    const binding = (env as Record<string, unknown>)['BROWSER'];
+    if (!binding) {
+      return {
+        ok: false,
+        rowsWritten: 0,
+        error:
+          '[cso] BROWSER binding not found in Cloudflare env. ' +
+          'Ensure Workers Paid plan + Browser Rendering are enabled ' +
+          'and wrangler.jsonc has the "browser" binding.',
+      };
+    }
+    browserBinding = binding as unknown as BrowserWorker;
+  } catch (err) {
     return {
-      ok: true,
+      ok: false,
       rowsWritten: 0,
-      error: 'Both CSO sources unreachable (DPU RSS + wastewater page returned non-200)',
+      error:
+        `[cso] Cloudflare context unavailable (running in next dev?): ${String(err)}`,
     };
   }
 
-  const advisories = rssSamples ?? htmlSamples ?? [];
-
-  if (!advisories.length) {
-    // Sources reachable, no active CSO advisory — correct outcome.
-    return { ok: true, rowsWritten: 0 };
+  // ── Fetch sites from EmNet ─────────────────────────────────────────────────
+  let sites: Awaited<ReturnType<typeof fetchEmnetSites>>;
+  try {
+    sites = await fetchEmnetSites(browserBinding);
+  } catch (err) {
+    return {
+      ok: false,
+      rowsWritten: 0,
+      error: `[cso] EmNet fetch failed: ${String(err)}`,
+    };
   }
 
-  // CSO affects all swimming-tagged river-access locations
-  const { data: riverLocations } = await supabase
-    .from('locations')
-    .select('id')
-    .contains('tags', ['swimming']);
+  console.log(`[cso] Fetched ${sites.length} EmNet sites`);
 
-  const locationIds = riverLocations?.map((l) => l.id) ?? [];
+  const supabase = await createServerClient('service');
+  let rowsWritten = 0;
+  const now = new Date().toISOString();
 
-  const ttlMs = CSO_TTL_DAYS * 24 * 60 * 60 * 1000;
+  // ── Process each site ──────────────────────────────────────────────────────
+  for (const site of sites) {
+    // 1. Upsert the outfall catalog entry.
+    //    On conflict (emnet_id already exists), refresh last_seen_at + mutable fields.
+    //    We always write back bodies/site_type in case the operator updates them.
+    const { data: outfallRow, error: outfallError } = await supabase
+      .from('cso_outfalls')
+      .upsert(
+        {
+          emnet_id: site.emnetId,
+          name: site.name,
+          lat: site.lat,
+          lng: site.lng,
+          bodies: site.bodies,
+          site_type: site.siteType,
+          affects_james_mainstem: site.affectsJamesMainstem,
+          last_seen_at: now,
+        },
+        { onConflict: 'emnet_id' },
+      )
+      .select('id')
+      .single();
 
-  for (const advisory of advisories) {
-    const effectiveTo = advisory.effectiveTo
-      ?? new Date(new Date(advisory.effectiveFrom).getTime() + ttlMs).toISOString();
+    if (outfallError || !outfallRow) {
+      console.error(
+        `[cso] outfall upsert failed for ${site.emnetId} (${site.name}):`,
+        outfallError?.message ?? 'no row returned',
+      );
+      continue;
+    }
 
-    // Deterministic source_id: fingerprint of headline + effectiveFrom.
-    // Re-scraping the same event produces the same id → upsert is a no-op.
-    const source_id = hashToHex16(advisory.headline + '\0' + advisory.effectiveFrom);
+    rowsWritten++; // count the outfall upsert
 
-    const { error } = await supabase.from('advisories').upsert({
-      source:         'rva_dpu',
-      source_id,
-      kind:           'cso_overflow',
-      severity:       'high',
-      headline:       advisory.headline,
-      body:           advisory.body,
-      effective_from: advisory.effectiveFrom,
-      effective_to:   effectiveTo,
-      location_ids:   locationIds,
-    }, { onConflict: 'source,source_id' });
+    // 2. Advisory — only for mainstem sites with a recent discharge event.
+    if (
+      !site.affectsJamesMainstem ||
+      !site.csoLastOccurrence ||
+      !isWithinWindow(site.csoLastOccurrence, CSO_WINDOW_HOURS)
+    ) {
+      continue; // no active advisory needed
+    }
 
-    if (!error) rowsWritten++;
+    const source_id = buildSourceId(site.emnetId, site.csoLastOccurrence);
+    const effectiveTo = new Date(
+      new Date(site.csoLastOccurrence).getTime() +
+        CSO_WINDOW_HOURS * 60 * 60 * 1000,
+    ).toISOString();
+
+    const { error: advError } = await supabase.from('advisories').upsert(
+      {
+        source: 'emnet_cso',
+        source_id,
+        kind: 'cso_overflow',
+        severity: 'high',
+        outfall_id: outfallRow.id,
+        headline: buildAdvisoryHeadline(site.name),
+        body: buildAdvisoryBody(site.name, site.csoLastOccurrence),
+        effective_from: site.csoLastOccurrence,
+        effective_to: effectiveTo,
+        location_ids: [], // upstream check happens at query time (sub-goal 83)
+      },
+      { onConflict: 'source,source_id' },
+    );
+
+    if (advError) {
+      console.error(
+        `[cso] advisory upsert failed for source_id ${source_id}:`,
+        advError.message,
+      );
+    } else {
+      rowsWritten++; // count the advisory upsert
+      console.log(`[cso] active CSO at ${site.name} — advisory upserted`);
+    }
   }
 
-  console.log(`[cso] Wrote ${rowsWritten} advisory rows.`);
+  console.log(
+    `[cso] Done. ${rowsWritten} rows written (${sites.length} sites, ` +
+      `${sites.filter((s) => s.affectsJamesMainstem && s.csoLastOccurrence && isWithinWindow(s.csoLastOccurrence, CSO_WINDOW_HOURS)).length} active mainstem events).`,
+  );
+
   return { ok: true, rowsWritten };
 }
