@@ -96,6 +96,11 @@ export interface MetroSummaryInput {
    * Changes naturally invalidate the prompt_hash, forcing regeneration.
    */
   activeClosures?:         ActiveClosureEntry[];
+  /**
+   * Deduplicated set of active CSO outfall events across all metro locations,
+   * sorted ASC by hoursAgo (most recent first). Empty array when no active events.
+   */
+  activeCsoOutfalls?:      Array<{ name: string; hoursAgo: number }>;
 }
 
 export function buildMetroUserMessage(input: MetroSummaryInput): string {
@@ -179,11 +184,25 @@ export function buildMetroUserMessage(input: MetroSummaryInput): string {
       (a) => `  { slug: "${a.slug}", status: "${a.status}", baseReason: "${a.baseReason}" }`,
     ),
     '',
+    '--- Active CSO outfalls (metro-wide, past 48h) ---',
+  ];
+
+  const csoOutfalls = input.activeCsoOutfalls ?? [];
+  if (csoOutfalls.length === 0) {
+    lines.push('Active CSO outfalls (past 48h): none.');
+  } else {
+    lines.push(`Active CSO outfalls (past 48h): ${csoOutfalls.length} total.`);
+    lines.push(`Most recent: ${csoOutfalls[0].name} ~${csoOutfalls[0].hoursAgo}h ago.`);
+    lines.push('Caution for all downstream swimming access points.');
+  }
+
+  lines.push(
+    '',
     'Produce a metro-level river summary for Richmond families planning a James River visit today.',
     'Respond with a single JSON object matching SCHEMA B (prompt version b2) in the system prompt.',
     'The activities[] array must have EXACTLY 4 entries (same order as the baseline above).',
     `Copy rapids_class: "${classResult.class}" verbatim. Do not derive your own class.`,
-  ];
+  );
 
   return lines.join('\n');
 }

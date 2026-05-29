@@ -58,6 +58,7 @@ const INPUT_OBSERVED: InterpretLocationInput = {
       freshness: 'current',
     },
   },
+  upstreamCso: null,
 };
 
 // Forecast day +1 — high confidence, no water temp
@@ -94,6 +95,40 @@ const INPUT_FORECAST_LOW: InterpretLocationInput = {
   waterTempF: null,
   dataAgeMinutes: null,
   waterQuality: null,
+};
+
+// CSO active — 2 upstream outfalls, one recent (6h), one older (30h)
+// Expect body_md to mention CSO and caution language.
+const INPUT_CSO_ACTIVE: InterpretLocationInput = {
+  ...INPUT_OBSERVED,
+  locationSlug: 'pony-pasture',
+  locationName: 'Pony Pasture Rapids',
+  activeAdvisoryHeadlines: ['CSO discharge: CSO 34 — combined sewer overflow ~6h ago'],
+  upstreamCso: {
+    count: 2,
+    mostRecentAt: new Date(Date.now() - 6 * 3_600_000).toISOString(),
+    outfalls: [
+      {
+        name: 'CSO 34',
+        csoOccurredAt: new Date(Date.now() - 6 * 3_600_000).toISOString(),
+        hoursAgo: 6,
+      },
+      {
+        name: 'CSO 12',
+        csoOccurredAt: new Date(Date.now() - 30 * 3_600_000).toISOString(),
+        hoursAgo: 30,
+      },
+    ],
+  },
+};
+
+// CSO inactive — no upstream CSO at all.
+// Expect body_md to NOT mention "combined sewer" or "CSO".
+const INPUT_CSO_INACTIVE: InterpretLocationInput = {
+  ...INPUT_OBSERVED,
+  locationSlug: 'pony-pasture',
+  locationName: 'Pony Pasture Rapids',
+  upstreamCso: null,
 };
 
 // Use observed fixture for the cache warm/read test
@@ -198,6 +233,67 @@ async function main() {
   await callMode(ai, 'Forecast day +1 (high confidence) — expect forward-looking language', INPUT_FORECAST_HIGH);
   await callMode(ai, 'Forecast day +2 (medium confidence) — expect uncertainty language',   INPUT_FORECAST_MEDIUM);
   await callMode(ai, 'Forecast day +3 (low confidence) — expect "check back" prep item',    INPUT_FORECAST_LOW);
+
+  // ── CSO variant tests ─────────────────────────────────────────────────────
+  console.log('\n=== CSO Variant Tests ===');
+
+  // Active CSO: expect body_md mentions "CSO" or "combined sewer" and "caution"
+  console.log('\n--- CSO Active (2 upstream events) ---');
+  const csoActiveResponse = await ai.messages.create({
+    model: 'claude-haiku-4-5',
+    max_tokens: 1024,
+    system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+    messages: [{ role: 'user', content: buildUserMessage(INPUT_CSO_ACTIVE) }],
+  });
+  const csoActiveText = csoActiveResponse.content[0]?.type === 'text' ? csoActiveResponse.content[0].text : '';
+  const csoActiveJson = csoActiveText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+  const csoActiveParsed = InterpretationSchema.safeParse(JSON.parse(csoActiveJson));
+  if (csoActiveParsed.success) {
+    const body = csoActiveParsed.data.body_md;
+    const mentionsCso = /CSO|combined sewer/i.test(body);
+    const mentionsCaution = /caution|avoid|elevated|bacteria/i.test(body);
+    console.log(`  zod parse:           ✓ PASS (status=${csoActiveParsed.data.status})`);
+    console.log(`  mentions CSO:        ${mentionsCso ? '✓ OK' : '✗ FAIL (no CSO mention)'}`);
+    console.log(`  mentions caution:    ${mentionsCaution ? '✓ OK' : '✗ FAIL (no caution language)'}`);
+    console.log(`  body_md excerpt:     "${body.slice(0, 200).replace(/\n/g, ' ')}..."`);
+    if (!mentionsCso || !mentionsCaution) {
+      console.error('CSO active test FAILED — expected CSO + caution language in body_md');
+      process.exit(1);
+    }
+  } else {
+    console.log(`  zod parse:           ✗ FAIL`);
+    console.error(csoActiveParsed.error.format());
+    process.exit(1);
+  }
+
+  // Inactive CSO: expect body_md does NOT mention "CSO" or "combined sewer"
+  console.log('\n--- CSO Inactive (null) ---');
+  const csoInactiveResponse = await ai.messages.create({
+    model: 'claude-haiku-4-5',
+    max_tokens: 1024,
+    system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+    messages: [{ role: 'user', content: buildUserMessage(INPUT_CSO_INACTIVE) }],
+  });
+  const csoInactiveText = csoInactiveResponse.content[0]?.type === 'text' ? csoInactiveResponse.content[0].text : '';
+  const csoInactiveJson = csoInactiveText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+  const csoInactiveParsed = InterpretationSchema.safeParse(JSON.parse(csoInactiveJson));
+  if (csoInactiveParsed.success) {
+    const body = csoInactiveParsed.data.body_md;
+    // "combined sewer" and "CSO" are precise enough to avoid false positives —
+    // the system prompt instructs the model to say nothing when CSO is absent.
+    const spuriousCsoMention = /CSO|combined sewer/i.test(body);
+    console.log(`  zod parse:           ✓ PASS (status=${csoInactiveParsed.data.status})`);
+    console.log(`  no spurious CSO:     ${spuriousCsoMention ? '✗ FAIL (CSO mentioned when it should not be)' : '✓ OK'}`);
+    if (spuriousCsoMention) {
+      console.error('CSO inactive test FAILED — model mentioned CSO when upstream_cso is null');
+      console.error('body_md:', body);
+      process.exit(1);
+    }
+  } else {
+    console.log(`  zod parse:           ✗ FAIL`);
+    console.error(csoInactiveParsed.error.format());
+    process.exit(1);
+  }
 
   console.log('\nSmoketest PASSED');
 }

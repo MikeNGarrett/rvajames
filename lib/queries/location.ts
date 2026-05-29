@@ -258,6 +258,7 @@ export async function getLocationDetail(
     activeAdvisoryHeadlines: activeAdvisories.map((a) => a.headline),
     availableActivitySlugs: activitySlugs,
     waterQuality: waterQualityInput,
+    upstreamCso: upstreamCso,
   };
 
   const genResult = await getOrGenerate(interpretInput, loc.id, hasHighSeverity);

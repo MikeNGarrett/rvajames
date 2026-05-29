@@ -22,6 +22,7 @@ export interface MetroSummaryResult {
 export async function getMetroSummary(
   date: string,
   ageBucket: AgeBucket,
+  activeCsoOutfalls?: Array<{ name: string; hoursAgo: number }>,
 ): Promise<MetroSummaryResult> {
   const supabase = await createServerClient('anon');
 
@@ -97,6 +98,7 @@ export async function getMetroSummary(
       activeCSOAdvisory,
       hasHighSeverityAdvisory: hasHighSeverity,
       activeClosures,
+      activeCsoOutfalls:     activeCsoOutfalls ?? [],
     },
     hasHighSeverity,
   );

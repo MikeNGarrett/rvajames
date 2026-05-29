@@ -65,6 +65,11 @@ function computeHash(normalized: string): string {
   return crypto.createHash('sha256').update(normalized).digest('hex');
 }
 
+/** @internal Exported for hash-stability tests only. */
+export function computeLocationHashForTest(input: InterpretLocationInput): string {
+  return computeLocationHash(input);
+}
+
 function computeLocationHash(input: InterpretLocationInput): string {
   return computeHash(JSON.stringify({
     date: input.date,
@@ -82,7 +87,16 @@ function computeLocationHash(input: InterpretLocationInput): string {
     advisories: [...input.activeAdvisoryHeadlines].sort(),
     // Water quality changes (new reading, stale→current) trigger regeneration.
     waterQuality: input.waterQuality ?? null,
+    // CSO: two scalars — count + timestamp are enough to detect new events
+    // without over-fragmenting the cache on outfall-array reorderings.
+    upstreamCsoCount: input.upstreamCso?.count ?? 0,
+    upstreamCsoMostRecentAt: input.upstreamCso?.mostRecentAt ?? null,
   }));
+}
+
+/** @internal Exported for hash-stability tests only. */
+export function computeMetroHashForTest(input: MetroSummaryInput): string {
+  return computeMetroHash(input);
 }
 
 function computeMetroHash(input: MetroSummaryInput): string {
@@ -106,6 +120,10 @@ function computeMetroHash(input: MetroSummaryInput): string {
     closures: (input.activeClosures ?? [])
       .map((c) => `${c.locationSlug}:${c.kind}`)
       .sort(),
+    // CSO: count + most-recent hoursAgo are enough — a new outfall event
+    // invalidates without over-fragmenting on array reorderings.
+    activeCsoCount: (input.activeCsoOutfalls ?? []).length,
+    activeCsoMostRecentHoursAgo: input.activeCsoOutfalls?.[0]?.hoursAgo ?? null,
   }));
 }
 

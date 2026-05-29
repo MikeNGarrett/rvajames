@@ -697,6 +697,61 @@ ALGAE BLOOM RISK:
   Report sightings to Virginia DEQ at (800) 468-8892.
 
 ════════════════════════════════════════════════════════════
+COMBINED SEWER OVERFLOW (CSO) — BACTERIAL SAFETY
+════════════════════════════════════════════════════════════
+
+The James River's combined sewer system overflows during heavy rain.
+When upstream CSO outfalls discharge, bacteria (E. coli, Enterococci) spike
+at downstream access points for approximately ${swim.post_rain_hold_hours} hours.
+Richmond DPU publishes real-time overflow events at apps.emnet.net.
+
+CSO IS INDEPENDENT OF GAUGE LEVEL AND JRA WATER QUALITY SAMPLES.
+  • Gauge level → measures physical danger (current speed, depth, flood risk).
+  • JRA E. coli samples → measured bacterial load at time of collection.
+  • Upstream CSO advisory → predicts elevated bacteria for ~${swim.post_rain_hold_hours} h after the discharge.
+Both the gauge and JRA samples can show "safe" while a CSO is still active.
+Bacteria from a CSO discharge do not appear in JRA weekly samples for several
+days. Reason about each independently. Do NOT conflate them.
+
+PER-CALL INPUT FIELDS:
+
+  upstream_cso — per-location upstream CSO signal
+    null (or count = 0):
+      No upstream CSO events in the past 48 h.
+      → Do NOT mention CSO. Treat bacterial risk as normal-baseline.
+    count > 0:
+      One or more CSO events upstream of this access point in the past 48 h.
+      → Bacteria are likely elevated. Mention this explicitly in body_md.
+      → Reference the most-recent event timing (hours_ago) from the data.
+      → Recommend caution for swimming and wading at this location.
+      → Apply the ${swim.post_rain_hold_hours} h swim hold regardless of gauge or JRA readings.
+      → Note elevated risk for children and immunocompromised individuals.
+
+  active_cso_outfalls — metro-level aggregated set
+    Used only in metro summaries (SCHEMA B).
+    Empty array (length = 0):
+      No active CSO events anywhere in the metro reach — do NOT mention CSO.
+    Non-empty:
+      Overflows are active in the metro area.
+      → Reference the overall CSO situation in body_md.
+      → Flag swimming access points as requiring caution.
+      → Individual locations vary in upstream exposure depending on position
+         relative to the outfalls, but err on the side of caution for any
+         swimming location downstream of an active outfall.
+
+WHEN THERE IS NO CSO DATA IN THE CALL: say nothing about CSO. Do not
+speculate about potential overflows or historical events not in the data.
+Do not insert a "no CSO issues" clause — silence is correct.
+
+WHEN THERE IS AN ACTIVE CSO:
+  • Lead with CSO caution in the swimming activity note.
+  • Include a brief CSO mention in body_md (one sentence is enough).
+  • Reference the timing: "A CSO discharge occurred ~N hours ago at [name]."
+  • Pathogens from CSO include Cryptosporidium, Giardia, and enteric viruses
+    in addition to E. coli — the risk window extends to ${swim.post_rain_hold_hours} h even after the
+    discharge stops and the river clears visually.
+
+════════════════════════════════════════════════════════════
 EMERGENCY AND RESCUE CONTEXT
 ════════════════════════════════════════════════════════════
 

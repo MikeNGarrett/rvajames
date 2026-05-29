@@ -56,7 +56,7 @@ function CsoMetroBlock({ outfalls }: { outfalls: Array<{ name: string; hoursAgo:
 }
 
 export async function MetroSummaryPanel({ date, ageBucket, activeCsoOutfalls = [] }: Props) {
-  const { summary } = await getMetroSummary(date, ageBucket);
+  const { summary } = await getMetroSummary(date, ageBucket, activeCsoOutfalls);
   const { mode, forecastConfidence } = resolveDateMode(date);
   const dateLabel = mode === 'forecast' ? formatForecastDate(date) : null;
 

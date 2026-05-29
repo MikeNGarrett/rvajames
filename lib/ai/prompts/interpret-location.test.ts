@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildUserMessage, computeWqFreshness } from './interpret-location';
 import type { InterpretLocationInput } from './interpret-location';
+import { computeLocationHashForTest } from '@/lib/ai/get-or-generate';
 
 // ─── computeWqFreshness ────────────────────────────────────────────────────────
 
@@ -49,6 +50,7 @@ const baseInput: InterpretLocationInput = {
   activeAdvisoryHeadlines: [],
   availableActivitySlugs: ['swim', 'rock-hop', 'beach-access', 'hike'],
   waterQuality: null,
+  upstreamCso: null,
 };
 
 describe('buildUserMessage — water quality section', () => {
@@ -218,5 +220,99 @@ describe('buildUserMessage — mode rendering', () => {
     const msg = buildUserMessage({ ...baseInput, mode: 'observed', forecastConfidence: null, daysOut: 0 });
     expect(msg).toContain('Water temp:');
     expect(msg).toContain('Data age:');
+  });
+});
+
+// ─── buildUserMessage — CSO section ──────────────────────────────────────────
+
+describe('buildUserMessage — CSO section', () => {
+  it('emits "no active events" when upstreamCso is null', () => {
+    const msg = buildUserMessage({ ...baseInput, upstreamCso: null });
+    expect(msg).toContain('Upstream CSO: no active events in past 48h.');
+  });
+
+  it('emits "no active events" when upstreamCso.count === 0', () => {
+    const msg = buildUserMessage({
+      ...baseInput,
+      upstreamCso: { count: 0, mostRecentAt: null, outfalls: [] },
+    });
+    expect(msg).toContain('Upstream CSO: no active events in past 48h.');
+  });
+
+  it('reports count, outfall name, hoursAgo, and caution language when count > 0', () => {
+    const msg = buildUserMessage({
+      ...baseInput,
+      upstreamCso: {
+        count: 2,
+        mostRecentAt: new Date(Date.now() - 6 * 3_600_000).toISOString(),
+        outfalls: [
+          { name: 'CSO 34', csoOccurredAt: new Date(Date.now() - 6 * 3_600_000).toISOString(), hoursAgo: 6 },
+          { name: 'CSO 12', csoOccurredAt: new Date(Date.now() - 30 * 3_600_000).toISOString(), hoursAgo: 30 },
+        ],
+      },
+    });
+    expect(msg).toContain('2 active event(s)');
+    expect(msg).toContain('CSO 34');
+    expect(msg).toContain('~6h ago');
+    expect(msg).toContain('caution for swim/wade');
+  });
+
+  it('lists up to 3 outfalls but not more', () => {
+    const msg = buildUserMessage({
+      ...baseInput,
+      upstreamCso: {
+        count: 4,
+        mostRecentAt: new Date().toISOString(),
+        outfalls: [
+          { name: 'A', csoOccurredAt: new Date().toISOString(), hoursAgo: 1 },
+          { name: 'B', csoOccurredAt: new Date().toISOString(), hoursAgo: 5 },
+          { name: 'C', csoOccurredAt: new Date().toISOString(), hoursAgo: 10 },
+          { name: 'D', csoOccurredAt: new Date().toISOString(), hoursAgo: 20 },
+        ],
+      },
+    });
+    expect(msg).toContain('A');
+    expect(msg).toContain('B');
+    expect(msg).toContain('C');
+    expect(msg).not.toContain('D ~'); // 4th outfall is truncated
+  });
+});
+
+// ─── computeLocationHashForTest — CSO hash stability ─────────────────────────
+
+describe('computeLocationHashForTest — CSO hash stability', () => {
+  const base: InterpretLocationInput = {
+    ...baseInput,
+    upstreamCso: null,
+  };
+
+  it('produces identical hashes for identical inputs (stability)', () => {
+    const h1 = computeLocationHashForTest(base);
+    const h2 = computeLocationHashForTest({ ...base });
+    expect(h1).toBe(h2);
+  });
+
+  it('hash changes when upstreamCso count goes 0→1', () => {
+    const h0 = computeLocationHashForTest({ ...base, upstreamCso: null });
+    const h1 = computeLocationHashForTest({
+      ...base,
+      upstreamCso: {
+        count: 1,
+        mostRecentAt: '2026-05-29T10:00:00Z',
+        outfalls: [{ name: 'CSO 34', csoOccurredAt: '2026-05-29T10:00:00Z', hoursAgo: 4 }],
+      },
+    });
+    expect(h0).not.toBe(h1);
+  });
+
+  it('hash changes when upstreamCso.mostRecentAt changes', () => {
+    const signal = (ts: string) => ({
+      count: 1,
+      mostRecentAt: ts,
+      outfalls: [{ name: 'CSO 34', csoOccurredAt: ts, hoursAgo: 4 }],
+    });
+    const h1 = computeLocationHashForTest({ ...base, upstreamCso: signal('2026-05-29T06:00:00Z') });
+    const h2 = computeLocationHashForTest({ ...base, upstreamCso: signal('2026-05-29T12:00:00Z') });
+    expect(h1).not.toBe(h2);
   });
 });

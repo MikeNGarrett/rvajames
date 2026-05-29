@@ -95,6 +95,20 @@ export interface InterpretLocationInput {
    * Non-null with primaryStation=null = station mapped but no recent reading.
    */
   waterQuality: WaterQualityInput | null;
+  /**
+   * Upstream CSO signal for this location.
+   * null = no active CSO events upstream in the past 48 h (count === 0).
+   * Non-null = one or more outfalls discharged upstream within the window.
+   */
+  upstreamCso: {
+    count: number;
+    mostRecentAt: string | null;
+    outfalls: Array<{
+      name: string;
+      csoOccurredAt: string;
+      hoursAgo: number;
+    }>;
+  } | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -165,6 +179,28 @@ export function buildUserMessage(input: InterpretLocationInput): string {
       const ecoliStr = ecoliCfuPer100ml !== null ? `${ecoliCfuPer100ml} CFU/100mL` : 'no reading';
       lines.push(`Watch station: ${stationName} (${stationCode}) — ${ecoliStr}, ${pluralDays(daysOld)} old (${freshness})`);
     }
+  }
+
+  // ── Upstream CSO block ─────────────────────────────────────────────────────
+  lines.push('');
+  lines.push('--- Upstream CSO (combined sewer overflow) ---');
+
+  const cso = input.upstreamCso;
+  if (!cso || cso.count === 0) {
+    lines.push('Upstream CSO: no active events in past 48h.');
+  } else {
+    const first3 = cso.outfalls.slice(0, 3);
+    lines.push(`Upstream CSO: ${cso.count} active event(s) in past 48h.`);
+    lines.push(`Most recent: ${first3[0].name} ~${first3[0].hoursAgo}h ago.`);
+    if (first3.length > 1) {
+      lines.push(
+        `Also active: ${first3
+          .slice(1)
+          .map((o) => `${o.name} ~${o.hoursAgo}h ago`)
+          .join(', ')}.`,
+      );
+    }
+    lines.push('Bacteria likely elevated; caution for swim/wade.');
   }
 
   lines.push('');
