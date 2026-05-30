@@ -1,11 +1,39 @@
+'use client';
+
 /**
- * Renders the AI-generated metro river summary.
- * This component is wrapped in <Suspense> on the homepage — it fetches + optionally
- * generates the summary lazily on first visit for a given (date, age_bucket) combo.
+ * MetroSummaryPanel — client component that fetches the AI metro summary
+ * after the deterministic homepage content paints (sub-goal 65).
+ *
+ * Architecture:
+ *   - The wrapper (this file's default export) is a client component that
+ *     drops <LazyContent> around the panel content, pointing at the new
+ *     /api/metro-summary route.
+ *   - The actual rendered markup lives in `MetroSummaryContent` below — a
+ *     plain function component called by LazyContent's `children` prop on
+ *     success.
+ *   - `MetroSummaryPanelSkeleton` is the placeholder during initial fetch.
+ *
+ * Why move this off the server-render hot path:
+ *   The browser's `load` event used to wait for the AI stream to finish
+ *   inside a <Suspense> boundary — 3-8s on cold cache. After this migration,
+ *   the deterministic content paints + the load event fires immediately,
+ *   then the AI panel fills in afterward with explicit loading affordances
+ *   (skeleton, spinner, status text, stale-while-revalidate on filter change).
+ *
+ * Filter change UX:
+ *   When date or age changes, the URL prop flips, LazyContent aborts the
+ *   in-flight fetch, and the prior summary stays visible at 60% opacity
+ *   with a small inline spinner in the top-right while the new fetch runs.
+ *   No skeleton flash on filter change — only on first mount.
  */
 
 import Link from 'next/link';
-import { getMetroSummary } from '@/lib/queries/metro-summary';
+import { useMemo } from 'react';
+import { LazyContent } from '@/components/ui/LazyContent';
+import {
+  MetroSummarySchema,
+  type MetroSummary,
+} from '@/lib/ai/prompts/summarize-metro';
 import { resolveDateMode, formatForecastDate } from '@/lib/queries/date-range';
 import { ForecastModeIndicator } from '@/components/forecast/ForecastModeIndicator';
 import { RiverWideActivityGrid } from './RiverWideActivityGrid';
@@ -16,21 +44,72 @@ interface Props {
   ageBucket: AgeBucket;
 }
 
-export async function MetroSummaryPanel({ date, ageBucket }: Props) {
-  const { summary } = await getMetroSummary(date, ageBucket);
+/**
+ * Parse function for the /api/metro-summary response. The route wraps the
+ * summary in { summary, source } — we drop `source` (presentation doesn't
+ * use it) and validate the inner shape against the canonical schema.
+ */
+function parseMetroSummaryResponse(raw: unknown): MetroSummary {
+  const r = raw as { summary?: unknown };
+  if (!r?.summary) {
+    throw new Error('Missing summary field in API response');
+  }
+  return MetroSummarySchema.parse(r.summary);
+}
+
+export function MetroSummaryPanel({ date, ageBucket }: Props) {
+  // encodeURIComponent on age to round-trip '14+' through the URL safely
+  // (same reason as the navigation hrefs — '+' decodes to a space without it).
+  // useMemo so the URL string identity is stable across re-renders that
+  // don't change date/age — otherwise LazyContent's effect dep would re-fire
+  // on every parent render.
+  const url = useMemo(
+    () => `/api/metro-summary?date=${date}&age=${encodeURIComponent(ageBucket)}`,
+    [date, ageBucket],
+  );
+
+  return (
+    <LazyContent
+      url={url}
+      parse={parseMetroSummaryResponse}
+      skeleton={<MetroSummaryPanelSkeleton />}
+      statusText="Generating recommendations…"
+      spinnerLabel="Loading metro summary"
+    >
+      {(summary) => (
+        <MetroSummaryContent
+          summary={summary}
+          date={date}
+          ageBucket={ageBucket}
+        />
+      )}
+    </LazyContent>
+  );
+}
+
+/**
+ * Pure render layer for the parsed metro summary. Called by LazyContent on
+ * success. Carries no state of its own; same JSX as the pre-migration
+ * server component, just receiving `summary` directly instead of awaiting it.
+ */
+function MetroSummaryContent({
+  summary,
+  date,
+  ageBucket,
+}: {
+  summary: MetroSummary;
+  date: string;
+  ageBucket: AgeBucket;
+}) {
   const { mode, forecastConfidence } = resolveDateMode(date);
   const dateLabel = mode === 'forecast' ? formatForecastDate(date) : null;
 
-  if (!summary) {
-    return (
-      <div className="rounded-xl border border-border bg-surface-raised p-4 mb-4 text-sm text-text-muted">
-        River summary unavailable — check gauge readings above for current conditions.
-      </div>
-    );
-  }
-
   return (
-    <section aria-label="River conditions summary" className="rounded-xl border border-border bg-surface-raised p-4 mb-4" style={{ viewTransitionName: 'metro-summary' }}>
+    <section
+      aria-label="River conditions summary"
+      className="rounded-xl border border-border bg-surface-raised p-4 mb-4"
+      style={{ viewTransitionName: 'metro-summary' }}
+    >
       {mode === 'forecast' && dateLabel ? (
         <>
           <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-1">
@@ -39,7 +118,9 @@ export async function MetroSummaryPanel({ date, ageBucket }: Props) {
           <ForecastModeIndicator mode={mode} forecastConfidence={forecastConfidence} />
         </>
       ) : null}
-      <p className={`text-base font-semibold text-text mb-2${mode === 'forecast' ? ' mt-2' : ''}`}>{summary.headline}</p>
+      <p className={`text-base font-semibold text-text mb-2${mode === 'forecast' ? ' mt-2' : ''}`}>
+        {summary.headline}
+      </p>
 
       {/* Body markdown rendered as plain text (strips Markdown syntax) */}
       <p className="text-sm text-text-secondary leading-relaxed mb-3 max-w-prose">
@@ -94,9 +175,13 @@ export async function MetroSummaryPanel({ date, ageBucket }: Props) {
         AI-generated from USGS sensor data · use your own judgment on the water
       </p>
 
-      {/* Speculation rules — prefetch + prerender the best-bet location pages
-          so they load instantly when the user taps a best-bet link.
-          guide: improve-next-page-load-performance */}
+      {/*
+       * Speculation rules: prefetch + prerender best-bet location pages so
+       * they load instantly when the user taps a best-bet link. After the
+       * migration these get injected into the DOM AFTER the AI fetch
+       * completes — the browser still honours them when added dynamically.
+       * guide: improve-next-page-load-performance
+       */}
       {summary.best_bets_today.length > 0 && (
         <script
           type="speculationrules"
@@ -118,7 +203,13 @@ export async function MetroSummaryPanel({ date, ageBucket }: Props) {
   );
 }
 
-/** Skeleton shown while MetroSummaryPanel is generating */
+/**
+ * Skeleton shown while MetroSummaryPanel is fetching for the first time.
+ * min-h-300 matches the typical filled-panel height to avoid CLS
+ * (per audit Finding 2). LazyContent wraps this in <SkeletonShimmer> at
+ * render time, so the gradient sweep overlays automatically — no need to
+ * add it here.
+ */
 export function MetroSummaryPanelSkeleton() {
   return (
     <div className="rounded-xl border border-border bg-surface-raised p-4 mb-4 animate-pulse motion-reduce:animate-none min-h-[300px]">

@@ -1,4 +1,3 @@
-import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { searchParamsCache, isValidAgeBucket, type AgeBucket } from '@/lib/url-state';
@@ -18,7 +17,7 @@ import { ConditionsForm } from '@/components/filters/ConditionsForm';
 import { EmptyState } from '@/components/states/Empty';
 import { StaleState } from '@/components/states/Stale';
 import { RiverSegmentPanel } from '@/components/metro/RiverSegmentPanel';
-import { MetroSummaryPanel, MetroSummaryPanelSkeleton } from '@/components/metro/MetroSummaryPanel';
+import { MetroSummaryPanel } from '@/components/metro/MetroSummaryPanel';
 import { PageContainer } from '@/components/ui/PageContainer';
 import { isStale } from '@/lib/freshness';
 
@@ -150,13 +149,14 @@ export default async function Home({ searchParams }: Props) {
           <RiverSegmentPanel metroState={metroState} />
         )}
 
-        {/* ── Metro AI summary ── Suspense boundary so cards below render immediately */}
-        <Suspense fallback={<MetroSummaryPanelSkeleton />}>
-          <MetroSummaryPanel
-            date={dateStr}
-            ageBucket={ageBucket}
-          />
-        </Suspense>
+        {/*
+         * ── Metro AI summary ──
+         * Now a client component (sub-goal 65) that fetches /api/metro-summary
+         * after the deterministic content paints. The browser `load` event
+         * no longer waits on AI streaming. Skeleton + spinner + status text
+         * surface inside the component itself; no Suspense boundary needed.
+         */}
+        <MetroSummaryPanel date={dateStr} ageBucket={ageBucket} />
 
         {/* ── Locations region ── 9 deterministic cards */}
         <section aria-labelledby="locations-heading">
