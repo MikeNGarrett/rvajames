@@ -183,17 +183,44 @@ IN PROGRESS   Sub-goals 80–85: CSO event ingestion via EmNet (Cloudflare Brows
        declaring something staged. CLAUDE.md already mandates this verification at
        session start; I need to also run it before any reconciliation status update.
 
-QUEUED (after 80–85)
+QUEUED (after 80–85, ahead of dynamic-content)
+       Sub-goals 93–97: CSO UX refinement
+       See docs/cso-ux-refinement-plan.md. User feedback after CSO/EmNet deploy
+       (Worker f421ce7d on 2026-05-29) called out five issues with the live UI:
+       (1) per-outfall IDs aren't user-helpful — counts in context are;
+       (2) active advisories belong as a top-of-homepage banner with plain
+       language + a /safety#cso link;
+       (3) forecast dates incorrectly show "active now" — should reflect whether
+       the selected date falls within an advisory's 48h window;
+       (4) the upstream-CSO location panel is great but the per-outfall list is
+       noise; keep the count;
+       (5) separate "active discharge now" from "past event under residual 48h
+       advisory" in the homepage banner.
+
+       Confirmed scope decisions: cadence stays twice-daily (cron limit
+       saturated) — banner labels staleness honestly; age targeting is
+       messaging-only (data doesn't support stratification from EmNet); learn-
+       more lives at /safety#cso (internal copy we control).
+
+       Sequencing decided 2026-05-29: insert AHEAD of dynamic-content-loading
+       (63–67). Same surfaces (MetroSummaryPanel, AdvisoriesBanner) — doing
+       dynamic-content first forces a re-touch.
+
+       Schema migration (93) requires user-applied DDL to prod (agent denied).
+
+QUEUED (after 93–97)
        Sub-goals 63–67: dynamic content loading
        See docs/dynamic-content-loading-plan.md. Authored before water quality, queued
        behind multiple priority rounds, never executed. User confirmed 2026-05-28 the
-       sequencing: run AFTER CSO/EmNet (80–85) ships. Premise still holds — the work
-       moves AI content from Suspense streaming to client-side fetch via new
-       /api/metro-summary and /api/location-interpretation routes, adds a reusable
-       LazyContent wrapper, gives visible loading + retry affordances, and enables
-       stale-while-revalidate on filter changes. Lighthouse currently 100/100/100/100
-       so this is UX polish, not perf-critical. Future agents: DO NOT skip again. The
-       plan doc is current; no rewrite needed before execution.
+       sequencing: run AFTER CSO/EmNet (80–85) ships; further deferred 2026-05-29
+       behind CSO UX refinement (93–97) since both rounds touch the same surfaces.
+       Premise still holds — the work moves AI content from Suspense streaming to
+       client-side fetch via new /api/metro-summary and /api/location-interpretation
+       routes, adds a reusable LazyContent wrapper, gives visible loading + retry
+       affordances, and enables stale-while-revalidate on filter changes. Lighthouse
+       currently 100/100/100/100 so this is UX polish, not perf-critical. Future
+       agents: DO NOT skip again. The plan doc is current; no rewrite needed before
+       execution.
 
 QUEUED (after 63–67)
        Sub-goals 86–91: Richmond Conditions Section (post-launch enhancement)
@@ -207,8 +234,8 @@ QUEUED (after 63–67)
        defer post-launch, renumber 86–91 to clear the collision, queue AFTER dynamic-
        content (63–67). Plan doc renumbered in the same commit as this update.
 
-       Execution order locked: CSO/EmNet (80–85) → dynamic-content (63–67) → Richmond
-       Conditions (86–91).
+       Execution order locked: CSO/EmNet (80–85) → CSO UX refinement (93–97) →
+       dynamic-content (63–67) → Richmond Conditions (86–91).
 
 DEFER  Finding 13 — dark mode (own round if/when prioritized)
 
