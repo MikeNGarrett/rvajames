@@ -116,7 +116,7 @@ The existing `lib/ingest/rva-closures.ts` (Round 4 sub-goal 45) scrapes rva.gov 
   - Filters posts/updates to ones likely to be access-affecting (keyword match on `closed`, `closure`, `construction`, `access`, location names matching our 9 access points).
   - For each match: creates a draft `location_status` row with `state='draft'`, `source='Venture Richmond — ' + page_title`, `source_url`, `reason=<excerpt>`, `kind=NULL` (admin sets it on approval).
   - Uses the same content-hash dedup as sub-goal 45 so re-runs without upstream changes produce 0 new drafts.
-  - Polite scraping: `User-Agent: rva-james (mike.garrett@teamcolab.com)`, ≥1s between fetches, respect robots.txt.
+  - Polite scraping: `User-Agent: rva-james-bot (https://rvajames.org)` via `BOT_USER_AGENT` from `lib/ingest/user-agent.ts`, ≥1s between fetches, respect robots.txt.
 - Register in `lib/ingest/closures/registry.ts`:
   ```ts
   export const closureSources: ClosureSource[] = [rvaGovSource, ventureRichmondSource];

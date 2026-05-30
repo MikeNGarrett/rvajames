@@ -10,7 +10,7 @@
  * so other closure sources continue unaffected.
  *
  * Polite scraping:
- *   User-Agent: rva-james-bot (mike.garrett@teamcolab.com)
+ *   User-Agent: rva-james-bot (https://rvajames.org) — see lib/ingest/user-agent.ts
  *   ≥ 1 s delay between page fetches
  *   No parallel fetches
  *
@@ -26,9 +26,10 @@ import { createServerClient } from '@/lib/supabase/server';
 import type { RunResult } from '@/lib/ingest/run';
 import type { ClosureSource } from '@/lib/ingest/closures/registry';
 import { naturalKey, loadExistingKeys } from '@/lib/ingest/closures/dedup';
+import { BOT_USER_AGENT, BOT_NAME } from '@/lib/ingest/user-agent';
 
 const SOURCE_NAME = 'Venture Richmond';
-const BOT_UA = 'rva-james-bot (mike.garrett@teamcolab.com)';
+const BOT_UA = BOT_USER_AGENT;
 const ROBOTS_URL = 'https://venturerichmond.com/robots.txt';
 
 const SCRAPE_PAGES = [
@@ -98,7 +99,7 @@ async function isAllowedByRobots(robotsUrl: string, targetPaths: string[]): Prom
     for (const line of lines) {
       if (line.toLowerCase().startsWith('user-agent:')) {
         const agent = line.slice('user-agent:'.length).trim().toLowerCase();
-        inOurBlock = agent === '*' || agent === 'rva-james-bot';
+        inOurBlock = agent === '*' || agent === BOT_NAME;
         if (!inOurBlock) disallowedPaths.length = 0; // reset if leaving our block
       } else if (inOurBlock && line.toLowerCase().startsWith('disallow:')) {
         const path = line.slice('disallow:'.length).trim();

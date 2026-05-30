@@ -188,7 +188,7 @@ create policy "anon_read" on water_quality_readings for select to anon using (tr
 - Zod schema for the response — all of `StationName`, `date_Time`, `CollectionDate`, `StationNumber` are `.nullable()`.
 - Sanitize `-9` sentinel for `Ecoli` and `Enterococci` to null (existing logic — keep).
 - Upsert by `station_global_id` (GlobalID) — each reading is unique per station per collection event. Re-runs the same day produce 0 new rows.
-- `User-Agent: rva-james (mike.garrett@teamcolab.com)` — polite identification.
+- `User-Agent: rva-james (https://rvajames.org)` — polite identification via `USER_AGENT` from `lib/ingest/user-agent.ts`.
 - Updates from the existing daily noon cron at `0 12 * * *` (no schedule change).
 
 ### Update queries

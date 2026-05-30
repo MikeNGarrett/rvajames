@@ -2,18 +2,24 @@
 
 ## Live URL
 
-**https://rva-james.mike-garrett.workers.dev**
+Production: **https://rvajames.org** (custom domain via Cloudflare)
 
-Production domain: https://rvajames.org (custom domain via Cloudflare)
+The Worker also serves at its `*.workers.dev` URL, but the canonical user-facing
+URL is rvajames.org. All metadata (OG tags, sitemap, canonical links) points
+to the custom domain.
 
-## Deploy details
+## Platform
 
-- **Platform:** Cloudflare Workers (OpenNext adapter)
-- **Worker name:** `rva-james`
-- **Account:** `mike-garrett`
-- **Supabase project:** `buokjdntsitjpqfjxano` (hosted)
-- **First deploy:** 2026-05-23
-- **Version ID:** `f08c5d38-5b23-4769-8054-7289103fb658`
+- **Hosting:** Cloudflare Workers via the [OpenNext](https://opennext.js.org/cloudflare) adapter
+- **Storage:** Supabase (hosted Postgres)
+- **AI:** Anthropic Claude (Haiku default, Sonnet escalation on high-severity advisories)
+- **Build target:** `pnpm build:cf` → OpenNext worker bundle; `scripts/patch-worker.mjs` injects the cron scheduled() handler post-build.
+
+Maintainer-specific values (Cloudflare account name, Supabase project ref,
+deploy version IDs) are intentionally not documented here — they're either
+operational metadata that changes per-deploy or aren't useful to external
+readers. The Worker bindings page in the Cloudflare dashboard is the
+authoritative source for the running configuration.
 
 ## Admin route
 
@@ -87,15 +93,29 @@ Public vars in `wrangler.jsonc`:
 >
 > To upgrade and restore a dedicated NOAA AHPS trigger: upgrade to Workers Paid plan, then add `"30 * * * *"` back to `wrangler.jsonc` and remove the NOAA call from `/api/cron/nws/route.ts`.
 
-## First manual trigger — 2026-05-23
+## Verifying after deploy
 
-| Source | Result |
-|---|---|
-| USGS | `ok: true, rows: 9` |
-| NWS | `ok: true, rows: 1` |
-| JRA | `ok: true, rows: 1` |
-| CSO | `ok: true, rows: 0` (no active overflow) |
-| Interpret | `ok: true, rows: 22` (partial via HTTP; cron has 15-min window for all 45) |
+After `pnpm deploy:cf`, exercise each cron endpoint with the production
+`CRON_SECRET` to confirm the deploy is healthy. The full verification
+sequence:
+
+```bash
+# Replace with your actual CRON_SECRET (stored via wrangler secret put)
+for source in usgs nws jra cso; do
+  curl -sw '\n%{http_code} %{time_total}s\n' \
+    -H "x-cron-secret: $CRON_SECRET" \
+    https://rvajames.org/api/cron/$source
+  echo "---"
+done
+```
+
+Each response is a JSON `RunResult`:
+- `{"ok": true, "rowsWritten": N}` — success, N rows persisted
+- `{"ok": false, "error": "..."}` — failure with a descriptive error
+
+`rowsWritten` will be zero for data sources that genuinely have no new rows
+(off-season JRA samples, no CSO overflow today, etc.). That's healthy. A
+non-zero count is only meaningful relative to what each source produces.
 
 ## Deploying updates
 

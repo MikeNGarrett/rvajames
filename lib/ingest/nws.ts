@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
 import type { Json } from '@/lib/supabase/types';
 import type { RunResult } from './run';
+import { USER_AGENT } from './user-agent';
 
-const USER_AGENT = 'rva-james (mike.garrett@teamcolab.com)';
 const NWS_HEADERS = { 'User-Agent': USER_AGENT, Accept: 'application/json' };
 
 // Richmond, VA grid: AKQ office, grid 36,78 (Belle Isle area)

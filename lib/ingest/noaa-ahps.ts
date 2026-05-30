@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { createServerClient } from '@/lib/supabase/server';
 import type { RunResult } from './run';
+import { USER_AGENT } from './user-agent';
 
-const USER_AGENT = 'rva-james (mike.garrett@teamcolab.com)';
 const HEADERS = { 'User-Agent': USER_AGENT, Accept: 'application/json' };
 
 const GAUGE_ID = 'rmdv2';

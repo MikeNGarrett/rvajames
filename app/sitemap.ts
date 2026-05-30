@@ -3,7 +3,10 @@ import { getAllLocationSlugs } from '@/lib/queries/location';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const slugs = await getAllLocationSlugs();
-  const base = 'https://rva-james.workers.dev';
+  // Canonical user-facing URL. Must match metadataBase in app/layout.tsx and
+  // the sitemap URL declared in app/robots.ts so search engines see consistent
+  // canonical links across metadata, OG tags, and the sitemap itself.
+  const base = 'https://rvajames.org';
 
   const locationUrls: MetadataRoute.Sitemap = slugs.map((slug) => ({
     url: `${base}/locations/${slug}`,

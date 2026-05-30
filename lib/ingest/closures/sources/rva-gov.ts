@@ -28,6 +28,7 @@ import { createServerClient } from '@/lib/supabase/server';
 import type { RunResult } from '@/lib/ingest/run';
 import type { ClosureSource } from '@/lib/ingest/closures/registry';
 import { naturalKey, loadExistingKeys } from '@/lib/ingest/closures/dedup';
+import { BOT_USER_AGENT } from '@/lib/ingest/user-agent';
 
 const SOURCE_NAME = 'rva.gov parks scrape';
 
@@ -92,7 +93,7 @@ export interface ScrapeHit {
 export async function scrapePage(url: string): Promise<ScrapeHit[]> {
   const res = await fetch(url, {
     headers: {
-      'User-Agent': 'rva-james-bot (mike.garrett@teamcolab.com)',
+      'User-Agent': BOT_USER_AGENT,
     },
   });
 

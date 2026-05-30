@@ -202,7 +202,7 @@ Expected post-round movement: Performance 69 → 75ish (Finding 2 + Finding 23 h
 ## `/goal` prompt to drive this
 
 ```
-/goal Execute the plan at /Users/mikegarrett/Sites/rva-james/docs/round-5-quick-wins-plan.md. Eight small fixes, single execution window, single commit, single deploy at the end.
+/goal Execute the plan at docs/round-5-quick-wins-plan.md. Eight small fixes, single execution window, single commit, single deploy at the end.
 
 Pre-requisite: Finding 18 (withIngestionRun bug) must be verified deployed first. Confirm by checking that ingestion_runs has audit rows for every cron fire in the last hour with no stuck null finished_at values. If not verified, stop and report.
 
@@ -210,5 +210,5 @@ For each item that cites a modern-web-guidance guide id, run `npx -y modern-web-
 
 After all eight items land locally: run lhci against current production for a before-snapshot, deploy, rerun for after-snapshot. Report both in the final summary.
 
-Working dir: /Users/mikegarrett/Sites/rva-james
+Working dir: the rva-james repo root
 ```

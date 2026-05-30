@@ -172,14 +172,14 @@ Hand the candidate sub-goals back to the user for prioritization before any impl
 ## Suggested `/goal` prompt to drive this
 
 ```
-/goal Execute the plan at /Users/mikegarrett/Sites/rva-james/docs/modern-web-evaluation-plan.md. This is a READ-ONLY audit — the only file you write is docs/modern-web-evaluation-findings.md plus the candidate sub-goal proposals at the end. Do not modify any source code, configs, schema, or content.
+/goal Execute the plan at docs/modern-web-evaluation-plan.md. This is a READ-ONLY audit — the only file you write is docs/modern-web-evaluation-findings.md plus the candidate sub-goal proposals at the end. Do not modify any source code, configs, schema, or content.
 
 The modern-web-guidance skill is installed locally per skills-lock.json. Invoke it via Bash:
   npx -y modern-web-guidance@latest search "<query>"
   npx -y modern-web-guidance@latest retrieve "<id>[,<id2>,...]"
   npx -y modern-web-guidance@latest list   (only if search returns vague matches)
 
-Run the 8 steps in order against the live production URLs (https://rvajames.org and https://rva-james.mike-garrett.workers.dev). For each candidate finding, run a targeted modern-web-guidance search first, then retrieve the relevant guide(s), then write the finding citing the guide id and any URL the guide points at.
+Run the 8 steps in order against the live production URL (https://rvajames.org). For each candidate finding, run a targeted modern-web-guidance search first, then retrieve the relevant guide(s), then write the finding citing the guide id and any URL the guide points at.
 
 Use the web-perf skill for CWV measurement (LCP element identification, INP under date/age form submit, CLS during metro AI streaming-in). Use Lighthouse mobile via lhci for the baseline snapshot.
 
@@ -187,7 +187,7 @@ Produce the findings document per the schema in step 7. Cap findings at ~25. Sev
 
 After the findings document is committed, propose 1–3 candidate follow-up sub-goals continuing the project's 29/30/31… numbering. Each bundles 3–7 related findings. Do not implement them — hand them back for prioritization.
 
-Working dir: /Users/mikegarrett/Sites/rva-james
+Working dir: the rva-james repo root
 ```
 
 ## Notes on cross-skill orchestration

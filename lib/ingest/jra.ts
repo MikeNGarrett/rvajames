@@ -22,6 +22,7 @@ import {
   getAllMappedStationCodes,
   getDisplayNameByCode,
 } from '@/lib/data/station-mapping';
+import { USER_AGENT } from './user-agent';
 
 const ARCGIS_BASE =
   'https://services7.arcgis.com/9ZKA6C4VwqZYRSvM/arcgis/rest/services' +
@@ -157,7 +158,7 @@ export async function runJraIngestion(): Promise<RunResult> {
   const resp = await fetch(`${ARCGIS_BASE}?${params}`, {
     headers: {
       Accept:       'application/json',
-      'User-Agent': 'rva-james (mike.garrett@teamcolab.com)',
+      'User-Agent': USER_AGENT,
     },
     signal: AbortSignal.timeout(20_000),
   });

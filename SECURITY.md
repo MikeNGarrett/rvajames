@@ -114,6 +114,18 @@ Approximate daily ceiling at list prices (2025):
 
 The `/status` page displays today's estimated cost and warns if it exceeds $1.
 
-## Reporting issues
+## Reporting security issues
 
-Open an issue at the project repository or contact mike.garrett@teamcolab.com.
+**Do NOT open a public issue for security vulnerabilities** — that exposes the
+problem before a fix can be deployed.
+
+Use GitHub's private security advisories instead:
+**Security → Advisories → New draft security advisory** on the project
+repository. Only the maintainer sees the report until you mark it published.
+
+See [GitHub's docs on private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)
+for the full flow.
+
+## Reporting non-security issues
+
+Open a public issue in the project repository.
