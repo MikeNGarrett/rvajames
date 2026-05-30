@@ -74,6 +74,28 @@ export function formatCsoWindowEnd(isoString: string): string {
 }
 
 /**
+ * Formats a YYYY-MM-DD date string as a friendly "Weekday, Month Day" string in
+ * Richmond time — e.g. "Saturday, May 31" or "Monday, June 1".
+ *
+ * Uses three separate toLocaleString calls (weekday, month, day) following the
+ * same two-call ICU pattern as formatCsoWindowEnd — to guarantee byte-identical
+ * output on Cloudflare Workers (ICU) and Node (V8) and avoid React #418 hydration
+ * mismatches. Combining multiple date parts in one toLocaleString call produces
+ * different separator characters across ICU versions.
+ */
+export function formatSelectedDate(dateStr: string): string {
+  // Construct the date at ET noon (UTC = noon + offset) so DST can never shift
+  // the calendar date boundary.
+  const offset = richmondUtcOffset(dateStr);
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d, 12 + offset)); // noon ET in UTC
+  const weekday = dt.toLocaleString('en-US', { weekday: 'long', timeZone: RICHMOND_TZ });
+  const month   = dt.toLocaleString('en-US', { month:   'long', timeZone: RICHMOND_TZ });
+  const day     = dt.toLocaleString('en-US', { day: 'numeric', timeZone: RICHMOND_TZ });
+  return `${weekday}, ${month} ${day}`;
+}
+
+/**
  * Adds `days` calendar days to a 'YYYY-MM-DD' iso string.
  * Operates on the date value only (no timezone conversion) — safe for
  * both DST-aware and DST-naive contexts.

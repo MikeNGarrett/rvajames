@@ -39,9 +39,9 @@ const baseMetroInput: MetroSummaryInput = {
   // cso field omitted → no active overflows
 };
 
-// ─── buildMetroUserMessage — CSO section ──────────────────────────────────────
+// ─── buildMetroUserMessage — CSO section (observed mode) ──────────────────────
 
-describe('buildMetroUserMessage — CSO section', () => {
+describe('buildMetroUserMessage — CSO section (observed mode)', () => {
   it('emits "no active overflows" when cso is omitted', () => {
     const msg = buildMetroUserMessage(baseMetroInput);
     expect(msg).toContain('no active overflows');
@@ -89,6 +89,89 @@ describe('buildMetroUserMessage — CSO section', () => {
       cso: {
         activelyDischarging: { count: 5 },
         advisoriesOnSelectedDate: { count: 5, windowEndsAt: '2026-05-31T03:00:00Z' },
+      },
+    });
+    expect(msg).not.toMatch(/CSO\s*\d+/i);
+  });
+
+  it('does NOT emit advisory-window language in observed mode', () => {
+    const msg = buildMetroUserMessage({
+      ...baseMetroInput,
+      mode: 'observed',
+      cso: {
+        activelyDischarging: { count: 2 },
+        advisoriesOnSelectedDate: { count: 2, windowEndsAt: '2026-05-31T03:00:00Z' },
+      },
+    });
+    expect(msg).not.toContain('cover the selected date');
+    expect(msg).toContain('active in Richmond metro');
+  });
+});
+
+// ─── buildMetroUserMessage — CSO section (forecast mode) ──────────────────────
+
+describe('buildMetroUserMessage — CSO section (forecast mode)', () => {
+  const forecastBase: MetroSummaryInput = {
+    ...baseMetroInput,
+    date: '2026-05-30',
+    mode: 'forecast',
+    forecastConfidence: 'high',
+    daysOut: 1,
+  };
+
+  it('emits advisory-window language in forecast mode with CSO', () => {
+    const msg = buildMetroUserMessage({
+      ...forecastBase,
+      cso: {
+        activelyDischarging: { count: 2 },
+        advisoriesOnSelectedDate: { count: 2, windowEndsAt: '2026-05-31T03:00:00Z' },
+      },
+    });
+    expect(msg).toContain('advisory window');
+    expect(msg).toContain('the selected date');
+    expect(msg).not.toContain('active in Richmond metro');
+  });
+
+  it('includes clear-by timestamp for forecast mode', () => {
+    const msg = buildMetroUserMessage({
+      ...forecastBase,
+      cso: {
+        activelyDischarging: { count: 1 },
+        advisoriesOnSelectedDate: { count: 1, windowEndsAt: '2026-05-31T03:00:00Z' },
+      },
+    });
+    expect(msg).toContain('2026-05-31T03:00:00Z');
+  });
+
+  it('uses plural "windows" for count > 1', () => {
+    const msg = buildMetroUserMessage({
+      ...forecastBase,
+      cso: {
+        activelyDischarging: { count: 3 },
+        advisoriesOnSelectedDate: { count: 3, windowEndsAt: null },
+      },
+    });
+    expect(msg).toContain('3 advisory windows');
+  });
+
+  it('uses singular "window" for count === 1', () => {
+    const msg = buildMetroUserMessage({
+      ...forecastBase,
+      cso: {
+        activelyDischarging: { count: 1 },
+        advisoriesOnSelectedDate: { count: 1, windowEndsAt: null },
+      },
+    });
+    expect(msg).toContain('1 advisory window');
+    expect(msg).not.toContain('1 advisory windows');
+  });
+
+  it('NEVER includes outfall IDs in forecast mode — no "CSO N" pattern', () => {
+    const msg = buildMetroUserMessage({
+      ...forecastBase,
+      cso: {
+        activelyDischarging: { count: 4 },
+        advisoriesOnSelectedDate: { count: 4, windowEndsAt: '2026-05-31T03:00:00Z' },
       },
     });
     expect(msg).not.toMatch(/CSO\s*\d+/i);
@@ -144,5 +227,13 @@ describe('SYSTEM_PROMPT — CSO REASONING block (metro prompt)', () => {
 
   it('contains count-based guidance for the cso metro input', () => {
     expect(SYSTEM_PROMPT).toContain('NEVER name specific outfalls');
+  });
+
+  it('contains mode=forecast tense guidance', () => {
+    expect(SYSTEM_PROMPT).toContain('mode=forecast');
+  });
+
+  it('contains mode=observed tense guidance', () => {
+    expect(SYSTEM_PROMPT).toContain('mode=observed');
   });
 });

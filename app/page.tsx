@@ -69,7 +69,7 @@ export default async function Home({ searchParams }: Props) {
 
   return (
     <NuqsAdapter>
-      <CsoBanner cso={data.cso} ageBucket={ageBucket} />
+      <CsoBanner cso={data.cso} ageBucket={ageBucket} mode={data.mode} selectedDate={data.date} />
       {hasFlood && <FloodBanner />}
       <DateUnavailableBanner notice={notice} />
       <FirstVisitModal />

@@ -92,6 +92,12 @@ export async function getLocationDetail(
 
   if (!loc) return null;
 
+  // Resolve date mode early so we can pass forSelectedDate to the CSO query for
+  // forecast dates. For observed mode, the default now()-anchored 48h window is
+  // used; for forecast, we use date-overlap so the upstream signal reflects
+  // advisory windows that cover the forecast date rather than "active right now."
+  const { mode, daysOut, forecastConfidence } = resolveDateMode(date);
+
   // Resolve station config synchronously (no DB call) so we can kick off all
   // parallel fetches before entering the Promise.all.
   const stationConfig = getStationConfig(slug);
@@ -104,7 +110,11 @@ export async function getLocationDetail(
     ? getLatestReadingByStationCode(upstreamWatchCode)
     : Promise.resolve(null);
   const upstreamCsoPromise = loc.lng != null
-    ? getUpstreamCsoForLocation(Number(loc.lng))
+    ? getUpstreamCsoForLocation(
+        Number(loc.lng),
+        48,
+        mode === 'forecast' ? date : undefined,
+      )
     : Promise.resolve({ count: 0, mostRecentAt: null, outfalls: [] } as UpstreamCsoSignal);
 
   // Run parallel queries
@@ -236,8 +246,6 @@ export async function getLocationDetail(
   );
 
   const activitySlugs = activities.map((a) => a.slug);
-
-  const { mode, daysOut, forecastConfidence } = resolveDateMode(date);
 
   const interpretInput: InterpretLocationInput = {
     date,

@@ -179,12 +179,19 @@ export function buildUserMessage(input: InterpretLocationInput): string {
   }
 
   // ── Upstream CSO block ─────────────────────────────────────────────────────
+  // For observed mode: report events upstream in the past 48h + approximate timing.
+  // For forecast mode: the signal reflects advisory windows covering the selected date
+  // (not "events right now"), so the tense and framing differ accordingly.
   lines.push('');
   lines.push('--- Upstream CSO (combined sewer overflow) ---');
 
   const cso = input.upstreamCso;
   if (!cso || cso.count === 0) {
     lines.push('Upstream CSO: no active events in past 48h.');
+  } else if (isForecast) {
+    const advisoryWord = cso.count !== 1 ? 'advisories' : 'advisory';
+    lines.push(`Upstream CSO: ${cso.count} overflow ${advisoryWord} from upstream will cover the selected date.`);
+    lines.push('Advisory window extends through the forecast date; caution for swim/wade on that day.');
   } else {
     lines.push(`Upstream CSO: ${cso.count} event${cso.count !== 1 ? 's' : ''} upstream in past 48h.`);
     if (cso.mostRecentAt) {

@@ -724,16 +724,47 @@ OUTFALL ID RULE — NON-NEGOTIABLE:
   The upstream count and approximate timing are sufficient for safety guidance.
   Outfall IDs are infrastructure identifiers that mean nothing to families.
 
+CSO TENSE RULES BY MODE — NON-NEGOTIABLE:
+
+  Apply the correct tense and framing based on the "Mode" line in each user message.
+
+  mode=observed AND activelyDischarging.count > 0 (active overflow):
+    → Present tense. Overflow is happening right now.
+    ✓ "There is currently an active sewer overflow upstream."
+    ✓ "A sewer overflow is active upstream of this location."
+    ✓ "As of the last check, sewer overflow events are ongoing."
+    ✗ Never say "was" or "occurred" as if the event is past.
+
+  mode=observed AND activelyDischarging.count = 0 AND advisoriesOnSelectedDate.count > 0 (residual):
+    → Past tense with forward-looking window context.
+    ✓ "A sewer overflow occurred upstream within the past 48 hours."
+    ✓ "A recent overflow event means bacteria may remain elevated through [clear time]."
+    ✓ "Though the discharge appears to have stopped, the advisory window extends to [clear time]."
+    ✗ Never imply an active overflow when none is discharging.
+
+  mode=forecast AND advisoriesOnSelectedDate.count > 0 (advisory covers the forecast date):
+    → Future-conditional tense. The event was in the past; the advisory window extends into the future.
+    ✓ "On [day], a CSO advisory is expected to still be in effect."
+    ✓ "By [day], a sewer overflow advisory may still cover this location through [windowEndsAt]."
+    ✓ "The advisory window from a recent overflow extends through [day]."
+    ✗ Never say the overflow is "currently" happening when mode is forecast.
+    ✗ Never report a future advisory without the clear time when windowEndsAt is available.
+
+  In all modes: NEVER name specific outfalls. Count + timing only.
+
 PER-CALL INPUT FIELDS:
 
   upstream_cso — per-location upstream CSO signal
     null (or count = 0):
-      No upstream CSO events in the past 48 h.
+      No upstream CSO events in the past 48 h (observed) or no advisory window covering
+      the selected date (forecast).
       → Do NOT mention CSO. Treat bacterial risk as normal-baseline.
     count > 0:
-      One or more CSO events upstream of this access point in the past 48 h.
+      One or more CSO events / advisory windows upstream of this access point.
       → Bacteria are likely elevated. Mention this explicitly in body_md.
-      → Reference the event count and approximate timing (~N h ago).
+      → Apply the correct mode tense (see CSO TENSE RULES above).
+      → Reference the event count. For observed: include approximate timing (~N h ago).
+         For forecast: reference that the advisory window covers the selected date.
       → NEVER name the specific outfall — use "an upstream overflow" or
          "N sewer overflow events upstream of this location."
       → Recommend caution for swimming and wading at this location.
@@ -745,9 +776,9 @@ PER-CALL INPUT FIELDS:
     activelyDischarging.count = 0 AND advisoriesOnSelectedDate.count = 0:
       No active CSO events anywhere in the metro reach — do NOT mention CSO.
     Otherwise:
-      Overflows are active or recently active in the metro area.
-      → Reference the overall count in body_md (e.g., "several sewer overflows active
-         in Richmond" or "N overflow events in the past 48 hours").
+      Overflows are active or the advisory window covers the selected date.
+      → Apply the correct mode tense (see CSO TENSE RULES above).
+      → Reference the overall count in body_md.
       → NEVER name specific outfalls.
       → Flag swimming access points as requiring caution.
       → Individual locations vary in upstream exposure by position, but err on the

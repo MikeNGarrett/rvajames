@@ -224,9 +224,9 @@ describe('buildUserMessage — mode rendering', () => {
   });
 });
 
-// ─── buildUserMessage — CSO section ──────────────────────────────────────────
+// ─── buildUserMessage — CSO section (observed mode) ──────────────────────────
 
-describe('buildUserMessage — CSO section', () => {
+describe('buildUserMessage — CSO section (observed mode)', () => {
   it('emits "no active events" when upstreamCso is null', () => {
     const msg = buildUserMessage({ ...baseInput, upstreamCso: null });
     expect(msg).toContain('Upstream CSO: no active events in past 48h.');
@@ -268,6 +268,69 @@ describe('buildUserMessage — CSO section', () => {
     // The count-only shape guarantees no outfall name can appear
     expect(msg).not.toMatch(/CSO\s*\d+/i);
   });
+
+  it('does NOT emit advisory-window language in observed mode', () => {
+    const msg = buildUserMessage({
+      ...baseInput,
+      mode: 'observed',
+      upstreamCso: { count: 1, mostRecentAt: new Date(Date.now() - 6 * 3_600_000).toISOString() },
+    });
+    expect(msg).not.toContain('will cover the selected date');
+    expect(msg).toContain('in past 48h');
+  });
+});
+
+// ─── buildUserMessage — CSO section (forecast mode) ──────────────────────────
+
+describe('buildUserMessage — CSO section (forecast mode)', () => {
+  const forecastBase: InterpretLocationInput = {
+    ...baseInput,
+    mode: 'forecast',
+    forecastConfidence: 'high',
+    daysOut: 1,
+    waterTempF: null,
+    dataAgeMinutes: null,
+  };
+
+  it('emits "no active events" when upstreamCso is null in forecast mode', () => {
+    const msg = buildUserMessage({ ...forecastBase, upstreamCso: null });
+    expect(msg).toContain('Upstream CSO: no active events in past 48h.');
+  });
+
+  it('emits advisory-window language for forecast mode with active CSO', () => {
+    const msg = buildUserMessage({
+      ...forecastBase,
+      upstreamCso: { count: 2, mostRecentAt: new Date(Date.now() - 6 * 3_600_000).toISOString() },
+    });
+    expect(msg).toContain('will cover the selected date');
+    expect(msg).not.toContain('in past 48h');
+    expect(msg).not.toContain('~6h ago');
+  });
+
+  it('uses singular "advisory" for count === 1 in forecast mode', () => {
+    const msg = buildUserMessage({
+      ...forecastBase,
+      upstreamCso: { count: 1, mostRecentAt: null },
+    });
+    expect(msg).toContain('1 overflow advisory');
+    expect(msg).not.toContain('1 overflow advisories');
+  });
+
+  it('uses plural "advisories" for count > 1 in forecast mode', () => {
+    const msg = buildUserMessage({
+      ...forecastBase,
+      upstreamCso: { count: 3, mostRecentAt: null },
+    });
+    expect(msg).toContain('3 overflow advisories');
+  });
+
+  it('NEVER includes outfall IDs in forecast mode either', () => {
+    const msg = buildUserMessage({
+      ...forecastBase,
+      upstreamCso: { count: 3, mostRecentAt: null },
+    });
+    expect(msg).not.toMatch(/CSO\s*\d+/i);
+  });
 });
 
 // ─── System prompt — CSO REASONING block ─────────────────────────────────────
@@ -280,6 +343,18 @@ describe('SYSTEM_PROMPT — CSO REASONING block', () => {
   it('prohibits "CSO 34" as an example of what not to say', () => {
     // The system prompt must document the prohibition with the canonical example
     expect(SYSTEM_PROMPT).toContain('"CSO 34"');
+  });
+
+  it('contains mode=observed tense guidance', () => {
+    expect(SYSTEM_PROMPT).toContain('mode=observed');
+  });
+
+  it('contains mode=forecast tense guidance', () => {
+    expect(SYSTEM_PROMPT).toContain('mode=forecast');
+  });
+
+  it('instructs future-conditional tense for forecast CSO', () => {
+    expect(SYSTEM_PROMPT).toContain('Future-conditional tense');
   });
 });
 

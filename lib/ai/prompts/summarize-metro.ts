@@ -193,11 +193,21 @@ export function buildMetroUserMessage(input: MetroSummaryInput): string {
   ];
 
   // Count-only CSO context — outfall IDs are never surfaced in this prompt.
+  // For observed mode: report active overflows + advisory windows covering today.
+  // For forecast mode: the signal reflects advisory window coverage on the selected
+  // date (not current active discharges), so framing uses future-conditional tense.
   const cso = input.cso;
   const discharging = cso?.activelyDischarging.count ?? 0;
   const advisory    = cso?.advisoriesOnSelectedDate.count ?? 0;
   if (discharging === 0 && advisory === 0) {
     lines.push('CSO state: no active overflows, no advisory windows in effect.');
+  } else if (isForecast) {
+    const windowEnd = cso?.advisoriesOnSelectedDate.windowEndsAt;
+    lines.push(`CSO state: ${advisory} advisory window${advisory !== 1 ? 's' : ''} cover the selected date.`);
+    if (windowEnd) {
+      lines.push(`Advisory window${advisory !== 1 ? 's' : ''} clear by: ${windowEnd}.`);
+    }
+    lines.push('Caution for all downstream swimming access points on the selected date.');
   } else {
     lines.push(`CSO state: ${discharging} overflow${discharging !== 1 ? 's' : ''} active in Richmond metro.`);
     if (advisory > 0) {

@@ -215,7 +215,12 @@ export default async function LocationPage({ params, searchParams }: Props) {
 
         {/* Upstream CSO panel */}
         {location.upstreamCso && (
-          <UpstreamCsoPanel upstreamCso={location.upstreamCso} />
+          <UpstreamCsoPanel
+            upstreamCso={location.upstreamCso}
+            mode={mode}
+            ageBucket={ageBucket}
+            selectedDate={dateStr}
+          />
         )}
 
         {/* Activity matrix */}
