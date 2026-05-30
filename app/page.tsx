@@ -108,7 +108,6 @@ export default async function Home({ searchParams }: Props) {
           <MetroSummaryPanel
             date={dateStr}
             ageBucket={ageBucket}
-            activeCsoOutfalls={data.activeCsoOutfalls}
           />
         </Suspense>
 

@@ -15,9 +15,9 @@ interface Props {
   date: string;
   ageBucket: AgeBucket;
   /**
-   * Deduplicated set of active CSO outfalls across all locations.
-   * When non-empty, an amber warning block is rendered above the AI summary.
-   * Empty array (or omitted) = no block shown.
+   * Deduplicated set of active CSO outfalls — deprecated since sub-goal 94.
+   * CsoBanner (sub-goal 95) takes over this role; omit for now.
+   * @deprecated sub-goal 96 will remove this prop entirely.
    */
   activeCsoOutfalls?: Array<{ name: string; hoursAgo: number }>;
 }

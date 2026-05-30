@@ -74,6 +74,33 @@ export interface EmNetSite {
 // ── Pure helper functions (exported for unit tests) ───────────────────────────
 
 /**
+ * Which advisory-ingest branch applies to a given EmNetSite.
+ *
+ *   'active-overflow' — overflow=true; extend existing advisory or create a new one.
+ *   'inactive-window' — overflow=false, recent csoLastOccurrence; standard dedup insert.
+ *   'skip'            — non-mainstem, overflow=null, or stale csoLastOccurrence.
+ *
+ * Pure function — exported for unit testing. The actual I/O lives in cso.ts.
+ */
+export type AdvisoryBranch = 'active-overflow' | 'inactive-window' | 'skip';
+
+export function selectAdvisoryBranch(
+  site: Pick<EmNetSite, 'affectsJamesMainstem' | 'overflow' | 'csoLastOccurrence'>,
+  windowHours: number,
+): AdvisoryBranch {
+  if (!site.affectsJamesMainstem) return 'skip';
+  if (site.overflow === true) return 'active-overflow';
+  if (
+    site.overflow === false &&
+    site.csoLastOccurrence &&
+    isWithinWindow(site.csoLastOccurrence, windowHours)
+  ) {
+    return 'inactive-window';
+  }
+  return 'skip';
+}
+
+/**
  * Returns true if any body name contains a James River mainstem reference.
  * Case-insensitive substring match so "James River Mainstem", "james river",
  * and bare "James" all match.

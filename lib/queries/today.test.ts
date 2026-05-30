@@ -1,99 +1,53 @@
 import { describe, it, expect } from 'vitest';
-import { computeActiveCsoOutfalls } from './today';
-import type { LocationSummary } from './today';
+import { buildAdvisoryDateFilter } from './today';
 
-// Minimal location-summary stub — only the upstreamCso field is needed.
-function makeLocation(
-  outfalls: Array<{ name: string; hoursAgo: number }>,
-): Pick<LocationSummary, 'upstreamCso'> {
-  if (!outfalls.length) return { upstreamCso: null };
-  return {
-    upstreamCso: {
-      count: outfalls.length,
-      mostRecentAt: new Date(Date.now() - outfalls[0].hoursAgo * 3_600_000).toISOString(),
-      outfalls: outfalls.map((o) => ({
-        name: o.name,
-        hoursAgo: o.hoursAgo,
-        csoOccurredAt: new Date(Date.now() - o.hoursAgo * 3_600_000).toISOString(),
-      })),
-    },
-  };
-}
+// ── buildAdvisoryDateFilter ───────────────────────────────────────────────────
+//
+// Covers the "observed-mode (today)", "forecast-within-window (+1/+2 day)", and
+// "month-boundary rollover" cases specified in sub-goal 94.
+//
+// The filter ensures: effective_from < start-of-next-day AND effective_to > start-of-selected-day.
+// Both bounds are UTC midnight strings. This correctly selects advisories that
+// overlap the selected calendar day in UTC.
 
-describe('computeActiveCsoOutfalls', () => {
-  it('returns empty array when all locations have null upstreamCso', () => {
-    const result = computeActiveCsoOutfalls([
-      { upstreamCso: null },
-      { upstreamCso: null },
-    ]);
-    expect(result).toEqual([]);
+describe('buildAdvisoryDateFilter', () => {
+  it('observed today (2026-05-30): fromLt = next midnight, toGt = today midnight', () => {
+    const f = buildAdvisoryDateFilter('2026-05-30');
+    expect(f.fromLt).toBe('2026-05-31T00:00:00Z');
+    expect(f.toGt).toBe('2026-05-30T00:00:00Z');
   });
 
-  it('returns empty array for empty input', () => {
-    expect(computeActiveCsoOutfalls([])).toEqual([]);
+  it('forecast day +1 (2026-05-31): fromLt = 2026-06-01, toGt = 2026-05-31', () => {
+    const f = buildAdvisoryDateFilter('2026-05-31');
+    expect(f.fromLt).toBe('2026-06-01T00:00:00Z');
+    expect(f.toGt).toBe('2026-05-31T00:00:00Z');
   });
 
-  it('returns a single outfall from a single location', () => {
-    const result = computeActiveCsoOutfalls([
-      makeLocation([{ name: 'Shockoe Bottom', hoursAgo: 10 }]),
-    ]);
-    expect(result).toEqual([{ name: 'Shockoe Bottom', hoursAgo: 10 }]);
+  it('forecast day +2 (2026-06-01): fromLt = 2026-06-02, toGt = 2026-06-01', () => {
+    const f = buildAdvisoryDateFilter('2026-06-01');
+    expect(f.fromLt).toBe('2026-06-02T00:00:00Z');
+    expect(f.toGt).toBe('2026-06-01T00:00:00Z');
   });
 
-  it('deduplicates by outfall name, keeping the minimum hoursAgo', () => {
-    const result = computeActiveCsoOutfalls([
-      makeLocation([{ name: 'Outfall A', hoursAgo: 20 }]),
-      makeLocation([{ name: 'Outfall A', hoursAgo: 5 }]),   // more recent — should win
-      makeLocation([{ name: 'Outfall A', hoursAgo: 35 }]),
-    ]);
-    expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({ name: 'Outfall A', hoursAgo: 5 });
+  it('handles year-end rollover (2026-12-31)', () => {
+    const f = buildAdvisoryDateFilter('2026-12-31');
+    expect(f.fromLt).toBe('2027-01-01T00:00:00Z');
+    expect(f.toGt).toBe('2026-12-31T00:00:00Z');
   });
 
-  it('sorts ascending by hoursAgo (most recent first)', () => {
-    const result = computeActiveCsoOutfalls([
-      makeLocation([{ name: 'Old Outfall', hoursAgo: 40 }]),
-      makeLocation([{ name: 'New Outfall', hoursAgo: 2 }]),
-      makeLocation([{ name: 'Mid Outfall', hoursAgo: 18 }]),
-    ]);
-    expect(result.map((o) => o.name)).toEqual(['New Outfall', 'Mid Outfall', 'Old Outfall']);
+  it('handles leap-year day (2028-02-28 → next day = 2028-02-29)', () => {
+    const f = buildAdvisoryDateFilter('2028-02-28');
+    expect(f.fromLt).toBe('2028-02-29T00:00:00Z');
+    expect(f.toGt).toBe('2028-02-28T00:00:00Z');
   });
 
-  it('handles a location with multiple outfalls', () => {
-    const result = computeActiveCsoOutfalls([
-      makeLocation([
-        { name: 'Outfall X', hoursAgo: 6 },
-        { name: 'Outfall Y', hoursAgo: 12 },
-      ]),
-    ]);
-    expect(result).toEqual([
-      { name: 'Outfall X', hoursAgo: 6 },
-      { name: 'Outfall Y', hoursAgo: 12 },
-    ]);
-  });
-
-  it('mixes null and non-null locations correctly', () => {
-    const result = computeActiveCsoOutfalls([
-      { upstreamCso: null },
-      makeLocation([{ name: 'Active Outfall', hoursAgo: 3 }]),
-      { upstreamCso: null },
-    ]);
-    expect(result).toEqual([{ name: 'Active Outfall', hoursAgo: 3 }]);
-  });
-
-  it('deduplication: same outfall seen from multiple locations — keeps minimum', () => {
-    const result = computeActiveCsoOutfalls([
-      makeLocation([
-        { name: 'Shared A', hoursAgo: 14 },
-        { name: 'Unique B', hoursAgo: 7 },
-      ]),
-      makeLocation([
-        { name: 'Shared A', hoursAgo: 2 },  // min — wins
-        { name: 'Unique C', hoursAgo: 30 },
-      ]),
-    ]);
-    expect(result.find((o) => o.name === 'Shared A')?.hoursAgo).toBe(2);
-    expect(result).toHaveLength(3);
-    expect(result[0].hoursAgo).toBeLessThanOrEqual(result[1].hoursAgo);
+  it('fromLt is always one day ahead of toGt', () => {
+    const dates = ['2026-01-01', '2026-03-14', '2026-09-30', '2026-11-07'];
+    for (const d of dates) {
+      const f = buildAdvisoryDateFilter(d);
+      const toLt = new Date(f.fromLt).getTime();
+      const toGt = new Date(f.toGt).getTime();
+      expect(toLt - toGt).toBe(86_400_000); // exactly 24h
+    }
   });
 });

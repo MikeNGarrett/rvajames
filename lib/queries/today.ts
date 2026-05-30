@@ -8,7 +8,7 @@ import type { NoaaAhpsForecastPoint, NoaaAhpsPayload } from '@/lib/ingest/noaa-a
 import { combinedLocationStatus, type SafetyStatus } from '@/lib/safety/rules';
 import { formatRichmondDate } from '@/lib/utils/date-tz';
 import { isInWindow } from '@/lib/queries/date-range';
-import { getUpstreamCsoForLocation, type UpstreamCsoSignal } from '@/lib/safety/upstream-cso';
+import { getUpstreamCsoForLocation, addOneDayISO, type UpstreamCsoSignal } from '@/lib/safety/upstream-cso';
 
 export interface DeterministicStatus {
   status: SafetyStatus;
@@ -51,6 +51,33 @@ export interface LocationSummary {
   upstreamCso: UpstreamCsoSignal | null;
 }
 
+/**
+ * CSO state for the selected date — used by the homepage banner (sub-goal 95)
+ * and the per-location upstream signal.
+ *
+ * activelyDischarging: outfalls with current_overflow=true at last ingest.
+ * advisoriesOnSelectedDate: advisory windows that include the selected date
+ *   (observed = today, forecast = the forecast date).
+ */
+export interface CsoState {
+  activelyDischarging: {
+    /** Number of mainstem outfalls with current_overflow=true at last ingest */
+    count: number;
+    /** current_overflow_observed_at of the most recently observed active outfall */
+    observedAt: string | null;
+    /** Hours since observedAt, rounded — null when count === 0 */
+    hoursStale: number | null;
+  };
+  advisoriesOnSelectedDate: {
+    /** Number of cso_overflow advisories whose window covers the selected date */
+    count: number;
+    /** max(effective_to) across matching advisories — null when count === 0 */
+    windowEndsAt: string | null;
+    /** True if any matching advisory is from a James mainstem outfall */
+    anyAffectsJamesMainstem: boolean;
+  };
+}
+
 export interface TodayData {
   date: string;
   ageBucket: AgeBucket;
@@ -68,12 +95,8 @@ export interface TodayData {
   }[];
   /** True when we have upriver gauge data (observed or forecast) to base status on */
   hasConditions: boolean;
-  /**
-   * Deduplicated set of active CSO outfalls across ALL locations (for the metro warning block).
-   * Flattened from location.upstreamCso.outfalls, deduplicated by outfall name, sorted by
-   * hoursAgo ASC (most recent first). Empty array when no active events.
-   */
-  activeCsoOutfalls: Array<{ name: string; hoursAgo: number }>;
+  /** CSO state for the selected date — drives homepage banner (sub-goal 95). */
+  cso: CsoState;
 }
 
 /**
@@ -144,30 +167,87 @@ function pickForecastPoint(
 }
 
 /**
- * Flattens upstream CSO outfalls from all location summaries, deduplicates by
- * outfall name (keeping the minimum hoursAgo), and sorts ascending by hoursAgo
- * (most recent first). Returns an empty array when no active events exist.
+ * Returns the date-filter bounds for the advisoriesOnSelectedDate query.
+ * An advisory covers `dateStr` when:
+ *   effective_from < start-of-next-day  AND  effective_to > start-of-selected-day
+ *
+ * Both bounds are UTC midnight of the relevant date (interpreted as a full
+ * UTC day). For observed mode, `dateStr` is today, so advisories that expire
+ * any time after midnight UTC today qualify. For forecast mode, advisories
+ * covering any part of the forecast date qualify.
  *
  * Exported for unit testing.
  */
-export function computeActiveCsoOutfalls(
-  locations: Pick<LocationSummary, 'upstreamCso'>[],
-): Array<{ name: string; hoursAgo: number }> {
-  const bestByName = new Map<string, number>();
+export function buildAdvisoryDateFilter(dateStr: string): { fromLt: string; toGt: string } {
+  const nextDay = addOneDayISO(dateStr);
+  return {
+    fromLt: `${nextDay}T00:00:00Z`,
+    toGt:   `${dateStr}T00:00:00Z`,
+  };
+}
 
-  for (const loc of locations) {
-    if (!loc.upstreamCso) continue;
-    for (const outfall of loc.upstreamCso.outfalls) {
-      const existing = bestByName.get(outfall.name);
-      if (existing === undefined || outfall.hoursAgo < existing) {
-        bestByName.set(outfall.name, outfall.hoursAgo);
-      }
-    }
-  }
+/** Empty CsoState — used when there's no data or as a safe default. */
+const EMPTY_CSO_STATE: CsoState = {
+  activelyDischarging:       { count: 0, observedAt: null, hoursStale: null },
+  advisoriesOnSelectedDate:  { count: 0, windowEndsAt: null, anyAffectsJamesMainstem: false },
+};
 
-  return Array.from(bestByName.entries())
-    .map(([name, hoursAgo]) => ({ name, hoursAgo }))
-    .sort((a, b) => a.hoursAgo - b.hoursAgo);
+/**
+ * Computes CsoState for the given date via two parallel Supabase queries:
+ *  1. cso_outfalls WHERE current_overflow=true AND affects_james_mainstem=true
+ *  2. advisories WHERE kind='cso_overflow' AND window covers dateStr
+ */
+async function computeCsoState(dateStr: string): Promise<CsoState> {
+  const supabase = await createServerClient('anon');
+  const { fromLt, toGt } = buildAdvisoryDateFilter(dateStr);
+
+  const [{ data: dischargingRows }, { data: advisoryRows }] = await Promise.all([
+    supabase
+      .from('cso_outfalls')
+      .select('current_overflow_observed_at')
+      .eq('current_overflow', true)
+      .eq('affects_james_mainstem', true),
+    supabase
+      .from('advisories')
+      .select('effective_to, cso_outfalls!inner(affects_james_mainstem)')
+      .eq('kind', 'cso_overflow')
+      .lt('effective_from', fromLt)
+      .gt('effective_to', toGt),
+  ]);
+
+  // activelyDischarging
+  const rows = dischargingRows ?? [];
+  const observedAt = rows
+    .map((r) => r.current_overflow_observed_at)
+    .filter((v): v is string => v != null)
+    .sort()
+    .at(-1) ?? null;
+
+  // advisoriesOnSelectedDate
+  const advRows = advisoryRows ?? [];
+  const windowEndsAt = advRows
+    .map((r) => r.effective_to)
+    .filter((v): v is string => v != null)
+    .sort()
+    .at(-1) ?? null;
+  const anyAffectsJamesMainstem = advRows.some(
+    (r) => (r.cso_outfalls as { affects_james_mainstem: boolean } | null)?.affects_james_mainstem,
+  );
+
+  return {
+    activelyDischarging: {
+      count: rows.length,
+      observedAt,
+      hoursStale: observedAt
+        ? Math.round((Date.now() - new Date(observedAt).getTime()) / 3_600_000)
+        : null,
+    },
+    advisoriesOnSelectedDate: {
+      count: advRows.length,
+      windowEndsAt,
+      anyAffectsJamesMainstem,
+    },
+  };
 }
 
 const STATUS_SORT_ORDER: Record<SafetyStatus, number> = {
@@ -217,7 +297,7 @@ async function getObservedTodayData(
   // Kick off water quality fetch in parallel (it uses its own service client)
   const wqPromise = getAllLatestWaterQualityReadings();
 
-  const [{ data: locations }, { data: advisories }, metroState, statusMap, wqReadings] = await Promise.all([
+  const [{ data: locations }, { data: advisories }, metroState, statusMap, wqReadings, cso] = await Promise.all([
     supabase
       .from('locations')
       .select('id, slug, name, tags, lng')
@@ -231,6 +311,7 @@ async function getObservedTodayData(
     getMetroRiverState(),
     getActiveStatusMap(now),
     wqPromise,
+    computeCsoState(date),
   ]);
 
   if (!locations?.length) {
@@ -238,7 +319,7 @@ async function getObservedTodayData(
       date, ageBucket,
       mode: 'observed', forecastConfidence: null,
       locations: [], activeAdvisories: [], hasConditions: false,
-      activeCsoOutfalls: [],
+      cso: EMPTY_CSO_STATE,
     };
   }
 
@@ -308,7 +389,7 @@ async function getObservedTodayData(
     locations: summarized,
     activeAdvisories: activeAdvisoryList,
     hasConditions: upriverGageFt !== null,
-    activeCsoOutfalls: computeActiveCsoOutfalls(summarized),
+    cso,
   };
 }
 
@@ -322,7 +403,7 @@ async function getForecastTodayData(
   const supabase = await createServerClient('anon');
   const now = new Date();
 
-  const [{ data: locations }, { data: advisories }, forecast, statusMap] = await Promise.all([
+  const [{ data: locations }, { data: advisories }, forecast, statusMap, cso] = await Promise.all([
     supabase
       .from('locations')
       .select('id, slug, name, tags, lng')
@@ -337,6 +418,7 @@ async function getForecastTodayData(
       .order('severity', { ascending: false }),
     getForecast(),
     getActiveStatusMap(now),
+    computeCsoState(date),
   ]);
 
   const forecastConfidence = computeConfidence(date, todayIso);
@@ -346,7 +428,7 @@ async function getForecastTodayData(
       date, ageBucket,
       mode: 'forecast', forecastConfidence,
       locations: [], activeAdvisories: [], hasConditions: false,
-      activeCsoOutfalls: [],
+      cso: EMPTY_CSO_STATE,
     };
   }
 
@@ -361,7 +443,9 @@ async function getForecastTodayData(
     kind: a.kind, severity: a.severity, headline: a.headline,
   }));
 
-  // Fetch upstream CSO signals for all locations in parallel
+  // Fetch upstream CSO signals for all locations in parallel.
+  // For forecast dates, pass forSelectedDate so the query uses date-overlap
+  // (advisory window covers the forecast date) rather than a now()-anchored window.
   const upstreamCsoMapForecast = new Map<string, UpstreamCsoSignal | null>();
   await Promise.all(
     locations.map(async (loc) => {
@@ -369,7 +453,7 @@ async function getForecastTodayData(
         upstreamCsoMapForecast.set(loc.id, null);
         return;
       }
-      const signal = await getUpstreamCsoForLocation(loc.lng);
+      const signal = await getUpstreamCsoForLocation(loc.lng, 48, date);
       upstreamCsoMapForecast.set(loc.id, signal.count > 0 ? signal : null);
     }),
   );
@@ -417,7 +501,7 @@ async function getForecastTodayData(
     locations: summarized,
     activeAdvisories: activeAdvisoryList,
     hasConditions: upriverGageFt !== null,
-    activeCsoOutfalls: computeActiveCsoOutfalls(summarized),
+    cso,
   };
 }
 

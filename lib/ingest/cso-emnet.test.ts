@@ -15,6 +15,7 @@ import {
   buildAdvisoryHeadline,
   buildAdvisoryBody,
   joinEmnetData,
+  selectAdvisoryBranch,
 } from './cso-emnet';
 
 // ── isJamesMainstem ────────────────────────────────────────────────────────────
@@ -237,5 +238,88 @@ describe('joinEmnetData — overflow field', () => {
     const sites = joinEmnetData([vSite], [inode], new Map());
     expect(sites).toHaveLength(1);
     expect(sites[0].overflow).toBeNull();
+  });
+});
+
+// ── selectAdvisoryBranch (sub-goal 94) ────────────────────────────────────────
+
+describe('selectAdvisoryBranch', () => {
+  const WINDOW = 48;
+  const recentOccurrence = new Date(Date.now() - 2 * 3_600_000).toISOString();
+  const staleOccurrence  = new Date(Date.now() - 50 * 3_600_000).toISOString();
+
+  it('returns "skip" when site does not affect James mainstem', () => {
+    const branch = selectAdvisoryBranch(
+      { affectsJamesMainstem: false, overflow: true, csoLastOccurrence: recentOccurrence },
+      WINDOW,
+    );
+    expect(branch).toBe('skip');
+  });
+
+  it('returns "active-overflow" when overflow=true and affects mainstem', () => {
+    const branch = selectAdvisoryBranch(
+      { affectsJamesMainstem: true, overflow: true, csoLastOccurrence: recentOccurrence },
+      WINDOW,
+    );
+    expect(branch).toBe('active-overflow');
+  });
+
+  it('returns "active-overflow" even when csoLastOccurrence is stale (overflow flag wins)', () => {
+    const branch = selectAdvisoryBranch(
+      { affectsJamesMainstem: true, overflow: true, csoLastOccurrence: staleOccurrence },
+      WINDOW,
+    );
+    expect(branch).toBe('active-overflow');
+  });
+
+  it('returns "active-overflow" even when csoLastOccurrence is null and overflow=true', () => {
+    const branch = selectAdvisoryBranch(
+      { affectsJamesMainstem: true, overflow: true, csoLastOccurrence: null },
+      WINDOW,
+    );
+    expect(branch).toBe('active-overflow');
+  });
+
+  it('returns "inactive-window" when overflow=false and csoLastOccurrence is within the window', () => {
+    const branch = selectAdvisoryBranch(
+      { affectsJamesMainstem: true, overflow: false, csoLastOccurrence: recentOccurrence },
+      WINDOW,
+    );
+    expect(branch).toBe('inactive-window');
+  });
+
+  it('returns "skip" when overflow=false and csoLastOccurrence is outside the window', () => {
+    const branch = selectAdvisoryBranch(
+      { affectsJamesMainstem: true, overflow: false, csoLastOccurrence: staleOccurrence },
+      WINDOW,
+    );
+    expect(branch).toBe('skip');
+  });
+
+  it('returns "skip" when overflow=false and csoLastOccurrence is null', () => {
+    const branch = selectAdvisoryBranch(
+      { affectsJamesMainstem: true, overflow: false, csoLastOccurrence: null },
+      WINDOW,
+    );
+    expect(branch).toBe('skip');
+  });
+
+  it('returns "skip" when overflow=null (sensor data absent)', () => {
+    const branch = selectAdvisoryBranch(
+      { affectsJamesMainstem: true, overflow: null, csoLastOccurrence: recentOccurrence },
+      WINDOW,
+    );
+    expect(branch).toBe('skip');
+  });
+
+  it('respects a custom windowHours — recent occurrence outside a narrow window → skip', () => {
+    // 2h ago is within 48h but NOT within 1h
+    const twoHoursAgo = new Date(Date.now() - 2 * 3_600_000).toISOString();
+    expect(
+      selectAdvisoryBranch(
+        { affectsJamesMainstem: true, overflow: false, csoLastOccurrence: twoHoursAgo },
+        1,
+      ),
+    ).toBe('skip');
   });
 });

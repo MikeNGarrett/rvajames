@@ -22,24 +22,39 @@ export interface UpstreamCsoSignal {
 }
 
 /**
- * Returns active CSO advisory rows from outfalls that are upstream of
- * `locationLng` (i.e. outfall.lng < locationLng) within the past
- * `windowHours` hours (default 48).
+ * Advances an ISO date string (YYYY-MM-DD) by one calendar day.
+ * Exported for testing.
+ */
+export function addOneDayISO(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().split('T')[0];
+}
+
+/**
+ * Returns CSO advisory rows from outfalls that are upstream of `locationLng`
+ * (i.e. outfall.lng < locationLng).
+ *
+ * Default behavior (no forSelectedDate): returns advisories whose
+ * effective_from is within the past `windowHours` hours (now-based window).
+ *
+ * With forSelectedDate: returns advisories that overlap the selected date
+ * (i.e. effective_from < end-of-day AND effective_to > start-of-day).
+ * Used for forecast dates so the signal reflects the advisory window rather
+ * than a now()-anchored window.
  *
  * Returns { count: 0, mostRecentAt: null, outfalls: [] } when no matches.
  */
 export async function getUpstreamCsoForLocation(
   locationLng: number,
   windowHours = 48,
+  forSelectedDate?: string,
 ): Promise<UpstreamCsoSignal> {
   const supabase = await createServerClient('anon');
-
-  const windowStart = new Date(Date.now() - windowHours * 3_600_000).toISOString();
 
   // Join advisories to cso_outfalls via the FK. Supabase PostgREST supports
   // embedded filters — select the foreign-table columns via !inner join so
   // rows with no matching outfall are excluded.
-  const { data, error } = await supabase
+  let query = supabase
     .from('advisories')
     .select(
       `
@@ -52,8 +67,21 @@ export async function getUpstreamCsoForLocation(
     `,
     )
     .eq('kind', 'cso_overflow')
-    .eq('source', 'emnet_cso')
-    .gt('effective_from', windowStart)
+    .eq('source', 'emnet_cso');
+
+  if (forSelectedDate) {
+    // Date-overlap mode: advisory must cover the selected date.
+    const nextDay = addOneDayISO(forSelectedDate);
+    query = query
+      .lt('effective_from', `${nextDay}T00:00:00Z`)
+      .gt('effective_to', `${forSelectedDate}T00:00:00Z`);
+  } else {
+    // Default: events whose effective_from is within the past windowHours.
+    const windowStart = new Date(Date.now() - windowHours * 3_600_000).toISOString();
+    query = query.gt('effective_from', windowStart);
+  }
+
+  const { data, error } = await query
     .lt('cso_outfalls.lng', locationLng)
     .eq('cso_outfalls.affects_james_mainstem', true)
     .order('effective_from', { ascending: false });

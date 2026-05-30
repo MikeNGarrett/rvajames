@@ -45,11 +45,16 @@ import {
   buildSourceId,
   buildAdvisoryHeadline,
   buildAdvisoryBody,
-  isWithinWindow,
+  selectAdvisoryBranch,
 } from './cso-emnet';
 
 /** CSO advisory window: 48h from last discharge event */
 const CSO_WINDOW_HOURS = 48;
+
+/** Returns an ISO timestamp 48 hours from now — used as advisory effective_to. */
+function ts48hFromNow(): string {
+  return new Date(Date.now() + CSO_WINDOW_HOURS * 60 * 60 * 1000).toISOString();
+}
 
 export async function runCsoIngestion(): Promise<RunResult> {
   // ── Get Cloudflare BROWSER binding ────────────────────────────────────────
@@ -150,58 +155,109 @@ export async function runCsoIngestion(): Promise<RunResult> {
 
     rowsWritten++; // count the outfall upsert
 
-    // 2. Advisory — only for mainstem sites with a recent discharge event.
-    if (
-      !site.affectsJamesMainstem ||
-      !site.csoLastOccurrence ||
-      !isWithinWindow(site.csoLastOccurrence, CSO_WINDOW_HOURS)
-    ) {
-      continue; // no active advisory needed
+    // 2. Advisory — three branches per the sub-goal 94 design decision.
+    const branch = selectAdvisoryBranch(site, CSO_WINDOW_HOURS);
+
+    if (branch === 'active-overflow') {
+      // ── Branch 1: site is actively discharging ─────────────────────────────
+      // Bump an existing active advisory's effective_to, or create a new one.
+      // This keeps advisories current for sites that have been overflowing
+      // continuously past the original 48h window.
+      const { data: existingAdvisory } = await supabase
+        .from('advisories')
+        .select('id')
+        .eq('outfall_id', outfallRow.id)
+        .eq('kind', 'cso_overflow')
+        .gt('effective_to', now)
+        .order('effective_to', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const newEffectiveTo = ts48hFromNow();
+
+      if (existingAdvisory) {
+        // Bump effective_to to now+48h
+        const { error: updateError } = await supabase
+          .from('advisories')
+          .update({ effective_to: newEffectiveTo })
+          .eq('id', existingAdvisory.id);
+        if (updateError) {
+          console.error(`[cso] advisory bump failed for outfall ${site.name}:`, updateError.message);
+        } else {
+          rowsWritten++;
+          console.log(`[cso] active CSO at ${site.name} — advisory effective_to bumped to ${newEffectiveTo}`);
+        }
+      } else {
+        // No active advisory — create one. Use csoLastOccurrence as effective_from
+        // if present (preserves chronology), otherwise fall back to now.
+        const effectiveFrom = site.csoLastOccurrence ?? now;
+        const source_id = buildSourceId(site.emnetId, effectiveFrom);
+        if (existingSourceIds.has(source_id)) continue; // safety dedup
+
+        const { error: insertError } = await supabase.from('advisories').insert({
+          source: 'emnet_cso',
+          source_id,
+          kind: 'cso_overflow',
+          severity: 'high',
+          outfall_id: outfallRow.id,
+          headline: buildAdvisoryHeadline(site.name),
+          body: buildAdvisoryBody(site.name, effectiveFrom),
+          effective_from: effectiveFrom,
+          effective_to: newEffectiveTo,
+          location_ids: [],
+        });
+        if (insertError) {
+          console.error(`[cso] advisory insert failed for ${site.name}:`, insertError.message);
+        } else {
+          rowsWritten++;
+          existingSourceIds.add(source_id);
+          console.log(`[cso] active CSO at ${site.name} — new advisory created`);
+        }
+      }
+      continue;
     }
 
-    const source_id = buildSourceId(site.emnetId, site.csoLastOccurrence);
+    if (branch === 'inactive-window') {
+      // ── Branch 2: not actively discharging but recent event within 48h ────
+      // Existing dedup-by-source_id logic (unchanged from original ingest).
+      const source_id = buildSourceId(site.emnetId, site.csoLastOccurrence!);
+      if (existingSourceIds.has(source_id)) continue;
 
-    // Natural-key dedup (see existingSourceIds setup above for why we can't
-    // use ON CONFLICT against the partial unique index).
-    if (existingSourceIds.has(source_id)) {
-      continue; // same event already recorded; csoLastOccurrence is the dedup axis
+      const effectiveTo = new Date(
+        new Date(site.csoLastOccurrence!).getTime() + CSO_WINDOW_HOURS * 60 * 60 * 1000,
+      ).toISOString();
+
+      const { error: advError } = await supabase.from('advisories').insert({
+        source: 'emnet_cso',
+        source_id,
+        kind: 'cso_overflow',
+        severity: 'high',
+        outfall_id: outfallRow.id,
+        headline: buildAdvisoryHeadline(site.name),
+        body: buildAdvisoryBody(site.name, site.csoLastOccurrence!),
+        effective_from: site.csoLastOccurrence!,
+        effective_to: effectiveTo,
+        location_ids: [],
+      });
+      if (advError) {
+        console.error(`[cso] advisory insert failed for source_id ${source_id}:`, advError.message);
+      } else {
+        rowsWritten++;
+        existingSourceIds.add(source_id);
+        console.log(`[cso] inactive-window CSO at ${site.name} — advisory inserted`);
+      }
+      continue;
     }
 
-    const effectiveTo = new Date(
-      new Date(site.csoLastOccurrence).getTime() +
-        CSO_WINDOW_HOURS * 60 * 60 * 1000,
-    ).toISOString();
-
-    const { error: advError } = await supabase.from('advisories').insert({
-      source: 'emnet_cso',
-      source_id,
-      kind: 'cso_overflow',
-      severity: 'high',
-      outfall_id: outfallRow.id,
-      headline: buildAdvisoryHeadline(site.name),
-      body: buildAdvisoryBody(site.name, site.csoLastOccurrence),
-      effective_from: site.csoLastOccurrence,
-      effective_to: effectiveTo,
-      location_ids: [], // upstream check happens at query time (sub-goal 83)
-    });
-
-    if (advError) {
-      console.error(
-        `[cso] advisory insert failed for source_id ${source_id}:`,
-        advError.message,
-      );
-    } else {
-      rowsWritten++;
-      // Record the new source_id so subsequent iterations within this run
-      // (e.g. if EmNet listed the same outfall twice — defensive) dedupe too.
-      existingSourceIds.add(source_id);
-      console.log(`[cso] active CSO at ${site.name} — advisory inserted`);
-    }
+    // Branch 3: site.overflow === null (unknown state) — skip advisory logic.
   }
 
+  const activeOverflowCount = sites.filter(
+    (s) => s.affectsJamesMainstem && s.overflow === true,
+  ).length;
   console.log(
     `[cso] Done. ${rowsWritten} rows written (${sites.length} sites, ` +
-      `${sites.filter((s) => s.affectsJamesMainstem && s.csoLastOccurrence && isWithinWindow(s.csoLastOccurrence, CSO_WINDOW_HOURS)).length} active mainstem events).`,
+      `${activeOverflowCount} actively-discharging mainstem sites).`,
   );
 
   return { ok: true, rowsWritten };

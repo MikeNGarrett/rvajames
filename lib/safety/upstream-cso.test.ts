@@ -16,28 +16,22 @@ import { getUpstreamCsoForLocation } from './upstream-cso';
 // ── Mock helpers ──────────────────────────────────────────────────────────────
 
 /**
- * Build a minimal Supabase mock for the advisories + cso_outfalls join query.
+ * Build a flexible Supabase mock that handles any filter-method chain order.
+ * Every intermediate method (select, eq, gt, lt, …) returns the same chain
+ * object so any permutation works. Only `.order()` resolves with data.
  *
- * The query chain is:
- *   .from('advisories')
- *   .select('effective_from, cso_outfalls!inner(...)')
- *   .eq('kind', 'cso_overflow')
- *   .eq('source', 'emnet_cso')
- *   .gt('effective_from', windowStart)
- *   .lt('cso_outfalls.lng', locationLng)
- *   .eq('cso_outfalls.affects_james_mainstem', true)
- *   .order('effective_from', { ascending: false })
+ * Covers both the default chain (gt → lt → eq → order) and the forSelectedDate
+ * chain (lt → gt → lt → eq → order).
  */
 function makeMockClient(rows: object[], queryError: { message: string } | null = null) {
-  const orderMock = vi.fn().mockResolvedValue({ data: rows, error: queryError });
-  const eq2Mock   = vi.fn().mockReturnValue({ order: orderMock });
-  const ltMock    = vi.fn().mockReturnValue({ eq: eq2Mock });
-  const gtMock    = vi.fn().mockReturnValue({ lt: ltMock });
-  const eq1Mock   = vi.fn().mockReturnValue({ gt: gtMock });
-  const eqKindMock = vi.fn().mockReturnValue({ eq: eq1Mock });
-  const selectMock = vi.fn().mockReturnValue({ eq: eqKindMock });
-  const fromMock   = vi.fn().mockReturnValue({ select: selectMock });
-  return { from: fromMock };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const chain: Record<string, any> = {};
+  const terminal = vi.fn().mockResolvedValue({ data: rows, error: queryError });
+  for (const m of ['select', 'eq', 'gt', 'lt', 'limit', 'maybeSingle', 'update', 'match']) {
+    chain[m] = vi.fn().mockReturnValue(chain);
+  }
+  chain['order'] = terminal;
+  return { from: vi.fn().mockReturnValue(chain) };
 }
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -161,5 +155,59 @@ describe('getUpstreamCsoForLocation', () => {
     // Math.floor — should be 3 (within ±1 due to ms timing in tests)
     expect(result.outfalls[0].hoursAgo).toBeGreaterThanOrEqual(2);
     expect(result.outfalls[0].hoursAgo).toBeLessThanOrEqual(4);
+  });
+});
+
+// ── forSelectedDate mode ──────────────────────────────────────────────────────
+
+describe('getUpstreamCsoForLocation — forSelectedDate', () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it('returns outfalls when mock returns rows for the selected date', async () => {
+    // effective_from overlapping the selected date
+    const rows = [makeRow('Manchester CSO', UPSTREAM_LNG, true, RECENT)];
+    vi.mocked(createServerClient).mockResolvedValue(makeMockClient(rows) as never);
+
+    const result = await getUpstreamCsoForLocation(LOCATION_LNG, 48, '2026-05-30');
+
+    expect(result.count).toBe(1);
+    expect(result.outfalls[0].name).toBe('Manchester CSO');
+  });
+
+  it('returns count=0 when mock returns empty rows for the selected date', async () => {
+    // DB filters out advisories that don't overlap the selected date
+    vi.mocked(createServerClient).mockResolvedValue(makeMockClient([]) as never);
+
+    const result = await getUpstreamCsoForLocation(LOCATION_LNG, 48, '2026-06-01');
+
+    expect(result.count).toBe(0);
+    expect(result.mostRecentAt).toBeNull();
+    expect(result.outfalls).toHaveLength(0);
+  });
+
+  it('returns count=0 on query error in forSelectedDate mode', async () => {
+    vi.mocked(createServerClient).mockResolvedValue(
+      makeMockClient([], { message: 'timeout' }) as never,
+    );
+
+    const result = await getUpstreamCsoForLocation(LOCATION_LNG, 48, '2026-05-30');
+
+    expect(result.count).toBe(0);
+    expect(result.mostRecentAt).toBeNull();
+  });
+
+  it('mostRecentAt reflects effective_from of the first (most recent) row', async () => {
+    const older = new Date(Date.now() - 10 * 3_600_000).toISOString();
+    const newer = new Date(Date.now() -  2 * 3_600_000).toISOString();
+    const rows = [
+      makeRow('Manchester CSO', UPSTREAM_LNG,       true, newer),
+      makeRow('Belle Isle CSO', UPSTREAM_LNG - 0.01, true, older),
+    ];
+    vi.mocked(createServerClient).mockResolvedValue(makeMockClient(rows) as never);
+
+    const result = await getUpstreamCsoForLocation(LOCATION_LNG, 48, '2026-05-30');
+
+    expect(result.count).toBe(2);
+    expect(result.mostRecentAt).toBe(newer);
   });
 });
