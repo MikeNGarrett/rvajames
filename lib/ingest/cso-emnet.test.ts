@@ -14,6 +14,7 @@ import {
   isWithinWindow,
   buildAdvisoryHeadline,
   buildAdvisoryBody,
+  joinEmnetData,
 } from './cso-emnet';
 
 // ── isJamesMainstem ────────────────────────────────────────────────────────────
@@ -160,5 +161,81 @@ describe('buildAdvisoryBody', () => {
   it('mentions "downstream" to communicate directionality', () => {
     const body = buildAdvisoryBody(outfallName, occurrence);
     expect(body).toMatch(/downstream/i);
+  });
+});
+
+// ── joinEmnetData — overflow field (sub-goal 93) ──────────────────────────────
+
+describe('joinEmnetData — overflow field', () => {
+  // Minimal fixtures: one visualization site, one matching inode, one analysis result.
+  const vSite = {
+    name: 'CSO 34',
+    site_type: 'CSO',
+    bodies: '',          // triggers James River default
+    analysis_config_id: 42,
+  };
+  const inode = {
+    id: 1,
+    name: 'sensor-1',
+    description: 'CSO 34',
+    lat: 37.54,
+    lon: -77.44,
+  };
+
+  it('sets overflow=true when cso_active_overflow is true', () => {
+    const analysisResults = new Map([
+      [42, {
+        analysis_configuration_id: 42,
+        analysis_results: {
+          analysis_results: {
+            cso_last_occurrence: '2026-05-30T10:00:00',
+            cso_active_overflow: true,
+          },
+        },
+      }],
+    ]);
+    const sites = joinEmnetData([vSite], [inode], analysisResults);
+    expect(sites).toHaveLength(1);
+    expect(sites[0].overflow).toBe(true);
+  });
+
+  it('sets overflow=false when cso_active_overflow is false', () => {
+    const analysisResults = new Map([
+      [42, {
+        analysis_configuration_id: 42,
+        analysis_results: {
+          analysis_results: {
+            cso_last_occurrence: '2026-05-30T10:00:00',
+            cso_active_overflow: false,
+          },
+        },
+      }],
+    ]);
+    const sites = joinEmnetData([vSite], [inode], analysisResults);
+    expect(sites).toHaveLength(1);
+    expect(sites[0].overflow).toBe(false);
+  });
+
+  it('sets overflow=null when cso_active_overflow is absent', () => {
+    const analysisResults = new Map([
+      [42, {
+        analysis_configuration_id: 42,
+        analysis_results: {
+          analysis_results: {
+            cso_last_occurrence: '2026-05-30T10:00:00',
+            // cso_active_overflow omitted
+          },
+        },
+      }],
+    ]);
+    const sites = joinEmnetData([vSite], [inode], analysisResults);
+    expect(sites).toHaveLength(1);
+    expect(sites[0].overflow).toBeNull();
+  });
+
+  it('sets overflow=null when no analysis result is available for the site', () => {
+    const sites = joinEmnetData([vSite], [inode], new Map());
+    expect(sites).toHaveLength(1);
+    expect(sites[0].overflow).toBeNull();
   });
 });

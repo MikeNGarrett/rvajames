@@ -130,6 +130,10 @@ export async function runCsoIngestion(): Promise<RunResult> {
           site_type: site.siteType,
           affects_james_mainstem: site.affectsJamesMainstem,
           last_seen_at: now,
+          // Sub-goal 93: persist EmNet's cso_active_overflow flag so sub-goals
+          // 94/95 can distinguish "actively discharging" from "past 48h advisory."
+          current_overflow: site.overflow,
+          current_overflow_observed_at: now,
         },
         { onConflict: 'emnet_id' },
       )

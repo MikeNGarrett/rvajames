@@ -222,6 +222,8 @@ export type Database = {
           affects_james_mainstem: boolean
           bodies: string[]
           created_at: string
+          current_overflow: boolean | null
+          current_overflow_observed_at: string | null
           emnet_id: string
           id: string
           last_seen_at: string
@@ -234,6 +236,8 @@ export type Database = {
           affects_james_mainstem?: boolean
           bodies?: string[]
           created_at?: string
+          current_overflow?: boolean | null
+          current_overflow_observed_at?: string | null
           emnet_id: string
           id?: string
           last_seen_at?: string
@@ -246,6 +250,8 @@ export type Database = {
           affects_james_mainstem?: boolean
           bodies?: string[]
           created_at?: string
+          current_overflow?: boolean | null
+          current_overflow_observed_at?: string | null
           emnet_id?: string
           id?: string
           last_seen_at?: string
