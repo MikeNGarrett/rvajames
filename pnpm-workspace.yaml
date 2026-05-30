@@ -3,3 +3,12 @@ allowBuilds:
   sharp: false
   workerd: true
   webpack: true
+
+# Force-patch transitive postcss. Next.js 15.5.x pins postcss to 8.4.31,
+# which is below the GHSA-qx2v-qp2m-jg93 patch threshold (8.5.10). PostCSS
+# in our build path only processes author-written CSS (Tailwind + globals),
+# so real-world XSS exposure is nil — but the override clears the Dependabot
+# alert. Remove when Next ships a transitive bump (currently latest stable
+# 15.5.18 still pins 8.4.31; 15.6 is canary).
+overrides:
+  postcss: ^8.5.10
