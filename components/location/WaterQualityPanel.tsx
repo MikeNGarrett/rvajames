@@ -233,21 +233,39 @@ export function WaterQualityPanel({ reading, testsEnterococcus }: Props) {
         )}
       </div>
 
-      {/* ── Secondary stats ───────────────────────────────────────────────── */}
+      {/* ── Secondary stats ─────────────────────────────────────────────────
+        *
+        * IMPORTANT: these values are observed at sample collection time
+        * (typically Thursdays, Memorial Day–Labor Day), NOT live readings.
+        * The Current Conditions block at the top of the location page shows
+        * live USGS gauge data for water temp; the two can disagree when the
+        * sample is hours/days old. The h3 heading below makes that explicit
+        * so a reader scanning top-to-bottom doesn't see the same metric name
+        * with different values and wonder which is right.
+        */}
       {(waterTempF !== null || airTempF !== null || turbidity !== null || salinity !== null) && (
-        <div className="border-t border-border pt-3 mb-4 space-y-1.5">
-          {waterTempF !== null && (
-            <SecondaryStatRow label="Water temp" value={`${waterTempF.toFixed(1)} °F`} />
-          )}
-          {airTempF !== null && (
-            <SecondaryStatRow label="Air temp" value={`${airTempF.toFixed(1)} °F`} />
-          )}
-          {turbidity !== null && (
-            <SecondaryStatRow label="Turbidity" value={`${turbidity.toFixed(1)} NTU`} />
-          )}
-          {salinity !== null && (
-            <SecondaryStatRow label="Salinity" value={`${salinity.toFixed(2)} ppt`} />
-          )}
+        <div className="border-t border-border pt-3 mb-4">
+          <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">
+            Observations at sample collection
+          </h3>
+          <p className="text-xs text-text-muted mb-2">
+            Recorded {daysOld === 0 ? 'today' : `${daysOld} day${daysOld !== 1 ? 's' : ''} ago`} on {formatReadingDate(collectedAt)}.
+            For live water temperature, see Current Conditions above.
+          </p>
+          <div className="space-y-1.5">
+            {waterTempF !== null && (
+              <SecondaryStatRow label="Water temp" value={`${waterTempF.toFixed(1)} °F`} />
+            )}
+            {airTempF !== null && (
+              <SecondaryStatRow label="Air temp" value={`${airTempF.toFixed(1)} °F`} />
+            )}
+            {turbidity !== null && (
+              <SecondaryStatRow label="Turbidity" value={`${turbidity.toFixed(1)} NTU`} />
+            )}
+            {salinity !== null && (
+              <SecondaryStatRow label="Salinity" value={`${salinity.toFixed(2)} ppt`} />
+            )}
+          </div>
         </div>
       )}
 
