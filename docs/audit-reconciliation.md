@@ -183,6 +183,23 @@ IN PROGRESS   Sub-goals 80–85: CSO event ingestion via EmNet (Cloudflare Brows
        declaring something staged. CLAUDE.md already mandates this verification at
        session start; I need to also run it before any reconciliation status update.
 
+       Note (process, 2026-05-30): a similar drift recurred during the CSO UX
+       round. While the user ran sub-goal 95 in a parallel /goal session, I edited
+       app/page.tsx via the Edit tool to apply the url-state fix #2 (`?? new Date()`
+       substitution). My `git add app/page.tsx` then staged the entire file state —
+       including the sub-goal 95 CsoBanner import + JSX lines that were already
+       present from the parallel session. Result: commit ed8d36f (url-state fix #2)
+       contains 2 extra lines referencing components/banners/CsoBanner.tsx, which
+       didn't exist in that commit's tree. A clean checkout of ed8d36f would fail to
+       build. The bleed self-resolves at HEAD because a6c0c0e (sub-goal 95) adds
+       the missing file. Single-developer impact only; no remote push happened
+       between the bleed and the resolution.
+
+       Lesson: when editing a file via the Edit tool, run `git diff <file>` BEFORE
+       `git add` to see the full current diff (not just the edit I made). If
+       unexpected modifications appear, stash or stage selectively rather than
+       blanket-staging the file.
+
 QUEUED (after 80–85, ahead of dynamic-content)
        Sub-goals 93–97: CSO UX refinement
        See docs/cso-ux-refinement-plan.md. User feedback after CSO/EmNet deploy
