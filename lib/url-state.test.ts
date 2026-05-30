@@ -82,10 +82,11 @@ describe('searchParamsCache.parse — date default', () => {
     expect(second.date).toBeNull();
   });
 
-  it('returns the parsed Date when ?date= is provided', () => {
+  it('returns the date string as-is when ?date= is provided', () => {
     const result = searchParamsCache.parse({ date: '2026-05-15' });
-    expect(result.date).toBeInstanceOf(Date);
-    expect((result.date as Date).toISOString()).toBe('2026-05-15T00:00:00.000Z');
+    // parseAsString keeps the URL value verbatim — no UTC-midnight Date conversion
+    // that would roll back one ET day via formatRichmondDate.
+    expect(result.date).toBe('2026-05-15');
   });
 
   it('still applies the age default when ?age= is absent', () => {

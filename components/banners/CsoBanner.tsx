@@ -1,23 +1,25 @@
 /**
- * CsoBanner — sub-goals 95, 97
+ * CsoBanner — sub-goals 95, 97, 97b
  *
- * Top-of-page sticky banner surfacing active, residual, or forecast CSO
- * advisory state in plain language. Three visual states:
+ * Persistent top-of-page banner surfacing CURRENT (live) CSO state in plain
+ * language. Two visual states:
  *
- *   active    — one or more outfalls with current_overflow=true at last ingest
- *               (observed mode only). Red. role="alert" for screen readers.
+ *   active    — one or more outfalls with current_overflow=true at last ingest.
+ *               Red. role="alert" for screen readers.
  *
- *   residual  — no active discharge, but advisory window still covers today
- *               (observed mode only). Amber. role="status".
- *
- *   forecast  — the selected forecast date falls within an advisory window
- *               (forecast mode only). Amber. role="status".
+ *   residual  — no active discharge, but today's advisory window is still in
+ *               effect (observed mode only). Amber. role="status".
  *
  * State precedence:
- *   observed → active (count > 0) → residual (advisory count > 0) → null
- *   forecast → forecast (advisory count > 0) → null
+ *   activelyDischarging.count > 0           → active  (both modes)
+ *   mode=observed AND advisories cover today → residual
+ *   else                                    → null (renders nothing)
  *
- * Renders null when no active/residual/forecast signal — no gating at call site.
+ * This banner always reflects LIVE conditions regardless of which date chip
+ * the user has selected. Date-specific forecast CSO advisories appear in the
+ * in-content block in app/page.tsx, not here.
+ *
+ * Renders null when no active/residual signal — no gating at call site.
  *
  * Copy varies by age bucket so younger-child households hear stronger urgency;
  * 14+ gets softer "consider postponing" framing.
@@ -29,30 +31,29 @@
 import Link from 'next/link';
 import type { TodayData } from '@/lib/queries/today';
 import type { AgeBucket } from '@/lib/url-state';
-import { formatCsoWindowEnd, formatSelectedDate } from '@/lib/utils/date-tz';
+import { formatCsoWindowEnd } from '@/lib/utils/date-tz';
 
 interface Props {
   cso: TodayData['cso'];
   ageBucket: AgeBucket;
   /** 'observed' for today (live gauge data); 'forecast' for days +1..+3. */
   mode: 'observed' | 'forecast';
-  /** YYYY-MM-DD selected date — used for forecast copy ("Saturday, May 31"). */
-  selectedDate: string;
 }
 
-type BannerState = 'active' | 'residual' | 'forecast';
+type BannerState = 'active' | 'residual';
 
 function resolveState(
   cso: TodayData['cso'],
   mode: 'observed' | 'forecast',
 ): BannerState | null {
-  if (mode === 'observed') {
-    if (cso.activelyDischarging.count > 0) return 'active';
-    if (cso.advisoriesOnSelectedDate.count > 0) return 'residual';
-    return null;
-  }
-  // forecast mode: only show when advisory window covers the forecast date
-  if (cso.advisoriesOnSelectedDate.count > 0) return 'forecast';
+  // Active discharge is a live real-time signal — show regardless of date mode.
+  if (cso.activelyDischarging.count > 0) return 'active';
+  // Residual (advisory window still in effect) is only meaningful in observed
+  // mode: advisoriesOnSelectedDate covers today when mode=observed, so it
+  // correctly represents "is an advisory window active right now."
+  // In forecast mode, advisoriesOnSelectedDate covers the future date; using it
+  // here would conflate "advisory covers tomorrow" with "advisory active today."
+  if (mode === 'observed' && cso.advisoriesOnSelectedDate.count > 0) return 'residual';
   return null;
 }
 
@@ -61,7 +62,6 @@ function buildMainCopy(
   state: BannerState,
   ageBucket: AgeBucket,
   windowEnd: string | null,
-  selectedDate: string,
 ): string {
   const isYoung  = ageBucket === '0-2' || ageBucket === '3-5';
   const isOlder  = ageBucket === '14+';
@@ -84,62 +84,42 @@ function buildMainCopy(
       : 'Sewer overflow in progress. Avoid swimming, wading, and any river water contact — bacterial contamination is elevated.';
   }
 
-  if (state === 'residual') {
-    if (isYoung) {
-      return endLabel
-        ? `Recent sewer overflow within the past 48 hours. Bacterial levels remain elevated through ${endLabel}. Avoid water contact with your kids until then.`
-        : 'Recent sewer overflow within the past 48 hours. Bacterial levels remain elevated. Avoid water contact with your kids until the advisory clears.';
-    }
-    if (isOlder) {
-      return endLabel
-        ? `Recent sewer overflow in the past 48 hours. Bacterial levels may be elevated through ${endLabel}.`
-        : 'Recent sewer overflow in the past 48 hours. Bacterial levels may be elevated.';
-    }
-    return endLabel
-      ? `Recent sewer overflow within the past 48 hours. Bacterial levels remain elevated through ${endLabel}.`
-      : 'Recent sewer overflow within the past 48 hours. Bacterial levels remain elevated.';
-  }
-
-  // forecast state
-  const dateLabel = formatSelectedDate(selectedDate);
+  // residual state
   if (isYoung) {
     return endLabel
-      ? `Sewer overflow advisory will be in effect on ${dateLabel}. Avoid all river water contact with your kids until the advisory clears at ${endLabel}.`
-      : `Sewer overflow advisory will be in effect on ${dateLabel}. Avoid all river water contact with your kids until the advisory clears.`;
+      ? `Recent sewer overflow within the past 48 hours. Bacterial levels remain elevated through ${endLabel}. Avoid water contact with your kids until then.`
+      : 'Recent sewer overflow within the past 48 hours. Bacterial levels remain elevated. Avoid water contact with your kids until the advisory clears.';
   }
   if (isOlder) {
     return endLabel
-      ? `A recent sewer overflow advisory may still be in effect on ${dateLabel}. The window clears at ${endLabel}.`
-      : `A recent sewer overflow advisory may still be in effect on ${dateLabel}.`;
+      ? `Recent sewer overflow in the past 48 hours. Bacterial levels may be elevated through ${endLabel}.`
+      : 'Recent sewer overflow in the past 48 hours. Bacterial levels may be elevated.';
   }
-  // 6-9, 10-13, none
   return endLabel
-    ? `Sewer overflow advisory will be in effect on ${dateLabel}. Avoid water contact until the advisory clears at ${endLabel}.`
-    : `Sewer overflow advisory will be in effect on ${dateLabel}. Avoid water contact until the advisory clears.`;
+    ? `Recent sewer overflow within the past 48 hours. Bacterial levels remain elevated through ${endLabel}.`
+    : 'Recent sewer overflow within the past 48 hours. Bacterial levels remain elevated.';
 }
 
-export function CsoBanner({ cso, ageBucket, mode, selectedDate }: Props) {
+export function CsoBanner({ cso, ageBucket, mode }: Props) {
   const state = resolveState(cso, mode);
   if (!state) return null;
 
-  const isActive    = state === 'active';
-  const isForecast  = state === 'forecast';
-  const windowEnd   = cso.advisoriesOnSelectedDate.windowEndsAt;
-  const hoursStale  = cso.activelyDischarging.hoursStale;
-  const mainCopy    = buildMainCopy(state, ageBucket, windowEnd, selectedDate);
+  const isActive   = state === 'active';
+  // For residual (observed mode), advisoriesOnSelectedDate covers today.
+  // For active in forecast mode, skip the window end — it covers the forecast
+  // date rather than today, and would misrepresent when the hazard clears.
+  const windowEnd  = mode === 'observed' ? cso.advisoriesOnSelectedDate.windowEndsAt : null;
+  const hoursStale = cso.activelyDischarging.hoursStale;
+  const mainCopy   = buildMainCopy(state, ageBucket, windowEnd);
 
   const colorClasses = isActive
     ? 'bg-status-danger text-status-danger-fg'
     : 'bg-status-caution text-status-caution-fg';
 
-  // Stale label varies by state:
-  //   active/residual (observed) → discharge observation staleness.
-  //   forecast → "Forecast for {date}" — no ingest staleness applies.
+  // Staleness label reflects ingest freshness (same for active and residual).
   // COPY: tied to cron schedule in wrangler.jsonc — update if cron
   // cadence changes (currently 0 6,18 * * * = twice daily).
-  const staleLabel = isForecast
-    ? `Forecast for ${formatSelectedDate(selectedDate)}.`
-    : hoursStale !== null
+  const staleLabel = hoursStale !== null
     ? `Data as of ${hoursStale}h ago.`
     : 'Updated twice daily.';
 
@@ -148,11 +128,11 @@ export function CsoBanner({ cso, ageBucket, mode, selectedDate }: Props) {
       className={`sticky top-0 z-40 ${colorClasses} text-sm`}
       role={isActive ? 'alert' : 'status'}
     >
-      <div className="max-w-prose mx-auto px-4 py-3">
+      <div className="max-w-lg sm:max-w-xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto px-4 py-3">
         {/* Main advisory copy */}
         <p className="font-semibold leading-snug">{mainCopy}</p>
 
-        {/* Microcopy row: staleness/forecast label + learn-more link */}
+        {/* Microcopy row: staleness label + learn-more link */}
         <div className="flex items-center justify-between gap-3 mt-1.5 flex-wrap">
           <span className="text-xs opacity-75">{staleLabel}</span>
           <Link

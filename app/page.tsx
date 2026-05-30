@@ -1,7 +1,8 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
-import { searchParamsCache, isValidAgeBucket, formatDateParam, type AgeBucket } from '@/lib/url-state';
+import { searchParamsCache, isValidAgeBucket, type AgeBucket } from '@/lib/url-state';
+import { formatRichmondDate } from '@/lib/utils/date-tz';
 import { getTodayData, OutOfWindowError } from '@/lib/queries/today';
 import { getMetroRiverState } from '@/lib/queries/river-segment';
 import { getForecastWindow, isInWindow } from '@/lib/queries/date-range';
@@ -29,10 +30,11 @@ export default async function Home({ searchParams }: Props) {
   const params = await searchParams;
   const { date, age } = searchParamsCache.parse(params);
   const ageBucket: AgeBucket = isValidAgeBucket(age) ? age : '6-9';
-  // date is null when ?date= is absent. Substitute a fresh per-request Date
-  // here rather than relying on a module-init default on the cache (which
-  // would go stale on warm Workers — see lib/url-state.ts).
-  const dateStr = formatDateParam(date ?? new Date());
+  // date is null when ?date= is absent. The URL param is already a Richmond-time
+  // YYYY-MM-DD string (set by the date chips), so use it directly without any
+  // Date round-trip. Fall back to formatRichmondDate(new Date()) per-request so
+  // the default never goes stale on warm Workers (see lib/url-state.ts).
+  const dateStr = date ?? formatRichmondDate(new Date());
 
   // ── Proactive guard: redirect out-of-window dates before hitting the DB ──
   if (!isInWindow(dateStr)) {
@@ -67,9 +69,26 @@ export default async function Home({ searchParams }: Props) {
   const staleSnapshotAge = data.locations[0]?.snapshotAge ?? null;
   const showStaleWarning = staleSnapshotAge !== null && isStale('usgs', staleSnapshotAge);
 
+  // ── Forecast CSO advisory copy — age-bucket-aware action line ────────────────
+  const forecastCsoAction =
+    ageBucket === '0-2' || ageBucket === '3-5'
+      ? 'Avoid all water contact with your kids until the advisory clears.'
+      : ageBucket === '14+'
+      ? 'Consider postponing water contact — bacterial contamination may be elevated.'
+      : 'Avoid swimming and wading — bacterial contamination may be elevated downstream.';
+
+  const forecastCsoCount = data.cso.advisoriesOnSelectedDate.count;
+
   return (
     <NuqsAdapter>
-      <CsoBanner cso={data.cso} ageBucket={ageBucket} mode={data.mode} selectedDate={data.date} />
+      {/*
+       * CsoBanner — persistent top-of-page signal for CURRENT CSO state.
+       * Shows active (live discharge) or residual (advisory window still in
+       * effect today) regardless of which date chip is selected. Forecast
+       * mode shows the active state only if there are real-time discharges;
+       * the date-specific advisory appears in the in-content block below.
+       */}
+      <CsoBanner cso={data.cso} ageBucket={ageBucket} mode={data.mode} />
       {hasFlood && <FloodBanner />}
       <DateUnavailableBanner notice={notice} />
       <FirstVisitModal />
@@ -85,8 +104,31 @@ export default async function Home({ searchParams }: Props) {
 
         <ConditionsForm currentAge={ageBucket} chips={chips} />
 
-        {data.activeAdvisories.length > 0 && (
+        {/*
+         * Active advisories — only shown for observed (today) mode.
+         * These reflect current real-time conditions; displaying them on a
+         * forecast date is misleading because they don't apply to that date.
+         * Forecast-date CSO advisory surfaces in the block below.
+         */}
+        {data.mode === 'observed' && data.activeAdvisories.length > 0 && (
           <AdvisoriesBanner advisories={data.activeAdvisories} />
+        )}
+
+        {/*
+         * Forecast CSO advisory — shown when the selected forecast date falls
+         * within an advisory window. This is the date-specific counterpart to
+         * the persistent CsoBanner above (which shows live discharge state).
+         */}
+        {data.mode === 'forecast' && forecastCsoCount > 0 && (
+          <div className="rounded-xl p-4 mb-4 bg-status-caution text-status-caution-fg" role="status">
+            <p className="font-semibold text-base mb-1">Sewer Overflow Advisory</p>
+            <p className="text-sm px-1 py-1">
+              {forecastCsoCount === 1
+                ? '1 sewer overflow advisory covers this forecast date. '
+                : `${forecastCsoCount} sewer overflow advisories cover this forecast date. `}
+              {forecastCsoAction}
+            </p>
+          </div>
         )}
 
         {showStaleWarning && staleSnapshotAge !== null && (
@@ -129,14 +171,14 @@ export default async function Home({ searchParams }: Props) {
               <EmptyState message="No gauge data yet — USGS updates every 15 minutes." />
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 auto-rows-fr">
                 {data.locations.map((loc) => (
-                  <RiverLevelTile key={loc.id} location={loc} />
+                  <RiverLevelTile key={loc.id} location={loc} dateStr={dateStr} ageBucket={ageBucket} />
                 ))}
               </div>
             </>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 auto-rows-fr">
               {data.locations.map((loc) => (
-                <RiverLevelTile key={loc.id} location={loc} />
+                <RiverLevelTile key={loc.id} location={loc} dateStr={dateStr} ageBucket={ageBucket} />
               ))}
             </div>
           )}

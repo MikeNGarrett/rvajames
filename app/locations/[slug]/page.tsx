@@ -3,8 +3,10 @@ import Link from 'next/link';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import type { Metadata } from 'next';
 import { getLocationDetail } from '@/lib/queries/location';
-import { searchParamsCache, isValidAgeBucket, formatDateParam, type AgeBucket } from '@/lib/url-state';
-import { isInWindow, resolveDateMode, formatForecastDate } from '@/lib/queries/date-range';
+import { searchParamsCache, isValidAgeBucket, type AgeBucket } from '@/lib/url-state';
+import { formatRichmondDate } from '@/lib/utils/date-tz';
+import { isInWindow, resolveDateMode, formatForecastDate, getForecastWindow } from '@/lib/queries/date-range';
+import { ConditionsForm } from '@/components/filters/ConditionsForm';
 import { ForecastModeIndicator } from '@/components/forecast/ForecastModeIndicator';
 import { OutOfWindowError } from '@/lib/queries/today';
 import { buildRedirectUrl } from '@/lib/utils/redirect-to-today';
@@ -59,15 +61,21 @@ export default async function LocationPage({ params, searchParams }: Props) {
   const raw = await searchParams;
   const { date, age } = searchParamsCache.parse(raw);
   const ageBucket: AgeBucket = isValidAgeBucket(age) ? age : '6-9';
-  // date is null when ?date= is absent. Substitute a fresh per-request Date
-  // here rather than relying on a module-init default on the cache (which
-  // would go stale on warm Workers — see lib/url-state.ts).
-  const dateStr = formatDateParam(date ?? new Date());
+  // date is null when ?date= is absent. The URL param is already a Richmond-time
+  // YYYY-MM-DD string (set by the date chips), so use it directly. Fall back to
+  // formatRichmondDate(new Date()) per-request (see lib/url-state.ts).
+  const dateStr = date ?? formatRichmondDate(new Date());
 
   // ── Proactive guard: redirect out-of-window dates before hitting the DB ──
   if (!isInWindow(dateStr)) {
     redirect(buildRedirectUrl(`/locations/${slug}`, raw));
   }
+
+  // ── Forecast chips (server-computed, passed to ConditionsForm) ──
+  // Mirrors app/page.tsx so the location detail page exposes the same
+  // date/age controls as the homepage. nuqs setters with shallow:false
+  // trigger an RSC re-render against the new params on this same route.
+  const chips = getForecastWindow();
 
   // ── Notice banner ──
   const notice = typeof raw.notice === 'string' ? raw.notice : undefined;
@@ -121,6 +129,14 @@ export default async function LocationPage({ params, searchParams }: Props) {
             ))}
           </div>
         )}
+
+        {/*
+         * Date + age filters. Same control surface as the homepage so users
+         * can change either dimension without bouncing back to /. The form's
+         * nuqs setters use shallow:false, which re-runs this server component
+         * with the updated searchParams.
+         */}
+        <ConditionsForm currentAge={ageBucket} chips={chips} />
 
         {/* Advisories */}
         {location.activeAdvisories.length > 0 && (

@@ -1,4 +1,4 @@
-import { createSearchParamsCache, parseAsString, parseAsIsoDate } from 'nuqs/server';
+import { createSearchParamsCache, parseAsString } from 'nuqs/server';
 import { formatRichmondDate } from '@/lib/utils/date-tz';
 
 export type AgeBucket = '0-2' | '3-5' | '6-9' | '10-13' | '14+' | 'none';
@@ -31,7 +31,11 @@ export const AGE_BUCKET_LABELS: Record<AgeBucket, string> = {
  *   const dateStr = formatDateParam(date ?? new Date());
  */
 export const searchParamsCache = createSearchParamsCache({
-  date: parseAsIsoDate,
+  // parseAsString keeps the URL value as-is (already a Richmond-time YYYY-MM-DD
+  // from the date chips). The previous parseAsIsoDate converted the string to a
+  // UTC-midnight Date, which formatRichmondDate then rolled back one ET day —
+  // causing each chip to display data for the *previous* date.
+  date: parseAsString,
   age: parseAsString.withDefault('6-9'),
 });
 
