@@ -1,9 +1,19 @@
 import Link from 'next/link';
 import { StatusBadge } from './StatusBadge';
 import type { LocationSummary } from '@/lib/queries/today';
+import type { AgeBucket } from '@/lib/url-state';
 
 interface Props {
   location: LocationSummary;
+  /**
+   * Current date param (YYYY-MM-DD in Richmond ET). Forwarded to the location
+   * detail page via the tile's href so users don't lose forecast context when
+   * clicking from the homepage's "Mon, Jun 1" chip into Belle Isle. The detail
+   * page also reads this from the URL to seed its own ConditionsForm.
+   */
+  dateStr: string;
+  /** Current age bucket. Forwarded for the same reason as dateStr. */
+  ageBucket: AgeBucket;
 }
 
 /**
@@ -89,7 +99,7 @@ function WaterDropBadge({ status }: { status: 'safe' | 'caution' }) {
   );
 }
 
-export function RiverLevelTile({ location }: Props) {
+export function RiverLevelTile({ location, dateStr, ageBucket }: Props) {
   const { status, reason } = location.deterministicStatus;
 
   const subtleClass = {
@@ -101,7 +111,7 @@ export function RiverLevelTile({ location }: Props) {
 
   return (
     <Link
-      href={`/locations/${location.slug}`}
+      href={`/locations/${location.slug}?date=${dateStr}&age=${ageBucket}`}
       className={`flex flex-col gap-2 rounded-xl border p-4 ${subtleClass} touch-target`}
     >
       <div className="flex items-start justify-between gap-2">
