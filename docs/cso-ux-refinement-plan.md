@@ -105,7 +105,39 @@ upsert because `cso_outfalls` has no column for it.
 "what's actively overflowing right now?" and "for the selected date, which
 advisory windows include this date?"
 
+**Design decision (2026-05-30): advisories become the canonical "river is
+concerning" record; live state is preserved via `cso_outfalls.current_overflow`.**
+
+Post-sub-goal-93 prod data revealed a divergence: 8 outfalls actively
+discharging but only 5 advisories (because the missing 4 have
+`csoLastOccurrence > 48h ago` — continuously running, past the original
+event window). User chose the "auto-extend advisory `effective_to`" model:
+
+- Each ingest where a site is `current_overflow=true`:
+  - If an active advisory exists for that outfall (effective_to > now()),
+    bump its `effective_to` to `now() + 48h`.
+  - If no advisory exists, INSERT a new one with `effective_from = csoLastOccurrence ?? now()`,
+    `effective_to = now() + 48h`.
+- Each ingest where a site is `current_overflow=false` and `csoLastOccurrence`
+  is within 48h: existing dedup-by-source_id logic (unchanged).
+- Each ingest where a site is `current_overflow=null` (unknown): skip advisory
+  logic entirely.
+
+Result: `advisories.effective_to` always reflects "river concerning until X."
+Sub-goal 94's queries become straightforward and the two-signal split
+(active vs. residual) lives at the query layer, not the data layer.
+
+This expands sub-goal 94's scope to include ingest changes alongside query
+changes. The schema doesn't change.
+
 **Deliverables**
+
+- **Ingest update** — `lib/ingest/cso.ts`:
+  - Replace the existing "advisory creation gated by isWithinWindow" block
+    with the new logic above (active-extend / not-active-window-check / null-skip).
+  - Update tests in `lib/ingest/cso-emnet.test.ts` to cover each branch.
+  - Manual run against local Supabase: verify a continuously-active site's
+    advisory has `effective_to` ≈ `now() + 48h`.
 
 - Extend `lib/queries/today.ts` `TodayData` shape:
   ```ts
