@@ -150,3 +150,14 @@ dialog.confirm-dialog::backdrop {
     animation: none !important;
   }
 }
+
+/* ── Skeleton shimmer (sub-goal 64) ─────────────────────────────────────────
+   Subtle left-to-right gradient sweep overlaid on top of skeleton silhouettes
+   to signal "content is being fetched" without competing visually with the
+   underlying placeholder. The Tailwind utility `animate-[shimmer_2s_infinite]`
+   references this keyframes block. `motion-reduce:animate-none` on the
+   wrapper element honours user reduced-motion preferences. */
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%);  }
+}
