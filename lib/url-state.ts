@@ -14,8 +14,24 @@ export const AGE_BUCKET_LABELS: Record<AgeBucket, string> = {
   'none': 'No youngest child',
 };
 
+/**
+ * Cached parser for ?date= and ?age= URL search params.
+ *
+ * IMPORTANT: `date` intentionally has NO default. The previous implementation
+ * used `parseAsIsoDate.withDefault(new Date())`, which evaluated `new Date()`
+ * once at module-init time. On Cloudflare Workers — where module init happens
+ * on cold start and the instance stays warm for hours — every request reused
+ * that stale default date until the Worker restarted.
+ *
+ * nuqs's `withDefault` accepts a value, not a thunk (see SingleParserBuilder
+ * type signature), so we can't defer evaluation at this layer. Call sites
+ * substitute `new Date()` per-request instead:
+ *
+ *   const { date, age } = searchParamsCache.parse(params);
+ *   const dateStr = formatDateParam(date ?? new Date());
+ */
 export const searchParamsCache = createSearchParamsCache({
-  date: parseAsIsoDate.withDefault(new Date()),
+  date: parseAsIsoDate,
   age: parseAsString.withDefault('6-9'),
 });
 

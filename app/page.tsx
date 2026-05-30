@@ -9,6 +9,7 @@ import { buildRedirectUrl } from '@/lib/utils/redirect-to-today';
 import { RiverLevelTile } from '@/components/tiles/RiverLevelTile';
 import { AdvisoriesBanner } from '@/components/tiles/AdvisoriesBanner';
 import { FloodBanner } from '@/components/banners/FloodBanner';
+import { CsoBanner } from '@/components/banners/CsoBanner';
 import { DateUnavailableBanner } from '@/components/banners/DateUnavailableBanner';
 import { DisclaimerFooter } from '@/components/legal/DisclaimerFooter';
 import { FirstVisitModal } from '@/components/legal/FirstVisitModal';
@@ -28,7 +29,10 @@ export default async function Home({ searchParams }: Props) {
   const params = await searchParams;
   const { date, age } = searchParamsCache.parse(params);
   const ageBucket: AgeBucket = isValidAgeBucket(age) ? age : '6-9';
-  const dateStr = formatDateParam(date);
+  // date is null when ?date= is absent. Substitute a fresh per-request Date
+  // here rather than relying on a module-init default on the cache (which
+  // would go stale on warm Workers — see lib/url-state.ts).
+  const dateStr = formatDateParam(date ?? new Date());
 
   // ── Proactive guard: redirect out-of-window dates before hitting the DB ──
   if (!isInWindow(dateStr)) {
@@ -65,6 +69,7 @@ export default async function Home({ searchParams }: Props) {
 
   return (
     <NuqsAdapter>
+      <CsoBanner cso={data.cso} ageBucket={ageBucket} />
       {hasFlood && <FloodBanner />}
       <DateUnavailableBanner notice={notice} />
       <FirstVisitModal />

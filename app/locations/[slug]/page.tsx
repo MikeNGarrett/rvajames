@@ -59,7 +59,10 @@ export default async function LocationPage({ params, searchParams }: Props) {
   const raw = await searchParams;
   const { date, age } = searchParamsCache.parse(raw);
   const ageBucket: AgeBucket = isValidAgeBucket(age) ? age : '6-9';
-  const dateStr = formatDateParam(date);
+  // date is null when ?date= is absent. Substitute a fresh per-request Date
+  // here rather than relying on a module-init default on the cache (which
+  // would go stale on warm Workers — see lib/url-state.ts).
+  const dateStr = formatDateParam(date ?? new Date());
 
   // ── Proactive guard: redirect out-of-window dates before hitting the DB ──
   if (!isInWindow(dateStr)) {

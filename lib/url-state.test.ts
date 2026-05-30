@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { formatDateParam, isValidAgeBucket, AGE_BUCKETS } from './url-state';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { formatDateParam, isValidAgeBucket, AGE_BUCKETS, searchParamsCache } from './url-state';
 
 // ── formatDateParam — must anchor to Richmond ET, not UTC ────────────────────
 //
@@ -40,6 +40,57 @@ describe('formatDateParam', () => {
     // 2026-11-08 05:30 UTC = 2026-11-08 00:30 EST (after DST ends)
     const d = new Date('2026-11-08T05:30:00Z');
     expect(formatDateParam(d)).toBe('2026-11-08');
+  });
+});
+
+// ── searchParamsCache — no stale module-init default for `date` ──────────────
+//
+// The previous implementation used `parseAsIsoDate.withDefault(new Date())`.
+// That `new Date()` evaluated ONCE at module load, so warm Cloudflare Workers
+// served the same default date for hours. Call sites now substitute
+// `new Date()` per-request via the `date ?? new Date()` pattern in
+// app/page.tsx and app/locations/[slug]/page.tsx.
+//
+// The behavior we assert at this layer: the cache returns `date: null` when
+// no ?date= param is present. Combined with the per-request substitution at
+// call sites, this proves no module-init Date can leak across requests.
+
+describe('searchParamsCache.parse — date default', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('returns date: null when ?date= is absent (no module-init default)', () => {
+    vi.setSystemTime(new Date('2026-05-30T12:00:00Z'));
+    const result = searchParamsCache.parse({});
+    expect(result.date).toBeNull();
+  });
+
+  it('still returns null after a 24h time advance — confirms no Date capture at any layer', () => {
+    // If the cache captured `new Date()` at parse() time and reused it, we'd
+    // see the same Date instance on subsequent calls. With no default, both
+    // calls return null regardless of clock state.
+    vi.setSystemTime(new Date('2026-05-30T12:00:00Z'));
+    const first = searchParamsCache.parse({});
+    vi.setSystemTime(new Date('2026-05-31T12:00:00Z'));
+    const second = searchParamsCache.parse({});
+    expect(first.date).toBeNull();
+    expect(second.date).toBeNull();
+  });
+
+  it('returns the parsed Date when ?date= is provided', () => {
+    const result = searchParamsCache.parse({ date: '2026-05-15' });
+    expect(result.date).toBeInstanceOf(Date);
+    expect((result.date as Date).toISOString()).toBe('2026-05-15T00:00:00.000Z');
+  });
+
+  it('still applies the age default when ?age= is absent', () => {
+    const result = searchParamsCache.parse({});
+    expect(result.age).toBe('6-9');
   });
 });
 
