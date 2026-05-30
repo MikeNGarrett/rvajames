@@ -7,14 +7,18 @@ import { searchParamsCache, isValidAgeBucket, type AgeBucket } from '@/lib/url-s
 import { formatRichmondDate } from '@/lib/utils/date-tz';
 import { isInWindow, resolveDateMode, formatForecastDate, getForecastWindow } from '@/lib/queries/date-range';
 import { ConditionsForm } from '@/components/filters/ConditionsForm';
-import { ForecastModeIndicator } from '@/components/forecast/ForecastModeIndicator';
 import { OutOfWindowError } from '@/lib/queries/today';
 import { buildRedirectUrl } from '@/lib/utils/redirect-to-today';
-import { ActivityMatrix } from '@/components/location/ActivityMatrix';
 import { WaterQualityPanel } from '@/components/location/WaterQualityPanel';
 import { UpstreamCsoPanel } from '@/components/location/UpstreamCsoPanel';
-import { PrepChecklist } from '@/components/trip/PrepChecklist';
 import { ResourceList } from '@/components/location/ResourceList';
+import { LocationInterpretationProvider } from '@/components/location/LocationInterpretationProvider';
+import {
+  LocationInterpretationSummary,
+  LocationActivityMatrix,
+  LocationPrepChecklist,
+  LocationAttribution,
+} from '@/components/location/LocationInterpretationSections';
 import { AdvisoriesBanner } from '@/components/tiles/AdvisoriesBanner';
 import { DateUnavailableBanner } from '@/components/banners/DateUnavailableBanner';
 import { StatusBadge } from '@/components/tiles/StatusBadge';
@@ -82,7 +86,14 @@ export default async function LocationPage({ params, searchParams }: Props) {
 
   let location;
   try {
-    location = await getLocationDetail(slug, dateStr, ageBucket);
+    // sub-goal 66: skip the AI call in the server render. The page now
+    // delegates interpretation fetching to the client via
+    // <LocationInterpretationProvider>. The deterministic slice (snapshot,
+    // advisories, water quality, upstream CSO, resources) still renders
+    // server-side as before.
+    location = await getLocationDetail(slug, dateStr, ageBucket, {
+      skipInterpretation: true,
+    });
   } catch (err) {
     if (err instanceof OutOfWindowError) {
       redirect(buildRedirectUrl(`/locations/${slug}`, raw));
@@ -200,76 +211,57 @@ export default async function LocationPage({ params, searchParams }: Props) {
           </section>
         )}
 
-        {/* AI interpretation */}
-        {location.interpretation && (
-          <section className="rounded-xl border border-border bg-surface-raised p-4 mb-4">
-            <h2 className="text-sm font-semibold text-text-secondary mb-2 uppercase tracking-wide">
-              {mode === 'forecast' && dateLabel ? `Forecast for ${dateLabel}` : 'Conditions summary'}
-            </h2>
-            {mode === 'forecast' && (
-              <ForecastModeIndicator mode={mode} forecastConfidence={forecastConfidence} />
-            )}
-            <p className={`text-base font-medium text-text mb-2${mode === 'forecast' ? ' mt-2' : ''}`}>
-              {location.interpretation.headline}
-            </p>
-            <p className="text-sm text-text-secondary leading-relaxed">
-              {location.interpretation.body_md.replace(/[*#`]/g, '')}
-            </p>
-            <p className="text-xs text-text-muted italic mt-2">
-              Use your judgment — conditions can change fast.
-            </p>
-          </section>
-        )}
-
-        {/* Water quality panel */}
-        {location.waterQuality && (
-          <WaterQualityPanel
-            reading={location.waterQuality.reading}
-            testsEnterococcus={location.waterQuality.testsEnterococcus}
-          />
-        )}
-
-        {/* Upstream CSO panel */}
-        {location.upstreamCso && (
-          <UpstreamCsoPanel
-            upstreamCso={location.upstreamCso}
+        {/*
+         * AI-driven sections + deterministic panels wrapped in a shared
+         * client-side fetch provider (sub-goal 66). The provider does ONE
+         * call to /api/location-interpretation; each AI-dependent consumer
+         * (summary, activity matrix, prep checklist, attribution) reads the
+         * shared state via context.
+         *
+         * Order matches the pre-migration page so the user sees the same
+         * layout: AI narrative → water quality → upstream CSO → activity
+         * matrix → prep checklist → attribution. The deterministic
+         * components (WaterQualityPanel, UpstreamCsoPanel) sit inside the
+         * provider tree but don't consume context, so they render
+         * immediately from server data.
+         */}
+        <LocationInterpretationProvider
+          slug={slug}
+          date={dateStr}
+          ageBucket={ageBucket}
+        >
+          <LocationInterpretationSummary
             mode={mode}
-            ageBucket={ageBucket}
-            selectedDate={dateStr}
+            dateLabel={dateLabel}
+            forecastConfidence={forecastConfidence}
           />
-        )}
 
-        {/* Activity matrix */}
-        {location.interpretation?.activities && (
-          <div className="mb-4">
-            <ActivityMatrix
-              activities={
-                location.interpretation.activities as {
-                  slug: string;
-                  status: 'safe' | 'caution' | 'deny';
-                  note: string;
-                }[]
-              }
+          {/* Water quality panel */}
+          {location.waterQuality && (
+            <WaterQualityPanel
+              reading={location.waterQuality.reading}
+              testsEnterococcus={location.waterQuality.testsEnterococcus}
             />
-          </div>
-        )}
+          )}
 
-        {/* Trip prep checklist */}
-        {location.interpretation?.prep_items && location.interpretation.prep_items.length > 0 && (
-          <div className="mb-4">
-            <PrepChecklist
-              items={location.interpretation.prep_items}
-              storageKey={`prep-${slug}-${dateStr}-${ageBucket}`}
+          {/* Upstream CSO panel */}
+          {location.upstreamCso && (
+            <UpstreamCsoPanel
+              upstreamCso={location.upstreamCso}
+              mode={mode}
+              ageBucket={ageBucket}
+              selectedDate={dateStr}
             />
-          </div>
-        )}
+          )}
 
-        {/* Attribution */}
-        {location.interpretation?.attribution?.length && (
-          <p className="text-xs text-text-muted mb-4">
-            Sources: {location.interpretation.attribution.join(', ')}
-          </p>
-        )}
+          <LocationActivityMatrix />
+
+          <LocationPrepChecklist
+            storageKey={`prep-${slug}-${dateStr}-${ageBucket}`}
+          />
+
+          <LocationAttribution />
+        </LocationInterpretationProvider>
 
         {/* Resource links */}
         {location.resources.length > 0 && (

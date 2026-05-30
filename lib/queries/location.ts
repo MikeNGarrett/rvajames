@@ -75,10 +75,27 @@ export interface LocationDetail {
 
 const UPRIVER_STATION = '02037500';
 
+/**
+ * Options for getLocationDetail.
+ *
+ * skipInterpretation — when true, the function returns deterministic data
+ * (snapshot, advisories, water quality, upstream CSO, resources) without
+ * calling the AI. interpretation is set to null in the response.
+ *
+ * The location *page* passes this flag now (sub-goal 66) so the server
+ * render no longer blocks on Anthropic latency. The /api/location-
+ * interpretation route, which is the client-side AI fetcher, does NOT
+ * pass the flag — it explicitly wants the AI result.
+ */
+export interface GetLocationDetailOptions {
+  skipInterpretation?: boolean;
+}
+
 export async function getLocationDetail(
   slug: string,
   date: string,
   ageBucket: AgeBucket,
+  opts: GetLocationDetailOptions = {},
 ): Promise<LocationDetail | null> {
   const supabase = await createServerClient('anon');
 
@@ -240,52 +257,59 @@ export async function getLocationDetail(
     loc.tags,
   );
 
-  // Lazy AI interpretation for the detail page
-  const hasHighSeverity = activeAdvisories.some(
-    (a) => a.severity === 'high' || a.severity === 'extreme',
-  );
-
-  const activitySlugs = activities.map((a) => a.slug);
-
-  const interpretInput: InterpretLocationInput = {
-    date,
-    locationSlug: loc.slug,
-    locationName: loc.name,
-    ageBucket,
-    mode,
-    forecastConfidence,
-    daysOut,
-    gageFt: snap?.gage_ft ?? null,
-    dischargeCfs: snap?.discharge_cfs ?? null,
-    // Water temperature not available in AHPS forecast — omit so the AI doesn't
-    // report a stale or live reading as if it were forecast data.
-    waterTempF: mode === 'forecast' ? null : (snap?.water_temp_f ?? null),
-    airTempF: snap?.air_temp_f ?? nwsSnap?.air_temp_f ?? null,
-    precip24hIn: null, // NWS stores probability not measured inches; TODO: wire actual precip
-    dataAgeMinutes: mode === 'forecast' ? null : (latestSnapshot?.ageMinutes ?? null),
-    activeAdvisoryHeadlines: activeAdvisories.map((a) => a.headline),
-    availableActivitySlugs: activitySlugs,
-    waterQuality: waterQualityInput,
-    // Project to count-only shape for the AI prompt (sub-goal 96).
-    // UpstreamCsoSignal still carries the full outfalls array for the UI
-    // (UpstreamCsoPanel) but the AI input intentionally omits outfall names.
-    upstreamCso: upstreamCso
-      ? { count: upstreamCso.count, mostRecentAt: upstreamCso.mostRecentAt }
-      : null,
-  };
-
-  const genResult = await getOrGenerate(interpretInput, loc.id, hasHighSeverity);
-
+  // AI interpretation — the expensive call. Skipped server-side when the
+  // page is rendering deterministic content + delegating the AI fetch to
+  // the client (sub-goal 66's split). The /api/location-interpretation
+  // route still passes the default (skipInterpretation: false) to do the
+  // actual AI work.
   let interpretation: LocationDetail['interpretation'] = null;
-  if (genResult) {
-    interpretation = {
-      status: genResult.interpretation.status,
-      headline: genResult.interpretation.headline,
-      body_md: genResult.interpretation.body_md,
-      activities: genResult.interpretation.activities,
-      prep_items: genResult.interpretation.prep_items,
-      attribution: genResult.interpretation.attribution,
+
+  if (!opts.skipInterpretation) {
+    const hasHighSeverity = activeAdvisories.some(
+      (a) => a.severity === 'high' || a.severity === 'extreme',
+    );
+
+    const activitySlugs = activities.map((a) => a.slug);
+
+    const interpretInput: InterpretLocationInput = {
+      date,
+      locationSlug: loc.slug,
+      locationName: loc.name,
+      ageBucket,
+      mode,
+      forecastConfidence,
+      daysOut,
+      gageFt: snap?.gage_ft ?? null,
+      dischargeCfs: snap?.discharge_cfs ?? null,
+      // Water temperature not available in AHPS forecast — omit so the AI doesn't
+      // report a stale or live reading as if it were forecast data.
+      waterTempF: mode === 'forecast' ? null : (snap?.water_temp_f ?? null),
+      airTempF: snap?.air_temp_f ?? nwsSnap?.air_temp_f ?? null,
+      precip24hIn: null, // NWS stores probability not measured inches; TODO: wire actual precip
+      dataAgeMinutes: mode === 'forecast' ? null : (latestSnapshot?.ageMinutes ?? null),
+      activeAdvisoryHeadlines: activeAdvisories.map((a) => a.headline),
+      availableActivitySlugs: activitySlugs,
+      waterQuality: waterQualityInput,
+      // Project to count-only shape for the AI prompt (sub-goal 96).
+      // UpstreamCsoSignal still carries the full outfalls array for the UI
+      // (UpstreamCsoPanel) but the AI input intentionally omits outfall names.
+      upstreamCso: upstreamCso
+        ? { count: upstreamCso.count, mostRecentAt: upstreamCso.mostRecentAt }
+        : null,
     };
+
+    const genResult = await getOrGenerate(interpretInput, loc.id, hasHighSeverity);
+
+    if (genResult) {
+      interpretation = {
+        status: genResult.interpretation.status,
+        headline: genResult.interpretation.headline,
+        body_md: genResult.interpretation.body_md,
+        activities: genResult.interpretation.activities,
+        prep_items: genResult.interpretation.prep_items,
+        attribution: genResult.interpretation.attribution,
+      };
+    }
   }
 
   return {
