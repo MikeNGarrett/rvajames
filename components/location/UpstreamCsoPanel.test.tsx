@@ -38,56 +38,57 @@ describe('UpstreamCsoPanel', () => {
     expect(html).toContain('Upstream Sewer Overflow');
   });
 
-  it('renders the outfall name', () => {
-    const html = render(makeSignal([{ name: 'Shockoe Bottom', hoursAgo: 10 }]));
-    expect(html).toContain('Shockoe Bottom');
+  it('renders singular overflow count', () => {
+    const html = render(makeSignal([{ name: 'Outfall A', hoursAgo: 5 }]));
+    expect(html).toContain('1 sewer overflow upstream');
+    expect(html).not.toContain('1 sewer overflows upstream');
   });
 
-  it('renders hoursAgo for a single outfall', () => {
-    const html = render(makeSignal([{ name: 'Outfall X', hoursAgo: 8 }]));
-    expect(html).toContain('8 hours ago');
-  });
-
-  it('renders singular "hour" for hoursAgo === 1', () => {
-    const html = render(makeSignal([{ name: 'Outfall Y', hoursAgo: 1 }]));
-    expect(html).toContain('1 hour ago');
-    expect(html).not.toContain('1 hours ago');
-  });
-
-  it('renders "less than 1 hour ago" for hoursAgo === 0', () => {
-    const html = render(makeSignal([{ name: 'Fresh', hoursAgo: 0 }]));
-    expect(html).toContain('less than 1 hour ago');
-  });
-
-  it('renders multiple outfalls', () => {
-    const html = render(
-      makeSignal([
-        { name: 'Outfall Alpha', hoursAgo: 4 },
-        { name: 'Outfall Beta', hoursAgo: 22 },
-      ]),
-    );
-    expect(html).toContain('Outfall Alpha');
-    expect(html).toContain('Outfall Beta');
-  });
-
-  it('renders the EmNet attribution link', () => {
-    const html = render(makeSignal([{ name: 'Any', hoursAgo: 6 }]));
-    expect(html).toContain('emnet.net');
-    expect(html).toContain('Richmond DPU via EmNet');
-  });
-
-  it('renders singular event count in the amber caution block', () => {
-    const html = render(makeSignal([{ name: 'One', hoursAgo: 3 }]));
-    expect(html).toContain('1 upstream sewer overflow event in the past 48 hours');
-  });
-
-  it('renders plural event count for multiple events', () => {
+  it('renders plural overflow count for 2 events', () => {
     const html = render(
       makeSignal([
         { name: 'A', hoursAgo: 5 },
         { name: 'B', hoursAgo: 10 },
       ]),
     );
-    expect(html).toContain('2 upstream sewer overflow events in the past 48 hours');
+    expect(html).toContain('2 sewer overflows upstream');
+  });
+
+  it('renders plural overflow count for N events', () => {
+    const html = render(
+      makeSignal([
+        { name: 'A', hoursAgo: 2 },
+        { name: 'B', hoursAgo: 6 },
+        { name: 'C', hoursAgo: 12 },
+        { name: 'D', hoursAgo: 24 },
+      ]),
+    );
+    expect(html).toContain('4 sewer overflows upstream');
+  });
+
+  it('includes downstream bacterial caution in the amber block', () => {
+    const html = render(makeSignal([{ name: 'Outfall A', hoursAgo: 5 }]));
+    expect(html).toContain('Bacterial contamination may be elevated downstream');
+    expect(html).toContain('consider postponing water contact');
+  });
+
+  it('does NOT render a list of individual outfall names', () => {
+    const html = render(
+      makeSignal([
+        { name: 'Shockoe Bottom', hoursAgo: 10 },
+        { name: 'CSO 34', hoursAgo: 5 },
+      ]),
+    );
+    // No <li> elements for individual outfalls
+    expect(html).not.toContain('<li');
+    // Individual outfall names must not appear
+    expect(html).not.toContain('Shockoe Bottom');
+    expect(html).not.toContain('CSO 34');
+  });
+
+  it('renders the EmNet attribution link', () => {
+    const html = render(makeSignal([{ name: 'Any', hoursAgo: 6 }]));
+    expect(html).toContain('emnet.net');
+    expect(html).toContain('Richmond DPU via EmNet');
   });
 });

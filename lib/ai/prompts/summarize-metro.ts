@@ -97,10 +97,15 @@ export interface MetroSummaryInput {
    */
   activeClosures?:         ActiveClosureEntry[];
   /**
-   * Deduplicated set of active CSO outfall events across all metro locations,
-   * sorted ASC by hoursAgo (most recent first). Empty array when no active events.
+   * CSO (combined sewer overflow) state — count-only, no outfall IDs.
+   * Replaces the former `activeCsoOutfalls` array (removed in sub-goal 96).
+   * `activelyDischarging.count` = outfalls with current_overflow=true.
+   * `advisoriesOnSelectedDate` = advisory windows covering today.
    */
-  activeCsoOutfalls?:      Array<{ name: string; hoursAgo: number }>;
+  cso?: {
+    activelyDischarging:       { count: number };
+    advisoriesOnSelectedDate:  { count: number; windowEndsAt: string | null };
+  };
 }
 
 export function buildMetroUserMessage(input: MetroSummaryInput): string {
@@ -184,15 +189,24 @@ export function buildMetroUserMessage(input: MetroSummaryInput): string {
       (a) => `  { slug: "${a.slug}", status: "${a.status}", baseReason: "${a.baseReason}" }`,
     ),
     '',
-    '--- Active CSO outfalls (metro-wide, past 48h) ---',
+    '--- CSO (combined sewer overflow) state ---',
   ];
 
-  const csoOutfalls = input.activeCsoOutfalls ?? [];
-  if (csoOutfalls.length === 0) {
-    lines.push('Active CSO outfalls (past 48h): none.');
+  // Count-only CSO context — outfall IDs are never surfaced in this prompt.
+  const cso = input.cso;
+  const discharging = cso?.activelyDischarging.count ?? 0;
+  const advisory    = cso?.advisoriesOnSelectedDate.count ?? 0;
+  if (discharging === 0 && advisory === 0) {
+    lines.push('CSO state: no active overflows, no advisory windows in effect.');
   } else {
-    lines.push(`Active CSO outfalls (past 48h): ${csoOutfalls.length} total.`);
-    lines.push(`Most recent: ${csoOutfalls[0].name} ~${csoOutfalls[0].hoursAgo}h ago.`);
+    lines.push(`CSO state: ${discharging} overflow${discharging !== 1 ? 's' : ''} active in Richmond metro.`);
+    if (advisory > 0) {
+      lines.push(`Advisory windows covering today: ${advisory}.`);
+      const windowEnd = cso?.advisoriesOnSelectedDate.windowEndsAt;
+      if (windowEnd) {
+        lines.push(`Latest advisory window ends: ${windowEnd}.`);
+      }
+    }
     lines.push('Caution for all downstream swimming access points.');
   }
 

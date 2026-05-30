@@ -96,18 +96,15 @@ export interface InterpretLocationInput {
    */
   waterQuality: WaterQualityInput | null;
   /**
-   * Upstream CSO signal for this location.
+   * Upstream CSO signal for this location — count-only (sub-goal 96).
    * null = no active CSO events upstream in the past 48 h (count === 0).
    * Non-null = one or more outfalls discharged upstream within the window.
+   * Outfall names/IDs are intentionally omitted — the AI must use counts and
+   * geographic context, never outfall IDs like "CSO 34".
    */
   upstreamCso: {
     count: number;
     mostRecentAt: string | null;
-    outfalls: Array<{
-      name: string;
-      csoOccurredAt: string;
-      hoursAgo: number;
-    }>;
   } | null;
 }
 
@@ -189,16 +186,12 @@ export function buildUserMessage(input: InterpretLocationInput): string {
   if (!cso || cso.count === 0) {
     lines.push('Upstream CSO: no active events in past 48h.');
   } else {
-    const first3 = cso.outfalls.slice(0, 3);
-    lines.push(`Upstream CSO: ${cso.count} active event(s) in past 48h.`);
-    lines.push(`Most recent: ${first3[0].name} ~${first3[0].hoursAgo}h ago.`);
-    if (first3.length > 1) {
-      lines.push(
-        `Also active: ${first3
-          .slice(1)
-          .map((o) => `${o.name} ~${o.hoursAgo}h ago`)
-          .join(', ')}.`,
+    lines.push(`Upstream CSO: ${cso.count} event${cso.count !== 1 ? 's' : ''} upstream in past 48h.`);
+    if (cso.mostRecentAt) {
+      const hoursAgo = Math.round(
+        (Date.now() - new Date(cso.mostRecentAt).getTime()) / 3_600_000,
       );
+      lines.push(`Most recent event: ~${hoursAgo}h ago.`);
     }
     lines.push('Bacteria likely elevated; caution for swim/wade.');
   }

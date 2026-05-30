@@ -22,7 +22,6 @@ export interface MetroSummaryResult {
 export async function getMetroSummary(
   date: string,
   ageBucket: AgeBucket,
-  activeCsoOutfalls?: Array<{ name: string; hoursAgo: number }>,
 ): Promise<MetroSummaryResult> {
   const supabase = await createServerClient('anon');
 
@@ -33,7 +32,7 @@ export async function getMetroSummary(
     getMetroRiverState(),
     supabase
       .from('advisories')
-      .select('headline, severity, location_ids')
+      .select('headline, severity, location_ids, kind, effective_to')
       .or(`effective_to.is.null,effective_to.gte.${now.toISOString()}`),
     supabase
       .from('conditions_snapshots')
@@ -55,7 +54,25 @@ export async function getMetroSummary(
 
   const activeCSOAdvisory =
     csoAdvisoryStatus(metroAdvisories.map((a) => ({ kind: a.severity }))) === 'danger' ||
-    metroAdvisories.some((a) => (a as { kind?: string }).kind === 'cso_overflow');
+    metroAdvisories.some((a) => a.kind === 'cso_overflow');
+
+  // Build CSO count-only context for the AI prompt.
+  // Count active cso_overflow advisories and find the latest window end time.
+  const csoAdvisories = metroAdvisories.filter((a) => a.kind === 'cso_overflow');
+  const csoWindowEndsAt =
+    csoAdvisories
+      .map((a) => a.effective_to)
+      .filter((v): v is string => typeof v === 'string')
+      .sort()
+      .at(-1) ?? null;
+
+  const cso = {
+    activelyDischarging: { count: csoAdvisories.length },
+    advisoriesOnSelectedDate: {
+      count: csoAdvisories.length,
+      windowEndsAt: csoWindowEndsAt,
+    },
+  };
 
   // Build active-closures list for the AI user message.
   // Look up location slugs for any active status rows.
@@ -98,7 +115,7 @@ export async function getMetroSummary(
       activeCSOAdvisory,
       hasHighSeverityAdvisory: hasHighSeverity,
       activeClosures,
-      activeCsoOutfalls:     activeCsoOutfalls ?? [],
+      cso,
     },
     hasHighSeverity,
   );

@@ -9,7 +9,12 @@ interface Advisory {
 export function AdvisoriesBanner({ advisories }: { advisories: Advisory[] }) {
   if (!advisories.length) return null;
 
-  const hasHigh = advisories.some((a) => a.severity === 'high' || a.severity === 'extreme');
+  // Partition: aggregate all CSO-overflow advisories into a single row;
+  // render every other advisory type one-per-row as before.
+  const csoAdvisories    = advisories.filter((a) => a.kind === 'cso_overflow');
+  const otherAdvisories  = advisories.filter((a) => a.kind !== 'cso_overflow');
+
+  const hasHigh  = advisories.some((a) => a.severity === 'high' || a.severity === 'extreme');
   const hasFlood = advisories.some((a) => a.kind === 'flood_warning');
 
   const bannerClass = hasFlood
@@ -18,14 +23,33 @@ export function AdvisoriesBanner({ advisories }: { advisories: Advisory[] }) {
     ? 'bg-status-danger text-status-danger-fg'
     : 'bg-status-caution text-status-caution-fg';
 
+  // Total visible rows = aggregated CSO block (if any) + each non-CSO advisory
+  const rowCount = (csoAdvisories.length > 0 ? 1 : 0) + otherAdvisories.length;
+
   return (
     <div className={`rounded-xl p-4 mb-4 ${bannerClass}`} role="alert">
       <div className="max-w-prose">
         <p className="font-semibold text-base mb-1">
-          {advisories.length === 1 ? 'Active Advisory' : `${advisories.length} Active Advisories`}
+          {rowCount === 1 ? 'Active Advisory' : `${rowCount} Active Advisories`}
         </p>
         <ul className="space-y-1">
-          {advisories.map((a) => (
+          {/*
+           * ── Aggregated CSO block ─────────────────────────────────────────
+           * Never show individual outfall IDs ("CSO 34") by default.
+           * Count + river-wide impact is the signal; names are noise.
+           */}
+          {csoAdvisories.length > 0 && (
+            <li className="text-sm px-1 py-1">
+              {csoAdvisories.length === 1
+                ? '1 active sewer overflow in Richmond — bacterial contamination elevated for at least 48h after each event.'
+                : `${csoAdvisories.length} active sewer overflows in Richmond — bacterial contamination elevated for at least 48h after each event.`}
+            </li>
+          )}
+
+          {/*
+           * ── All other advisory types — render one row each ───────────────
+           */}
+          {otherAdvisories.map((a) => (
             <li key={a.id} className="text-sm">
               {a.body ? (
                 /*

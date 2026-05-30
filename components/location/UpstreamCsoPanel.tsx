@@ -22,7 +22,7 @@ export function UpstreamCsoPanel({ upstreamCso }: Props) {
   // Callers pass a non-null signal; defensive early exit for count === 0.
   if (upstreamCso.count === 0) return null;
 
-  const { count, outfalls } = upstreamCso;
+  const { count } = upstreamCso;
 
   return (
     <section
@@ -39,24 +39,10 @@ export function UpstreamCsoPanel({ upstreamCso }: Props) {
       {/* Amber caution block */}
       <div className="rounded-lg bg-status-caution/10 border border-status-caution/30 p-3 mb-4 text-sm">
         <p className="text-status-caution-fg font-medium">
-          {count} upstream sewer overflow event{count !== 1 ? 's' : ''} in the past 48 hours
-        </p>
-        <p className="text-xs text-text-muted mt-0.5">
-          Bacterial contamination may be elevated. Consider postponing water contact activities.
+          {count} sewer overflow{count !== 1 ? 's' : ''} upstream of this location in the past 48 hours.
+          Bacterial contamination may be elevated downstream — consider postponing water contact.
         </p>
       </div>
-
-      {/* Outfall list */}
-      <ul className="space-y-1.5 mb-4" aria-label="Upstream overflow events">
-        {outfalls.map((o) => (
-          <li key={`${o.name}-${o.csoOccurredAt}`} className="flex items-center justify-between text-sm">
-            <span className="text-text font-medium">{o.name}</span>
-            <span className="text-xs text-text-muted ml-2 flex-shrink-0">
-              {o.hoursAgo < 1 ? 'less than 1 hour ago' : `${o.hoursAgo} hour${o.hoursAgo !== 1 ? 's' : ''} ago`}
-            </span>
-          </li>
-        ))}
-      </ul>
 
       {/* Attribution */}
       <p className="text-xs text-text-muted">

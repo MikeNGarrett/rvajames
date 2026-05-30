@@ -258,7 +258,12 @@ export async function getLocationDetail(
     activeAdvisoryHeadlines: activeAdvisories.map((a) => a.headline),
     availableActivitySlugs: activitySlugs,
     waterQuality: waterQualityInput,
-    upstreamCso: upstreamCso,
+    // Project to count-only shape for the AI prompt (sub-goal 96).
+    // UpstreamCsoSignal still carries the full outfalls array for the UI
+    // (UpstreamCsoPanel) but the AI input intentionally omits outfall names.
+    upstreamCso: upstreamCso
+      ? { count: upstreamCso.count, mostRecentAt: upstreamCso.mostRecentAt }
+      : null,
   };
 
   const genResult = await getOrGenerate(interpretInput, loc.id, hasHighSeverity);

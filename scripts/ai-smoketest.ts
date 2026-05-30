@@ -101,28 +101,17 @@ const INPUT_FORECAST_LOW: InterpretLocationInput = {
   waterQuality: null,
 };
 
-// CSO active — 2 upstream outfalls, one recent (6h), one older (30h)
+// CSO active — 2 upstream overflows, most recent ~6h ago (count-only, no IDs).
 // Expect body_md to mention CSO and caution language.
+// Expect body_md to NOT contain "CSO 34", "CSO 12", or similar outfall IDs.
 const INPUT_CSO_ACTIVE: InterpretLocationInput = {
   ...INPUT_OBSERVED,
   locationSlug: 'pony-pasture',
   locationName: 'Pony Pasture Rapids',
-  activeAdvisoryHeadlines: ['CSO discharge: CSO 34 — combined sewer overflow ~6h ago'],
+  activeAdvisoryHeadlines: ['Active combined sewer overflow advisory — bacterial contamination elevated'],
   upstreamCso: {
     count: 2,
     mostRecentAt: new Date(Date.now() - 6 * 3_600_000).toISOString(),
-    outfalls: [
-      {
-        name: 'CSO 34',
-        csoOccurredAt: new Date(Date.now() - 6 * 3_600_000).toISOString(),
-        hoursAgo: 6,
-      },
-      {
-        name: 'CSO 12',
-        csoOccurredAt: new Date(Date.now() - 30 * 3_600_000).toISOString(),
-        hoursAgo: 30,
-      },
-    ],
   },
 };
 
@@ -256,12 +245,16 @@ async function main() {
     const body = csoActiveParsed.data.body_md;
     const mentionsCso = /CSO|combined sewer/i.test(body);
     const mentionsCaution = /caution|avoid|elevated|bacteria/i.test(body);
+    // Negative assertion: AI must NEVER emit outfall IDs like "CSO 34", "CSO 12".
+    // Pattern: "CSO" + optional whitespace + one or more digits.
+    const mentionsOutfallId = /CSO\s*\d+/i.test(body);
     console.log(`  zod parse:           ✓ PASS (status=${csoActiveParsed.data.status})`);
     console.log(`  mentions CSO:        ${mentionsCso ? '✓ OK' : '✗ FAIL (no CSO mention)'}`);
     console.log(`  mentions caution:    ${mentionsCaution ? '✓ OK' : '✗ FAIL (no caution language)'}`);
+    console.log(`  no outfall ID (CSO N): ${mentionsOutfallId ? '✗ FAIL (outfall ID in output)' : '✓ OK'}`);
     console.log(`  body_md excerpt:     "${body.slice(0, 200).replace(/\n/g, ' ')}..."`);
-    if (!mentionsCso || !mentionsCaution) {
-      console.error('CSO active test FAILED — expected CSO + caution language in body_md');
+    if (!mentionsCso || !mentionsCaution || mentionsOutfallId) {
+      console.error('CSO active test FAILED — expected CSO + caution, no outfall IDs in body_md');
       process.exit(1);
     }
   } else {
@@ -286,10 +279,13 @@ async function main() {
     // "combined sewer" and "CSO" are precise enough to avoid false positives —
     // the system prompt instructs the model to say nothing when CSO is absent.
     const spuriousCsoMention = /CSO|combined sewer/i.test(body);
+    // Also verify no outfall IDs appear regardless of CSO state.
+    const mentionsOutfallId = /CSO\s*\d+/i.test(body);
     console.log(`  zod parse:           ✓ PASS (status=${csoInactiveParsed.data.status})`);
     console.log(`  no spurious CSO:     ${spuriousCsoMention ? '✗ FAIL (CSO mentioned when it should not be)' : '✓ OK'}`);
-    if (spuriousCsoMention) {
-      console.error('CSO inactive test FAILED — model mentioned CSO when upstream_cso is null');
+    console.log(`  no outfall ID (CSO N): ${mentionsOutfallId ? '✗ FAIL (outfall ID in output)' : '✓ OK'}`);
+    if (spuriousCsoMention || mentionsOutfallId) {
+      console.error('CSO inactive test FAILED — model mentioned CSO or outfall ID when upstream_cso is null');
       console.error('body_md:', body);
       process.exit(1);
     }

@@ -99,6 +99,8 @@ export function CsoBanner({ cso, ageBucket }: Props) {
   // Stale label: available for active state (hoursStale !== null); residual
   // uses a generic cadence note since the discharge-observation staleness is
   // not meaningful when no outfall is actively discharging.
+  // COPY: tied to cron schedule in wrangler.jsonc — update if cron
+  // cadence changes (currently 0 6,18 * * * = twice daily).
   const staleLabel = hoursStale !== null
     ? `Data as of ${hoursStale}h ago.`
     : 'Updated twice daily.';

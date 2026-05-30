@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildUserMessage, computeWqFreshness } from './interpret-location';
 import type { InterpretLocationInput } from './interpret-location';
 import { computeLocationHashForTest } from '@/lib/ai/get-or-generate';
+import { SYSTEM_PROMPT } from '@/lib/ai/system-prompt';
 
 // ─── computeWqFreshness ────────────────────────────────────────────────────────
 
@@ -234,47 +235,51 @@ describe('buildUserMessage — CSO section', () => {
   it('emits "no active events" when upstreamCso.count === 0', () => {
     const msg = buildUserMessage({
       ...baseInput,
-      upstreamCso: { count: 0, mostRecentAt: null, outfalls: [] },
+      upstreamCso: { count: 0, mostRecentAt: null },
     });
     expect(msg).toContain('Upstream CSO: no active events in past 48h.');
   });
 
-  it('reports count, outfall name, hoursAgo, and caution language when count > 0', () => {
+  it('reports count, approximate timing, and caution when count > 0', () => {
+    const mostRecentAt = new Date(Date.now() - 6 * 3_600_000).toISOString();
     const msg = buildUserMessage({
       ...baseInput,
-      upstreamCso: {
-        count: 2,
-        mostRecentAt: new Date(Date.now() - 6 * 3_600_000).toISOString(),
-        outfalls: [
-          { name: 'CSO 34', csoOccurredAt: new Date(Date.now() - 6 * 3_600_000).toISOString(), hoursAgo: 6 },
-          { name: 'CSO 12', csoOccurredAt: new Date(Date.now() - 30 * 3_600_000).toISOString(), hoursAgo: 30 },
-        ],
-      },
+      upstreamCso: { count: 2, mostRecentAt },
     });
-    expect(msg).toContain('2 active event(s)');
-    expect(msg).toContain('CSO 34');
+    expect(msg).toContain('2 events upstream in past 48h');
     expect(msg).toContain('~6h ago');
     expect(msg).toContain('caution for swim/wade');
   });
 
-  it('lists up to 3 outfalls but not more', () => {
+  it('singular count renders without trailing "s"', () => {
     const msg = buildUserMessage({
       ...baseInput,
-      upstreamCso: {
-        count: 4,
-        mostRecentAt: new Date().toISOString(),
-        outfalls: [
-          { name: 'A', csoOccurredAt: new Date().toISOString(), hoursAgo: 1 },
-          { name: 'B', csoOccurredAt: new Date().toISOString(), hoursAgo: 5 },
-          { name: 'C', csoOccurredAt: new Date().toISOString(), hoursAgo: 10 },
-          { name: 'D', csoOccurredAt: new Date().toISOString(), hoursAgo: 20 },
-        ],
-      },
+      upstreamCso: { count: 1, mostRecentAt: new Date(Date.now() - 12 * 3_600_000).toISOString() },
     });
-    expect(msg).toContain('A');
-    expect(msg).toContain('B');
-    expect(msg).toContain('C');
-    expect(msg).not.toContain('D ~'); // 4th outfall is truncated
+    expect(msg).toContain('1 event upstream in past 48h');
+    expect(msg).not.toContain('1 events upstream');
+  });
+
+  it('NEVER includes outfall IDs — no "CSO N" pattern in output', () => {
+    const msg = buildUserMessage({
+      ...baseInput,
+      upstreamCso: { count: 3, mostRecentAt: new Date(Date.now() - 4 * 3_600_000).toISOString() },
+    });
+    // The count-only shape guarantees no outfall name can appear
+    expect(msg).not.toMatch(/CSO\s*\d+/i);
+  });
+});
+
+// ─── System prompt — CSO REASONING block ─────────────────────────────────────
+
+describe('SYSTEM_PROMPT — CSO REASONING block', () => {
+  it('contains the "Never surface outfall IDs" rule', () => {
+    expect(SYSTEM_PROMPT).toContain('Never surface outfall IDs');
+  });
+
+  it('prohibits "CSO 34" as an example of what not to say', () => {
+    // The system prompt must document the prohibition with the canonical example
+    expect(SYSTEM_PROMPT).toContain('"CSO 34"');
   });
 });
 
@@ -296,23 +301,33 @@ describe('computeLocationHashForTest — CSO hash stability', () => {
     const h0 = computeLocationHashForTest({ ...base, upstreamCso: null });
     const h1 = computeLocationHashForTest({
       ...base,
-      upstreamCso: {
-        count: 1,
-        mostRecentAt: '2026-05-29T10:00:00Z',
-        outfalls: [{ name: 'CSO 34', csoOccurredAt: '2026-05-29T10:00:00Z', hoursAgo: 4 }],
-      },
+      upstreamCso: { count: 1, mostRecentAt: '2026-05-29T10:00:00Z' },
     });
     expect(h0).not.toBe(h1);
   });
 
   it('hash changes when upstreamCso.mostRecentAt changes', () => {
-    const signal = (ts: string) => ({
-      count: 1,
-      mostRecentAt: ts,
-      outfalls: [{ name: 'CSO 34', csoOccurredAt: ts, hoursAgo: 4 }],
+    const h1 = computeLocationHashForTest({
+      ...base,
+      upstreamCso: { count: 1, mostRecentAt: '2026-05-29T06:00:00Z' },
     });
-    const h1 = computeLocationHashForTest({ ...base, upstreamCso: signal('2026-05-29T06:00:00Z') });
-    const h2 = computeLocationHashForTest({ ...base, upstreamCso: signal('2026-05-29T12:00:00Z') });
+    const h2 = computeLocationHashForTest({
+      ...base,
+      upstreamCso: { count: 1, mostRecentAt: '2026-05-29T12:00:00Z' },
+    });
+    expect(h1).not.toBe(h2);
+  });
+
+  it('hash stays stable regardless of count when mostRecentAt is the same', () => {
+    // Count changes SHOULD change the hash (different prompt text)
+    const h1 = computeLocationHashForTest({
+      ...base,
+      upstreamCso: { count: 1, mostRecentAt: '2026-05-29T06:00:00Z' },
+    });
+    const h2 = computeLocationHashForTest({
+      ...base,
+      upstreamCso: { count: 3, mostRecentAt: '2026-05-29T06:00:00Z' },
+    });
     expect(h1).not.toBe(h2);
   });
 });

@@ -120,10 +120,11 @@ function computeMetroHash(input: MetroSummaryInput): string {
     closures: (input.activeClosures ?? [])
       .map((c) => `${c.locationSlug}:${c.kind}`)
       .sort(),
-    // CSO: count + most-recent hoursAgo are enough — a new outfall event
-    // invalidates without over-fragmenting on array reorderings.
-    activeCsoCount: (input.activeCsoOutfalls ?? []).length,
-    activeCsoMostRecentHoursAgo: input.activeCsoOutfalls?.[0]?.hoursAgo ?? null,
+    // CSO: count-only shape (sub-goal 96). Outfall names are no longer in the
+    // prompt input — counts + advisory windows are sufficient to detect changes
+    // that warrant a fresh AI generation.
+    csoActivelyDischargingCount: input.cso?.activelyDischarging.count ?? 0,
+    csoAdvisoryCount: input.cso?.advisoriesOnSelectedDate.count ?? 0,
   }));
 }
 

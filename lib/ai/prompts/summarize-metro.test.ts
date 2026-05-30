@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildMetroUserMessage, type MetroSummaryInput } from './summarize-metro';
 import { computeMetroHashForTest } from '@/lib/ai/get-or-generate';
+import { SYSTEM_PROMPT } from '@/lib/ai/system-prompt';
 
 // ─── Minimal MetroRiverState stub ──────────────────────────────────────────────
 
@@ -35,47 +36,62 @@ const baseMetroInput: MetroSummaryInput = {
   activeCSOAdvisory: false,
   hasHighSeverityAdvisory: false,
   activeClosures: [],
-  activeCsoOutfalls: [],
+  // cso field omitted → no active overflows
 };
 
 // ─── buildMetroUserMessage — CSO section ──────────────────────────────────────
 
 describe('buildMetroUserMessage — CSO section', () => {
-  it('emits "none" when activeCsoOutfalls is empty', () => {
-    const msg = buildMetroUserMessage({ ...baseMetroInput, activeCsoOutfalls: [] });
-    expect(msg).toContain('Active CSO outfalls (past 48h): none.');
+  it('emits "no active overflows" when cso is omitted', () => {
+    const msg = buildMetroUserMessage(baseMetroInput);
+    expect(msg).toContain('no active overflows');
   });
 
-  it('emits "none" when activeCsoOutfalls is omitted', () => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { activeCsoOutfalls: _omit, ...withoutCso } = baseMetroInput;
-    const msg = buildMetroUserMessage(withoutCso);
-    expect(msg).toContain('Active CSO outfalls (past 48h): none.');
-  });
-
-  it('reports count, first outfall name, hoursAgo, and caution when outfalls are active', () => {
+  it('emits "no active overflows" when cso counts are both zero', () => {
     const msg = buildMetroUserMessage({
       ...baseMetroInput,
-      activeCsoOutfalls: [
-        { name: 'CSO 34', hoursAgo: 5 },
-        { name: 'CSO 12', hoursAgo: 18 },
-        { name: 'CSO 07', hoursAgo: 42 },
-      ],
+      cso: {
+        activelyDischarging: { count: 0 },
+        advisoriesOnSelectedDate: { count: 0, windowEndsAt: null },
+      },
     });
-    expect(msg).toContain('Active CSO outfalls (past 48h): 3 total.');
-    expect(msg).toContain('CSO 34');
-    expect(msg).toContain('~5h ago');
+    expect(msg).toContain('no active overflows');
+  });
+
+  it('reports active discharge count when overflows are present', () => {
+    const msg = buildMetroUserMessage({
+      ...baseMetroInput,
+      cso: {
+        activelyDischarging: { count: 3 },
+        advisoriesOnSelectedDate: { count: 3, windowEndsAt: '2026-05-31T03:00:00Z' },
+      },
+    });
+    expect(msg).toContain('3 overflows active');
+    expect(msg).toContain('Advisory windows covering today: 3');
     expect(msg).toContain('Caution for all downstream swimming access points.');
   });
 
-  it('reports singular outfall correctly', () => {
+  it('renders singular overflow count correctly', () => {
     const msg = buildMetroUserMessage({
       ...baseMetroInput,
-      activeCsoOutfalls: [{ name: 'CSO 22', hoursAgo: 12 }],
+      cso: {
+        activelyDischarging: { count: 1 },
+        advisoriesOnSelectedDate: { count: 1, windowEndsAt: null },
+      },
     });
-    expect(msg).toContain('Active CSO outfalls (past 48h): 1 total.');
-    expect(msg).toContain('CSO 22');
-    expect(msg).toContain('~12h ago');
+    expect(msg).toContain('1 overflow active');
+    expect(msg).not.toContain('1 overflows active');
+  });
+
+  it('NEVER includes outfall IDs in the prompt text — no "CSO N" pattern', () => {
+    const msg = buildMetroUserMessage({
+      ...baseMetroInput,
+      cso: {
+        activelyDischarging: { count: 5 },
+        advisoriesOnSelectedDate: { count: 5, windowEndsAt: '2026-05-31T03:00:00Z' },
+      },
+    });
+    expect(msg).not.toMatch(/CSO\s*\d+/i);
   });
 });
 
@@ -88,24 +104,45 @@ describe('computeMetroHashForTest — CSO hash stability', () => {
     expect(h1).toBe(h2);
   });
 
-  it('hash changes when activeCsoOutfalls count goes 0→1', () => {
-    const h0 = computeMetroHashForTest({ ...baseMetroInput, activeCsoOutfalls: [] });
+  it('hash changes when cso.activelyDischarging.count goes 0→1', () => {
+    const h0 = computeMetroHashForTest(baseMetroInput);
     const h1 = computeMetroHashForTest({
       ...baseMetroInput,
-      activeCsoOutfalls: [{ name: 'CSO 34', hoursAgo: 6 }],
+      cso: {
+        activelyDischarging: { count: 1 },
+        advisoriesOnSelectedDate: { count: 1, windowEndsAt: null },
+      },
     });
     expect(h0).not.toBe(h1);
   });
 
-  it('hash changes when most-recent hoursAgo changes', () => {
+  it('hash changes when advisory count changes', () => {
     const h1 = computeMetroHashForTest({
       ...baseMetroInput,
-      activeCsoOutfalls: [{ name: 'CSO 34', hoursAgo: 6 }],
+      cso: {
+        activelyDischarging: { count: 1 },
+        advisoriesOnSelectedDate: { count: 1, windowEndsAt: null },
+      },
     });
     const h2 = computeMetroHashForTest({
       ...baseMetroInput,
-      activeCsoOutfalls: [{ name: 'CSO 34', hoursAgo: 12 }],
+      cso: {
+        activelyDischarging: { count: 1 },
+        advisoriesOnSelectedDate: { count: 3, windowEndsAt: null },
+      },
     });
     expect(h1).not.toBe(h2);
+  });
+});
+
+// ─── System prompt — CSO REASONING block ─────────────────────────────────────
+
+describe('SYSTEM_PROMPT — CSO REASONING block (metro prompt)', () => {
+  it('contains the "Never surface outfall IDs" rule', () => {
+    expect(SYSTEM_PROMPT).toContain('Never surface outfall IDs');
+  });
+
+  it('contains count-based guidance for the cso metro input', () => {
+    expect(SYSTEM_PROMPT).toContain('NEVER name specific outfalls');
   });
 });

@@ -57,11 +57,14 @@ export function richmondUtcOffset(dateStr: string): 4 | 5 {
  *
  * Used by CsoBanner to display advisory window end times in plain language.
  *
- * Two separate toLocaleString calls avoid the ICU engine separator discrepancy
- * where Cloudflare Workers emits "Sat, 7 PM" while V8 emits "Sat 7 PM" when
- * weekday and hour are combined in a single call — see the comment in
- * RiverConditionsDetailDialog.tsx's formatWeekdayHour for the full story.
- * By joining manually we guarantee byte-identical output across all engines.
+ * Uses the same two-call ICU pattern as
+ * components/metro/RiverConditionsDetailDialog.tsx's formatWeekdayHour to
+ * ensure server (Workers ICU) and client (V8) produce identical output —
+ * the canonical fix for React #418 hydration mismatches on weekday + hour
+ * formatting. When weekday and hour are combined in a single toLocaleString
+ * call, Cloudflare Workers emits a comma separator ("Sat, 7 PM") while V8
+ * omits it ("Sat 7 PM"), causing a hydration mismatch. Two separate calls
+ * joined manually guarantee byte-identical output across all engines.
  */
 export function formatCsoWindowEnd(isoString: string): string {
   const d = new Date(isoString);

@@ -713,6 +713,17 @@ Both the gauge and JRA samples can show "safe" while a CSO is still active.
 Bacteria from a CSO discharge do not appear in JRA weekly samples for several
 days. Reason about each independently. Do NOT conflate them.
 
+OUTFALL ID RULE — NON-NEGOTIABLE:
+  Never surface outfall IDs (e.g., "CSO 34", "CSO 12", "CSO 07").
+  Use counts and geographic context only:
+    ✓ "a sewer overflow upstream"
+    ✓ "3 sewer overflows in Richmond"
+    ✓ "an active overflow event upstream of this access point"
+    ✗ "CSO 34 overflowed ~6h ago"
+    ✗ "Outfall CSO 12 is active"
+  The upstream count and approximate timing are sufficient for safety guidance.
+  Outfall IDs are infrastructure identifiers that mean nothing to families.
+
 PER-CALL INPUT FIELDS:
 
   upstream_cso — per-location upstream CSO signal
@@ -722,22 +733,25 @@ PER-CALL INPUT FIELDS:
     count > 0:
       One or more CSO events upstream of this access point in the past 48 h.
       → Bacteria are likely elevated. Mention this explicitly in body_md.
-      → Reference the most-recent event timing (hours_ago) from the data.
+      → Reference the event count and approximate timing (~N h ago).
+      → NEVER name the specific outfall — use "an upstream overflow" or
+         "N sewer overflow events upstream of this location."
       → Recommend caution for swimming and wading at this location.
       → Apply the ${swim.post_rain_hold_hours} h swim hold regardless of gauge or JRA readings.
       → Note elevated risk for children and immunocompromised individuals.
 
-  active_cso_outfalls — metro-level aggregated set
-    Used only in metro summaries (SCHEMA B).
-    Empty array (length = 0):
+  cso — metro-level CSO state (SCHEMA B only)
+    Used only in metro summaries.
+    activelyDischarging.count = 0 AND advisoriesOnSelectedDate.count = 0:
       No active CSO events anywhere in the metro reach — do NOT mention CSO.
-    Non-empty:
-      Overflows are active in the metro area.
-      → Reference the overall CSO situation in body_md.
+    Otherwise:
+      Overflows are active or recently active in the metro area.
+      → Reference the overall count in body_md (e.g., "several sewer overflows active
+         in Richmond" or "N overflow events in the past 48 hours").
+      → NEVER name specific outfalls.
       → Flag swimming access points as requiring caution.
-      → Individual locations vary in upstream exposure depending on position
-         relative to the outfalls, but err on the side of caution for any
-         swimming location downstream of an active outfall.
+      → Individual locations vary in upstream exposure by position, but err on the
+         side of caution for any swimming location in the downtown reach.
 
 WHEN THERE IS NO CSO DATA IN THE CALL: say nothing about CSO. Do not
 speculate about potential overflows or historical events not in the data.
@@ -746,7 +760,8 @@ Do not insert a "no CSO issues" clause — silence is correct.
 WHEN THERE IS AN ACTIVE CSO:
   • Lead with CSO caution in the swimming activity note.
   • Include a brief CSO mention in body_md (one sentence is enough).
-  • Reference the timing: "A CSO discharge occurred ~N hours ago at [name]."
+  • Reference the approximate timing ("a sewer overflow event ~N hours ago") —
+    never the outfall name.
   • Pathogens from CSO include Cryptosporidium, Giardia, and enteric viruses
     in addition to E. coli — the risk window extends to ${swim.post_rain_hold_hours} h even after the
     discharge stops and the river clears visually.
