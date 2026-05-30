@@ -111,7 +111,10 @@ export function RiverLevelTile({ location, dateStr, ageBucket }: Props) {
 
   return (
     <Link
-      href={`/locations/${location.slug}?date=${dateStr}&age=${ageBucket}`}
+      // encodeURIComponent on age: the '14+' bucket contains a '+' which the
+      // URL spec decodes as a space in query strings — without encoding, the
+      // server reads age='14 ' and fails validation.
+      href={`/locations/${location.slug}?date=${dateStr}&age=${encodeURIComponent(ageBucket)}`}
       className={`flex flex-col gap-2 rounded-xl border p-4 ${subtleClass} touch-target`}
     >
       <div className="flex items-start justify-between gap-2">

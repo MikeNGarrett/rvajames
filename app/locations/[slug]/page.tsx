@@ -105,7 +105,7 @@ export default async function LocationPage({ params, searchParams }: Props) {
       <main className="max-w-lg mx-auto px-4 py-5">
         {/* Back nav */}
         <Link
-          href={`/?date=${dateStr}&age=${ageBucket}`}
+          href={`/?date=${dateStr}&age=${encodeURIComponent(ageBucket)}`}
           className="touch-target inline-flex items-center text-sm text-rva-blue mb-4"
         >
           ← All locations

@@ -73,7 +73,7 @@ export async function MetroSummaryPanel({ date, ageBucket }: Props) {
             {summary.best_bets_today.map((bet) => (
               <li key={bet.location_slug}>
                 <Link
-                  href={`/locations/${bet.location_slug}?date=${date}&age=${ageBucket}`}
+                  href={`/locations/${bet.location_slug}?date=${date}&age=${encodeURIComponent(ageBucket)}`}
                   className="flex items-center justify-between gap-2 touch-target group"
                 >
                   <div>
