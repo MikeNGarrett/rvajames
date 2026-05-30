@@ -8,6 +8,7 @@ import { getOrGenerateMetro } from '@/lib/ai/get-or-generate';
 import { getMetroRiverState } from './river-segment';
 import { getActiveStatuses } from './location-status';
 import { resolveDateMode } from './date-range';
+import { computeCsoState } from './today';
 import type { AgeBucket } from '@/lib/url-state';
 import type { MetroSummary } from '@/lib/ai/prompts/summarize-metro';
 import { csoAdvisoryStatus } from '@/lib/safety/rules';
@@ -28,7 +29,7 @@ export async function getMetroSummary(
   const now = new Date();
 
   // Fetch supporting data in parallel
-  const [metroState, advisoriesResult, nwsSnap, activeStatuses] = await Promise.all([
+  const [metroState, advisoriesResult, nwsSnap, activeStatuses, csoState] = await Promise.all([
     getMetroRiverState(),
     supabase
       .from('advisories')
@@ -42,6 +43,10 @@ export async function getMetroSummary(
       .limit(1)
       .maybeSingle(),
     getActiveStatuses(now),
+    // Use the single source of truth for CSO live/residual state.
+    // Don't derive these counts from the advisories list above — that diverges
+    // from the cso_outfalls.current_overflow=true live signal.
+    computeCsoState(date),
   ]);
 
   const advisories = advisoriesResult.data ?? [];
@@ -56,21 +61,16 @@ export async function getMetroSummary(
     csoAdvisoryStatus(metroAdvisories.map((a) => ({ kind: a.severity }))) === 'danger' ||
     metroAdvisories.some((a) => a.kind === 'cso_overflow');
 
-  // Build CSO count-only context for the AI prompt.
-  // Count active cso_overflow advisories and find the latest window end time.
-  const csoAdvisories = metroAdvisories.filter((a) => a.kind === 'cso_overflow');
-  const csoWindowEndsAt =
-    csoAdvisories
-      .map((a) => a.effective_to)
-      .filter((v): v is string => typeof v === 'string')
-      .sort()
-      .at(-1) ?? null;
-
+  // CSO count-only context for the AI prompt comes from computeCsoState
+  // above (Promise.all). Two distinct signals:
+  //   activelyDischarging.count   — cso_outfalls.current_overflow=true (live)
+  //   advisoriesOnSelectedDate.count — advisories whose 48h window covers date
+  // Project the slimmer shape the metro AI prompt expects.
   const cso = {
-    activelyDischarging: { count: csoAdvisories.length },
+    activelyDischarging:      { count: csoState.activelyDischarging.count },
     advisoriesOnSelectedDate: {
-      count: csoAdvisories.length,
-      windowEndsAt: csoWindowEndsAt,
+      count:        csoState.advisoriesOnSelectedDate.count,
+      windowEndsAt: csoState.advisoriesOnSelectedDate.windowEndsAt,
     },
   };
 

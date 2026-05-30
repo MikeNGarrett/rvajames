@@ -211,7 +211,17 @@ const EMPTY_CSO_STATE: CsoState = {
  *  1. cso_outfalls WHERE current_overflow=true AND affects_james_mainstem=true
  *  2. advisories WHERE kind='cso_overflow' AND window covers dateStr
  */
-async function computeCsoState(dateStr: string): Promise<CsoState> {
+/**
+ * Computes the two-signal CSO state for the given date.
+ *
+ * Exported so callers outside today.ts (e.g. lib/queries/metro-summary.ts)
+ * use the same query rather than reimplementing — sub-goal 96's first cut
+ * derived activelyDischarging.count from the advisory list, which diverges
+ * from the true live-overflow count any time an outfall stops discharging
+ * while its 48h advisory window remains open. Both paths must use this
+ * function.
+ */
+export async function computeCsoState(dateStr: string): Promise<CsoState> {
   const supabase = await createServerClient('anon');
   const { fromLt, toGt } = buildAdvisoryDateFilter(dateStr);
 
