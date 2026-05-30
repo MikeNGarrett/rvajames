@@ -6,7 +6,7 @@ import { getForecast } from './forecast';
 import { getAllLatestWaterQualityReadings } from './water-quality';
 import type { NoaaAhpsForecastPoint, NoaaAhpsPayload } from '@/lib/ingest/noaa-ahps';
 import { combinedLocationStatus, type SafetyStatus } from '@/lib/safety/rules';
-import { formatRichmondDate } from '@/lib/utils/date-tz';
+import { formatRichmondDate, richmondUtcOffset } from '@/lib/utils/date-tz';
 import { isInWindow } from '@/lib/queries/date-range';
 import { getUpstreamCsoForLocation, addOneDayISO, type UpstreamCsoSignal } from '@/lib/safety/upstream-cso';
 
@@ -169,20 +169,34 @@ function pickForecastPoint(
 /**
  * Returns the date-filter bounds for the advisoriesOnSelectedDate query.
  * An advisory covers `dateStr` when:
- *   effective_from < start-of-next-day  AND  effective_to > start-of-selected-day
+ *   effective_from < ET-midnight-of-next-day  AND  effective_to > ET-midnight-of-selected-day
  *
- * Both bounds are UTC midnight of the relevant date (interpreted as a full
- * UTC day). For observed mode, `dateStr` is today, so advisories that expire
- * any time after midnight UTC today qualify. For forecast mode, advisories
- * covering any part of the forecast date qualify.
+ * Both bounds are expressed as UTC timestamps anchored to Eastern Time midnight.
+ * `dateStr` is always an ET calendar date (produced by `formatRichmondDate`), and
+ * advisory timestamps (effective_from / effective_to) are stored in UTC, so the
+ * day-boundary must also use ET midnight rather than UTC midnight to avoid a
+ * 4–5 hour false-positive/false-negative window around midnight ET.
+ *
+ * Examples (EDT, UTC-4):
+ *   buildAdvisoryDateFilter('2026-05-30')
+ *   → { fromLt: '2026-05-31T04:00:00Z', toGt: '2026-05-30T04:00:00Z' }
+ *
+ * Examples (EST, UTC-5):
+ *   buildAdvisoryDateFilter('2026-12-31')
+ *   → { fromLt: '2027-01-01T05:00:00Z', toGt: '2026-12-31T05:00:00Z' }
  *
  * Exported for unit testing.
  */
 export function buildAdvisoryDateFilter(dateStr: string): { fromLt: string; toGt: string } {
-  const nextDay = addOneDayISO(dateStr);
+  const nextDay     = addOneDayISO(dateStr);
+  // Compute the ET offset for each day separately so DST transitions are handled
+  // correctly: on fall-back day (EDT→EST, e.g. Nov 7→8), the start uses UTC-4
+  // and the end uses UTC-5, making the ET day 25h as expected.
+  const startOffset = richmondUtcOffset(dateStr);
+  const endOffset   = richmondUtcOffset(nextDay);
   return {
-    fromLt: `${nextDay}T00:00:00Z`,
-    toGt:   `${dateStr}T00:00:00Z`,
+    fromLt: `${nextDay}T${String(endOffset).padStart(2, '0')}:00:00Z`,
+    toGt:   `${dateStr}T${String(startOffset).padStart(2, '0')}:00:00Z`,
   };
 }
 

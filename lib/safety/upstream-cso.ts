@@ -8,6 +8,7 @@
  */
 
 import { createServerClient } from '@/lib/supabase/server';
+import { richmondUtcOffset } from '@/lib/utils/date-tz';
 
 export interface UpstreamCsoOutfall {
   name: string;
@@ -71,10 +72,15 @@ export async function getUpstreamCsoForLocation(
 
   if (forSelectedDate) {
     // Date-overlap mode: advisory must cover the selected date.
-    const nextDay = addOneDayISO(forSelectedDate);
+    // Use ET midnight (not UTC midnight) so the day boundaries align with the
+    // ET calendar date that `forSelectedDate` represents. Use separate offsets
+    // for start and end so DST fall-back days (Nov 7 → 8) span 25h correctly.
+    const nextDay     = addOneDayISO(forSelectedDate);
+    const startOffset = richmondUtcOffset(forSelectedDate);
+    const endOffset   = richmondUtcOffset(nextDay);
     query = query
-      .lt('effective_from', `${nextDay}T00:00:00Z`)
-      .gt('effective_to', `${forSelectedDate}T00:00:00Z`);
+      .lt('effective_from', `${nextDay}T${String(endOffset).padStart(2, '0')}:00:00Z`)
+      .gt('effective_to',   `${forSelectedDate}T${String(startOffset).padStart(2, '0')}:00:00Z`);
   } else {
     // Default: events whose effective_from is within the past windowHours.
     const windowStart = new Date(Date.now() - windowHours * 3_600_000).toISOString();

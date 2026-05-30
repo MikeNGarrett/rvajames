@@ -29,6 +29,29 @@ export function formatRichmondDate(date: Date): string {
 }
 
 /**
+ * Returns the positive UTC offset (hours) for America/New_York on the given date.
+ *
+ *   EDT (UTC−4): ~Mar 14 – Nov 7 (second Sunday in March to first Sunday in November)
+ *   EST (UTC−5): otherwise
+ *
+ * Uses the same DST approximation as normalizeEmnetTimestamp in cso-emnet.ts:
+ * EDT when (month > 3 && month < 11) || (month === 3 && day >= 14) || (month === 11 && day <= 7).
+ *
+ * Exported so callers can anchor UTC timestamps to ET midnight without duplicating
+ * the DST logic across the codebase.
+ */
+export function richmondUtcOffset(dateStr: string): 4 | 5 {
+  const parts = dateStr.split('-').map(Number);
+  const month = parts[1];
+  const day   = parts[2];
+  const isEDT =
+    (month > 3 && month < 11) ||
+    (month === 3 && day >= 14) ||
+    (month === 11 && day <= 7);
+  return isEDT ? 4 : 5;
+}
+
+/**
  * Adds `days` calendar days to a 'YYYY-MM-DD' iso string.
  * Operates on the date value only (no timezone conversion) — safe for
  * both DST-aware and DST-naive contexts.
