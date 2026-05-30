@@ -235,7 +235,39 @@ QUEUED (after 63–67)
        content (63–67). Plan doc renumbered in the same commit as this update.
 
        Execution order locked: CSO/EmNet (80–85) → CSO UX refinement (93–97) →
-       dynamic-content (63–67) → Richmond Conditions (86–91).
+       dynamic-content (63–67) → Richmond Conditions (86–91) → /about page.
+
+QUEUED (after 86–91, last slot)
+       /about page — single static page introducing project + creator
+       Single self-contained page at app/about/page.tsx. Sized for one /goal
+       session. User decision 2026-05-30: ship last, after all functional rounds.
+
+       Content structure:
+       - Project intent — what RVA James is and why it exists (Richmond families,
+         James River, consolidating fragmented data sources into kid-safe guidance).
+         Tone matches the existing brand voice (warm, plain language, honest about
+         AI involvement — mirrors /safety + DisclaimerFooter posture).
+       - Creator section — short bio of Mike Garrett with his motivation for
+         building this. NEEDS USER INPUT at execution time: name confirmation,
+         role/title, what to share about his connection to Richmond + the river,
+         which contact links to surface (email? LinkedIn? GitHub?).
+       - "How it's built" — plain-language overview (2–3 sentences: Next.js +
+         Cloudflare + Supabase + Claude AI; data sources USGS / NWS / JRA /
+         Richmond DPU) PLUS a collapsible "For the technically curious" sidebar
+         using <details>/<summary>. Sidebar covers the stack at more depth —
+         cron schedule, prompt caching, freshness model. Decision per Q&A
+         2026-05-30.
+
+       Navigation: confirm at execution time whether /about gets a nav link, a
+       footer link, or both. Existing footer is DisclaimerFooter — may need an
+       expansion or a sibling component.
+
+       Open inputs needed from user before execution:
+       1. Bio paragraph (or 3–5 facts to draft from)
+       2. Contact links to include
+       3. Photo? (optional)
+       4. Footer-only vs nav vs both
+       5. Any GitHub repo link if the project is/will-be public
 
 DEFER  Finding 13 — dark mode (own round if/when prioritized)
 
