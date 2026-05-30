@@ -52,6 +52,25 @@ export function richmondUtcOffset(dateStr: string): 4 | 5 {
 }
 
 /**
+ * Formats a UTC ISO timestamp as a friendly "Weekday Hour AM/PM" string in
+ * Richmond time — e.g. "Saturday 7 PM" or "Monday 11 AM".
+ *
+ * Used by CsoBanner to display advisory window end times in plain language.
+ *
+ * Two separate toLocaleString calls avoid the ICU engine separator discrepancy
+ * where Cloudflare Workers emits "Sat, 7 PM" while V8 emits "Sat 7 PM" when
+ * weekday and hour are combined in a single call — see the comment in
+ * RiverConditionsDetailDialog.tsx's formatWeekdayHour for the full story.
+ * By joining manually we guarantee byte-identical output across all engines.
+ */
+export function formatCsoWindowEnd(isoString: string): string {
+  const d = new Date(isoString);
+  const weekday = d.toLocaleString('en-US', { weekday: 'long',    timeZone: RICHMOND_TZ });
+  const hour    = d.toLocaleString('en-US', { hour:    'numeric', timeZone: RICHMOND_TZ });
+  return `${weekday} ${hour}`;
+}
+
+/**
  * Adds `days` calendar days to a 'YYYY-MM-DD' iso string.
  * Operates on the date value only (no timezone conversion) — safe for
  * both DST-aware and DST-naive contexts.

@@ -136,6 +136,80 @@ export default function SafetyPage() {
         </ul>
       </section>
 
+      <section id="cso" className="mb-6">
+        <h2 className="text-lg font-semibold text-text mb-3">Combined Sewer Overflows in Richmond</h2>
+        <div className="rounded-xl border border-border bg-surface-raised p-4 max-w-prose space-y-4 text-sm text-text-secondary leading-relaxed">
+          <p>
+            Richmond&rsquo;s combined sewer system carries both sewage and stormwater in the same
+            underground pipes. On most days, everything flows to the treatment plant as intended.
+            After heavy rain, however, the volume can overwhelm the plant&rsquo;s capacity — and
+            the overflow valves open, releasing a mix of untreated sewage and stormwater directly
+            into the James River to prevent backups into streets and basements. This is a combined
+            sewer overflow, or CSO.
+          </p>
+          <p>
+            The combined system covers much of downtown Richmond, running along the same stretch of
+            the James where most of the popular river access points are — Brown&rsquo;s Island,
+            Belle Isle, the Manchester Climbing Wall, and others. After significant rain (typically
+            anything over half an inch in a few hours), overflows at multiple outfalls are common.
+            The monitoring data on this site comes from Richmond DPU&rsquo;s{' '}
+            <a
+              href="https://apps.emnet.net/richmond-pub-map-app/?city=47&config=5c0cacee-7e95-4eea-922d-c736c83eb4b9"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-rva-blue underline"
+            >
+              EmNet real-time monitoring system
+            </a>
+            , which tracks each outfall&rsquo;s active discharge status.
+          </p>
+          <p>
+            Bacterial levels in the James — particularly E.&nbsp;coli and enterococcus — spike
+            after a CSO event and take time to return to safe levels. Richmond DPU and the James
+            River Association both recommend avoiding water contact for at least 48 hours after a
+            known overflow. That&rsquo;s why this site shows an advisory window extending 48 hours
+            from the most recent observed discharge, even if the overflow has already stopped. When
+            a site is still actively discharging, the window keeps extending so it always reflects
+            the full expected recovery time.
+          </p>
+          <div className="pt-2 space-y-1.5 border-t border-border">
+            <p className="font-medium text-text text-xs uppercase tracking-wide">Sources</p>
+            <ul className="space-y-1">
+              <li>
+                <a
+                  href="https://www.rva.gov/public-utilities/combined-sewer-overflow-advisory"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-rva-blue underline"
+                >
+                  Richmond DPU — Combined Sewer Overflow Advisories
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://apps.emnet.net/richmond-pub-map-app/?city=47&config=5c0cacee-7e95-4eea-922d-c736c83eb4b9"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-rva-blue underline"
+                >
+                  EmNet — Richmond CSO real-time monitoring map
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://www.cdc.gov/healthywater/swimming/swimmers/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-rva-blue underline"
+                >
+                  CDC — Healthy Swimming for recreational water users
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
       <section className="mb-6">
         <h2 className="text-lg font-semibold text-text mb-3">Trail safety</h2>
         <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 list-none p-0 m-0">
