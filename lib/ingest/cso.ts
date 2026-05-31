@@ -160,23 +160,32 @@ export async function runCsoIngestion(): Promise<RunResult> {
 
     if (branch === 'active-overflow') {
       // ── Branch 1: site is actively discharging ─────────────────────────────
-      // Bump an existing active advisory's effective_to, or create a new one.
-      // This keeps advisories current for sites that have been overflowing
-      // continuously past the original 48h window.
+      // Bump the advisory for THIS EVENT (matched by source_id), or create a
+      // new one. We key on source_id rather than "any open advisory for this
+      // outfall" because that broader match caused a zombie-advisory bug
+      // observed in production 2026-05-31: a July 2025 advisory got bumped
+      // forward every time the same outfall transitioned to overflow=true at
+      // any later ingest, regardless of which event was actually starting.
+      // Result: a 2025-07-09 advisory still in effect in May 2026.
+      //
+      // With source_id (which embeds csoLastOccurrence), each discharge event
+      // has its own advisory lifecycle. A *continuing* event keeps the same
+      // csoLastOccurrence across ingests, so we bump the same row. A *new*
+      // event (different csoLastOccurrence) creates a new advisory. Stale
+      // advisories from past events are never extended again.
+      const effectiveFrom = site.csoLastOccurrence ?? now;
+      const sourceId      = buildSourceId(site.emnetId, effectiveFrom);
+      const newEffectiveTo = ts48hFromNow();
+
       const { data: existingAdvisory } = await supabase
         .from('advisories')
         .select('id')
-        .eq('outfall_id', outfallRow.id)
-        .eq('kind', 'cso_overflow')
-        .gt('effective_to', now)
-        .order('effective_to', { ascending: false })
-        .limit(1)
+        .eq('source', 'emnet_cso')
+        .eq('source_id', sourceId)
         .maybeSingle();
 
-      const newEffectiveTo = ts48hFromNow();
-
       if (existingAdvisory) {
-        // Bump effective_to to now+48h
+        // Same event continuing — bump its effective_to to now+48h.
         const { error: updateError } = await supabase
           .from('advisories')
           .update({ effective_to: newEffectiveTo })
@@ -185,33 +194,32 @@ export async function runCsoIngestion(): Promise<RunResult> {
           console.error(`[cso] advisory bump failed for outfall ${site.name}:`, updateError.message);
         } else {
           rowsWritten++;
-          console.log(`[cso] active CSO at ${site.name} — advisory effective_to bumped to ${newEffectiveTo}`);
+          console.log(`[cso] active CSO at ${site.name} (event ${effectiveFrom}) — advisory bumped to ${newEffectiveTo}`);
         }
       } else {
-        // No active advisory — create one. Use csoLastOccurrence as effective_from
-        // if present (preserves chronology), otherwise fall back to now.
-        const effectiveFrom = site.csoLastOccurrence ?? now;
-        const source_id = buildSourceId(site.emnetId, effectiveFrom);
-        if (existingSourceIds.has(source_id)) continue; // safety dedup
+        // New event — insert. The (source, source_id) partial unique index
+        // protects against races; existingSourceIds tracks what we've already
+        // inserted this run.
+        if (existingSourceIds.has(sourceId)) continue;
 
         const { error: insertError } = await supabase.from('advisories').insert({
           source: 'emnet_cso',
-          source_id,
-          kind: 'cso_overflow',
-          severity: 'high',
-          outfall_id: outfallRow.id,
-          headline: buildAdvisoryHeadline(site.name),
-          body: buildAdvisoryBody(site.name, effectiveFrom),
+          source_id:      sourceId,
+          kind:           'cso_overflow',
+          severity:       'high',
+          outfall_id:     outfallRow.id,
+          headline:       buildAdvisoryHeadline(site.name),
+          body:           buildAdvisoryBody(site.name, effectiveFrom),
           effective_from: effectiveFrom,
-          effective_to: newEffectiveTo,
-          location_ids: [],
+          effective_to:   newEffectiveTo,
+          location_ids:   [],
         });
         if (insertError) {
           console.error(`[cso] advisory insert failed for ${site.name}:`, insertError.message);
         } else {
           rowsWritten++;
-          existingSourceIds.add(source_id);
-          console.log(`[cso] active CSO at ${site.name} — new advisory created`);
+          existingSourceIds.add(sourceId);
+          console.log(`[cso] active CSO at ${site.name} (event ${effectiveFrom}) — new advisory created`);
         }
       }
       continue;

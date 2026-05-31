@@ -42,12 +42,35 @@ interface Props {
 
 type BannerState = 'active' | 'residual';
 
+/**
+ * Staleness threshold for the active state. If `current_overflow_observed_at`
+ * is older than this, we downgrade "active" to "residual" — we can't honestly
+ * claim discharge is happening NOW based on data this stale. Live observed in
+ * production 2026-05-31: the cron runs twice daily (06:00, 18:00 UTC), so by
+ * the time a user visits ~10 hours after a 06:00 ingest that captured an
+ * active overflow, the discharge has almost certainly stopped — but the
+ * banner was confidently claiming "Sewer overflow in progress" with a tiny
+ * "Data as of 9h ago" caveat. EmNet's live map disagreed.
+ *
+ * 2 hours matches the typical ingest cadence headroom — well under one
+ * cron cycle, so a fresh active signal still gets the urgent treatment;
+ * stale ones get the more honest "recent past 48 hours" framing.
+ */
+const ACTIVE_STALENESS_HOURS = 2;
+
 function resolveState(
   cso: TodayData['cso'],
   mode: 'observed' | 'forecast',
 ): BannerState | null {
-  // Active discharge is a live real-time signal — show regardless of date mode.
-  if (cso.activelyDischarging.count > 0) return 'active';
+  // Active discharge is a live real-time signal — show regardless of date mode,
+  // but only if the observation is recent. Stale "active" claims are worse than
+  // omitted ones; they overpromise certainty we don't have.
+  if (cso.activelyDischarging.count > 0) {
+    const hoursStale = cso.activelyDischarging.hoursStale ?? Infinity;
+    if (hoursStale <= ACTIVE_STALENESS_HOURS) return 'active';
+    // Fall through — let the residual check handle it. If an advisory window
+    // is still open we render residual; otherwise null (no banner).
+  }
   // Residual (advisory window still in effect) is only meaningful in observed
   // mode: advisoriesOnSelectedDate covers today when mode=observed, so it
   // correctly represents "is an advisory window active right now."
