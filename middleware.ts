@@ -68,6 +68,21 @@ export function middleware(request: NextRequest) {
     'camera=(), microphone=(), geolocation=()',
   );
 
+  // ── HSTS (spec-website audit, sub-goal A) ───────────────────────────────
+  // 1 year max-age + includeSubDomains. NO `preload` directive yet — the
+  // HSTS preload list is irreversible (removal takes months) so the standard
+  // practice is to ship without preload first, monitor for 30+ days that
+  // every subdomain serves HTTPS cleanly, then add `preload` and submit to
+  // https://hstspreload.org. Sub-goal A explicitly defers that step.
+  //
+  // Applied to every matched path (not just root) because HSTS is enforced
+  // per host, not per path — browsers cache the directive against the
+  // origin regardless of which URL delivered it.
+  response.headers.set(
+    'Strict-Transport-Security',
+    'max-age=31536000; includeSubDomains',
+  );
+
   // ── CSP Report-Only (Finding 17) ─────────────────────────────────────────
   response.headers.set(
     'Content-Security-Policy-Report-Only',
