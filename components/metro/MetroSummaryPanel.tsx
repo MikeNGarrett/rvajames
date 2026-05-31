@@ -68,22 +68,58 @@ export function MetroSummaryPanel({ date, ageBucket }: Props) {
     [date, ageBucket],
   );
 
+  // Header is computed + rendered server-side so the panel area has a
+  // stable, text-bearing LCP candidate in the initial HTML. Before this,
+  // the panel area in the initial paint was just skeleton bars (no text
+  // content), so Chrome's LCP shifted to the AI-fetched content when it
+  // arrived (causing a ~3.7s LCP / Performance 88 on the homepage).
+  // With this header in the initial paint, LCP anchors to a deterministic
+  // element near TTFB.
+  const { mode, forecastConfidence } = resolveDateMode(date);
+  const dateLabel = mode === 'forecast' ? formatForecastDate(date) : null;
+
   return (
-    <LazyContent
-      url={url}
-      parse={parseMetroSummaryResponse}
-      skeleton={<MetroSummaryPanelSkeleton />}
-      statusText="Generating recommendations…"
-      spinnerLabel="Loading metro summary"
+    <section
+      aria-label="River conditions summary"
+      className="rounded-xl border border-border bg-surface-raised p-4 mb-4"
+      style={{ viewTransitionName: 'metro-summary' }}
     >
-      {(summary) => (
-        <MetroSummaryContent
-          summary={summary}
-          date={date}
-          ageBucket={ageBucket}
-        />
+      {/*
+       * Header is the LCP anchor — must paint from the initial server-rendered
+       * HTML, regardless of AI fetch state. Forecast mode shows a longer
+       * "Forecast for [date]" + confidence indicator; observed mode keeps a
+       * subtle "Conditions summary" eyebrow.
+       */}
+      {mode === 'forecast' && dateLabel ? (
+        <>
+          <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-1">
+            Forecast for {dateLabel}
+          </p>
+          <ForecastModeIndicator mode={mode} forecastConfidence={forecastConfidence} />
+        </>
+      ) : (
+        <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">
+          Conditions summary
+        </p>
       )}
-    </LazyContent>
+
+      <LazyContent
+        url={url}
+        parse={parseMetroSummaryResponse}
+        skeleton={<MetroSummaryPanelSkeleton />}
+        statusText="Generating recommendations…"
+        spinnerLabel="Loading metro summary"
+      >
+        {(summary) => (
+          <MetroSummaryContent
+            summary={summary}
+            date={date}
+            ageBucket={ageBucket}
+            mode={mode}
+          />
+        )}
+      </LazyContent>
+    </section>
   );
 }
 
@@ -96,28 +132,15 @@ function MetroSummaryContent({
   summary,
   date,
   ageBucket,
+  mode,
 }: {
   summary: MetroSummary;
   date: string;
   ageBucket: AgeBucket;
+  mode: ReturnType<typeof resolveDateMode>['mode'];
 }) {
-  const { mode, forecastConfidence } = resolveDateMode(date);
-  const dateLabel = mode === 'forecast' ? formatForecastDate(date) : null;
-
   return (
-    <section
-      aria-label="River conditions summary"
-      className="rounded-xl border border-border bg-surface-raised p-4 mb-4"
-      style={{ viewTransitionName: 'metro-summary' }}
-    >
-      {mode === 'forecast' && dateLabel ? (
-        <>
-          <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-1">
-            Forecast for {dateLabel}
-          </p>
-          <ForecastModeIndicator mode={mode} forecastConfidence={forecastConfidence} />
-        </>
-      ) : null}
+    <>
       <p className={`text-base font-semibold text-text mb-2${mode === 'forecast' ? ' mt-2' : ''}`}>
         {summary.headline}
       </p>
@@ -199,7 +222,7 @@ function MetroSummaryContent({
           }}
         />
       )}
-    </section>
+    </>
   );
 }
 
@@ -211,8 +234,12 @@ function MetroSummaryContent({
  * add it here.
  */
 export function MetroSummaryPanelSkeleton() {
+  // No outer chrome (rounded-xl / border / bg / padding / mb) — the parent
+  // <section> in MetroSummaryPanel already provides it. The skeleton renders
+  // inside that section as placeholder bars only. min-h preserves CLS-safe
+  // height while the AI fetch resolves.
   return (
-    <div className="rounded-xl border border-border bg-surface-raised p-4 mb-4 animate-pulse motion-reduce:animate-none min-h-[300px]">
+    <div className="animate-pulse motion-reduce:animate-none min-h-[260px]">
       <div className="h-4 bg-surface rounded w-3/4 mb-3" />
       <div className="space-y-2 mb-3">
         <div className="h-3 bg-surface rounded w-full" />
