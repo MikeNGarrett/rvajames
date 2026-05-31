@@ -83,14 +83,22 @@ export function middleware(request: NextRequest) {
     'max-age=31536000; includeSubDomains',
   );
 
-  // ── CSP Report-Only (Finding 17) ─────────────────────────────────────────
+  // ── CSP enforced (spec audit B; graduated from Report-Only 2026-05-31) ────
+  // Finding 17 shipped this in Report-Only mode (0723474, 2026-05-26). After
+  // ~5 days of live monitoring with zero violation reports observed in the
+  // browser console during smoke tests, graduated to enforcement. The policy
+  // string is byte-identical to the prior Report-Only header.
+  //
+  // If a violation surfaces post-graduation, revert just this line back to
+  // the `Content-Security-Policy-Report-Only` header name — the existing
+  // policy directives are tuned for this app's actual fetches.
   response.headers.set(
-    'Content-Security-Policy-Report-Only',
+    'Content-Security-Policy',
     [
       "default-src 'self'",
       // Cloudflare Web Analytics beacon is injected by Cloudflare edge (Finding 10).
       // Include its CDN in script-src and its reporting endpoint in connect-src so
-      // these don't generate violations when we eventually enforce the policy.
+      // these don't generate violations under enforcement.
       "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com",
       "style-src 'self' 'unsafe-inline'",
       "font-src 'self'",
