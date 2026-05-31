@@ -1,0 +1,8 @@
+# Security policy for rvajames.org
+# RFC 9116 — https://www.rfc-editor.org/rfc/rfc9116
+
+Contact: https://github.com/MikeNGarrett/rvajames/security/advisories/new
+Expires: 2027-05-31T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://rvajames.org/.well-known/security.txt
+Policy: https://github.com/MikeNGarrett/rvajames/blob/main/SECURITY.md
