@@ -102,6 +102,15 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 | Date-range-forecast sub-goal 79 | Final a11y + perf pass: fixed chip subtitle contrast (opacity-70 removed, was ~2.94:1), fixed label-content-name-mismatch (aria-label override dropped), deployed round. Lighthouse final: 98/100/96/100 observed, 95/100/96/100 forecast. pa11y 0 violations on 3 URLs. Pre-existing React #418 hydration warning (Best Practices 96) filed as follow-up. | ✅ COMPLETE | `17dde94`, `89f9f32` |
 | Structural advisory dedup | Migration 0012: `source_id text NULL` + partial UNIQUE index `ON advisories (source, source_id) WHERE source_id IS NOT NULL`. One-time cleanup DELETE collapses NWS blind-insert duplicates. All three ingest paths refactored: NWS upserts on `alert.properties.id`, CSO upserts on `hashToHex16(headline+effectiveFrom)` (bulk-expire removed), JRA splits composite source key into `source='jra_water_quality'` + `source_id='{code}:{date}'`. Types regenerated. Commit 1 kept `dedupAdvisories()` as safety net. Commit 2 removed it once UNIQUE constraint was live. `8f65cdd` hotfix read-side defense **RETIRED** — structural constraint supersedes it. | ✅ COMPLETE — migration applied to prod; code deployed in sub-goal 79 deploy; 0 `(source, source_id)` duplicates in prod | `2950e4b`, `929ce08` |
 | React #418 hydration mismatch fix | Root cause: `RiverConditionsDetailDialog` (Client Component) called `new Date(ts).toLocaleString('en-US', { hour: 'numeric', … })` without a `timeZone` option. Server (Cloudflare Worker = UTC) and client (user's browser = local TZ) produced different time strings, causing React to throw #418 on the text node mismatch. Fix: added `timeZone: 'America/New_York'` to all four datetime `toLocaleString` calls in `RiverConditionsDetailDialog`; pinned number `.toLocaleString()` calls to `'en-US'` locale to prevent locale-default divergence on Cloudflare. | ✅ COMPLETE | `36f5166` |
+| Security: postcss override | Next.js 15.5.18 pinned postcss to 8.4.31, below the GHSA-qx2v-qp2m-jg93 patch threshold (8.5.10). Forced postcss ^8.5.10 via pnpm-workspace.yaml `overrides` (pnpm 11 moved overrides out of package.json). Audit clean; tree de-duplicated to single postcss@8.5.15. Real-world XSS exposure was nil (build-time only on author-written CSS) but the override clears Dependabot. | ✅ COMPLETE | `7191087` |
+| Navigation: preserve date+age on outbound location links | Pre-fix: `RiverLevelTile` (homepage cards) and `MetroSummaryPanel` best-bets links navigated to `/locations/<slug>` with no query params — clicking a forecast-date chip then a location card silently reset to today's view. Tile + best-bets hrefs now append `?date=&age=`. Also added `ConditionsForm` to the location detail page so users can change date/age without bouncing back to `/`. | ✅ COMPLETE | `887281a`, `fad109f` |
+| Navigation: URL-encode age bucket in hrefs | `+` in the `14+` bucket decodes as a space in query strings, breaking `isValidAgeBucket` server-side. Three hrefs corrected via `encodeURIComponent(ageBucket)`. Discovered during sub-goal 63 route testing (regression-guard test surfaced the bug). | ✅ COMPLETE | `9f80250` |
+| Dynamic content loading sub-goal 63 | New API routes `/api/metro-summary` and `/api/location-interpretation` — thin HTTP wrappers over `getMetroSummary` / `getLocationDetail`. Zod-validated params (date regex, age refine via `isValidAgeBucket`, slug regex), `isInWindow()` guard, 400/404/502/500 error contract, `Cache-Control: public, max-age=30, stale-while-revalidate=120` (tighter than plan default because cache keys are per-(date, age, slug)). nodejs runtime (consistent with crons, not edge). 22 new tests covering param validation, window rejection, happy path, AI failure, 404, 500. | ✅ COMPLETE | `05d27da` |
+| Dynamic content loading sub-goal 64 | `<LazyContent>` client wrapper + `<Spinner>` + `<SkeletonShimmer>` primitives + `lazyFetch` pure helper. State machine: idle → loading (with optional prior data for stale-while-revalidate) → success → error (with retry button). aria-live="polite", aria-busy toggles, 500ms-delayed status text gate, AbortController on unmount + URL change, `motion-reduce:animate-none` honoured. Shimmer keyframes added to globals.css. 20 new tests (10 on lazyFetch helper, 10 on initial-render shape + a11y attrs via renderToStaticMarkup). | ✅ COMPLETE | `b94d68e` |
+| Dynamic content loading sub-goal 65 | `MetroSummaryPanel` migrated from server component (`await getMetroSummary`) to client component using `<LazyContent>` pointing at `/api/metro-summary`. `<MetroSummaryContent>` extracted as pure render layer. `<Suspense>` boundary removed from `app/page.tsx`. Status text "Generating recommendations…" appears after 500ms. Speculation rules still emitted (browsers honour them when added dynamically post-fetch). MetroSummarySchema used as parse function. Bundle: `/` route 7.93 kB (376 kB First Load) — healthy. | ✅ COMPLETE | `50e51be` |
+| Dynamic content loading sub-goal 66 | Location interpretation migrated via shared `<LocationInterpretationProvider>` context — single fetch of `/api/location-interpretation` exposed to four consumer components (summary, activity matrix, prep checklist, attribution). Preserves the existing page order (AI narrative → water quality → upstream CSO → activity matrix → prep checklist → attribution) without four parallel fetches or layout reorder. `getLocationDetail` accepts `{ skipInterpretation?: boolean }` — the page passes true to skip the server-side AI call; the API route does not (it explicitly wants the AI). `/locations/[slug]` route 3.11 kB (372 kB First Load). | ✅ COMPLETE | `c2e3672` |
+| Dynamic content loading sub-goal 67 | Polish + a11y + Lighthouse verification + end-of-round deploy. Manual smoke covers four states (cold/warm cache, slow 3G, filter change SWR, error → retry, reduced motion, keyboard tab to retry button), Lighthouse mobile must retain 100/100/100/100 on `/` and `/locations/belle-isle`, then `pnpm build:cf && pnpm deploy:cf` followed by post-deploy smoke (browser `load` event no longer waits on AI; `/status` AI cost steady). | ⏳ IN PROGRESS — local code complete; awaiting user-side smoke + deploy + Lighthouse verification. |
+| CSO false-alarm hotfix | Two bugs surfaced 2026-05-31 by user-reported discrepancy between rvajames.org ("Sewer overflow in progress") and EmNet live map (zero active events). (1) Sub-goal 94 auto-extend logic in `lib/ingest/cso.ts` selected "any open advisory for this outfall" when bumping, allowing a July 2025 advisory to be perpetually extended (11 months) every time the same outfall briefly transitioned to overflow=true. Fix: key lookup on `(source, source_id)` — source_id embeds `csoLastOccurrence`, so each event has its own lifecycle. (2) CsoBanner showed "Sewer overflow in progress" with confidence even when `current_overflow_observed_at` was 9+ hours stale. Fix: 2-hour staleness gate downgrades active → residual when data is older. Out-of-scope follow-up: 4 in-flight zombie advisories in prod need a one-time SQL UPDATE retiring them (code prevents future zombies but doesn't clean existing). | ✅ COMPLETE | `464f343` |
 
 ---
 
@@ -225,19 +234,30 @@ QUEUED (after 80–85, ahead of dynamic-content)
 
        Schema migration (93) requires user-applied DDL to prod (agent denied).
 
-QUEUED (after 93–97)
-       Sub-goals 63–67: dynamic content loading
-       See docs/dynamic-content-loading-plan.md. Authored before water quality, queued
-       behind multiple priority rounds, never executed. User confirmed 2026-05-28 the
-       sequencing: run AFTER CSO/EmNet (80–85) ships; further deferred 2026-05-29
-       behind CSO UX refinement (93–97) since both rounds touch the same surfaces.
-       Premise still holds — the work moves AI content from Suspense streaming to
-       client-side fetch via new /api/metro-summary and /api/location-interpretation
-       routes, adds a reusable LazyContent wrapper, gives visible loading + retry
-       affordances, and enables stale-while-revalidate on filter changes. Lighthouse
-       currently 100/100/100/100 so this is UX polish, not perf-critical. Future
-       agents: DO NOT skip again. The plan doc is current; no rewrite needed before
-       execution.
+IN PROGRESS — Sub-goals 63–67: dynamic content loading
+       See docs/dynamic-content-loading-plan.md. Premise: move AI content from
+       Suspense streaming to client-side fetch via new /api/metro-summary and
+       /api/location-interpretation routes, add a reusable LazyContent wrapper,
+       give visible loading + retry affordances, enable stale-while-revalidate
+       on filter changes.
+
+       Sub-goals 63 → 66 ✅ COMPLETE (commits 05d27da, b94d68e, 50e51be, c2e3672).
+       The browser `load` event no longer waits on Anthropic latency on either
+       `/` or `/locations/[slug]`.
+
+       Sub-goal 67 ⏳ IN PROGRESS — local code complete; awaiting user-side
+       smoke (cold/warm cache, slow 3G, filter change, error → retry, reduced
+       motion, keyboard tab to retry button) + `pnpm build:cf && pnpm deploy:cf`
+       + Lighthouse mobile verification (must retain 100/100/100/100 on `/` and
+       `/locations/belle-isle` per hard constraint) + post-deploy smoke + push.
+
+       Round-internal decisions captured:
+         - No dev showcase route — Vitest + manual DevTools throttling instead.
+         - nodejs runtime (not edge) for the new API routes — consistent with crons.
+         - Cache-Control: max-age=30, stale-while-revalidate=120 — tighter than
+           plan default since cache keys are per-(date, age, [slug]).
+         - Sub-goal 66 uses a React Context provider (not four parallel
+           LazyContent boundaries) so page order is preserved with one fetch.
 
 QUEUED (after 63–67)
        Sub-goals 86–91: Richmond Conditions Section (post-launch enhancement)
@@ -253,6 +273,22 @@ QUEUED (after 63–67)
 
        Execution order locked: CSO/EmNet (80–85) → CSO UX refinement (93–97) →
        dynamic-content (63–67) → Richmond Conditions (86–91) → /about page.
+
+QUEUED — Spec-Website audit follow-up
+       See docs/spec-website-audit-plan.md. Source: spec-check run
+       `2026-05-31T02-31-02-Z` against https://specification.website. 7 fails
+       (1 high · 6 medium) + 1 contradiction to investigate. Single-round
+       candidate, mostly small surfaces:
+         A. HSTS header (🔴 high)
+         B. CSP graduate from Report-Only → enforced
+         C. /.well-known/security.txt
+         D. /llms.txt
+         E. JSON-LD Organization + WebSite schema
+         F. Investigate stray hreflang entries (13 found by Screaming Frog
+            despite localeScope=single profile — almost certainly bogus)
+       Slot anywhere from "right after current dynamic-content round closes"
+       to "after Richmond Conditions" depending on appetite. Discovered
+       2026-05-31.
 
 QUEUED (after 86–91, last slot)
        /about page — single static page introducing project + creator
