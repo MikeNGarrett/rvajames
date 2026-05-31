@@ -157,7 +157,15 @@ export function CsoBanner({ cso, ageBucket, mode }: Props) {
 
         {/* Microcopy row: staleness label + learn-more link */}
         <div className="flex items-center justify-between gap-3 mt-1.5 flex-wrap">
-          <span className="text-xs opacity-75">{staleLabel}</span>
+          {/*
+           * Bare text-xs without opacity — opacity-75 dropped the brown-on-
+           * amber pair from 7.9:1 (AAA) to 4.2:1 (sub-AA) per Lighthouse a11y
+           * audit 2026-05-31. Sub-goal 79 already removed an opacity-70 from
+           * the chip subtitles for the same reason. Visual hierarchy here
+           * comes from size (text-xs) + position (below the main copy), not
+           * from transparency.
+           */}
+          <span className="text-xs">{staleLabel}</span>
           <Link
             href="/safety#cso"
             className="text-xs underline underline-offset-2 touch-target inline-flex items-center flex-shrink-0"
