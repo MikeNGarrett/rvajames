@@ -36,12 +36,20 @@ export function AdvisoriesBanner({ advisories }: { advisories: Advisory[] }) {
          * ── Aggregated CSO block ─────────────────────────────────────────
          * Never show individual outfall IDs ("CSO 34") by default.
          * Count + river-wide impact is the signal; names are noise.
+         *
+         * The word "active" was removed 2026-05-31 because it falsely implied
+         * current discharge for advisories that had moved into their residual
+         * 48h window. The count here is `effective_to > now()` advisories —
+         * truly-active discharge state is the CsoBanner's job (top of page,
+         * gated on `current_overflow=true` + freshness). This row is the
+         * in-content context: "these many recent events; bacterial impact
+         * persists for 48h after each."
          */}
         {csoAdvisories.length > 0 && (
           <li className="text-sm px-1 py-1">
             {csoAdvisories.length === 1
-              ? '1 active sewer overflow in Richmond — bacterial contamination elevated for at least 48h after each event.'
-              : `${csoAdvisories.length} active sewer overflows in Richmond — bacterial contamination elevated for at least 48h after each event.`}
+              ? '1 recent sewer overflow in Richmond — bacterial contamination elevated for at least 48h after each event.'
+              : `${csoAdvisories.length} recent sewer overflows in Richmond — bacterial contamination elevated for at least 48h after each event.`}
           </li>
         )}
 

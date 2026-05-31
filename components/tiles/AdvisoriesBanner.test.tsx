@@ -46,7 +46,7 @@ describe('AdvisoriesBanner', () => {
 
   it('aggregates a single CSO advisory into one row without outfall name', () => {
     const html = render([makeCsoAdvisory('a1', 'CSO 34')]);
-    expect(html).toContain('1 active sewer overflow in Richmond');
+    expect(html).toContain('1 recent sewer overflow in Richmond');
     // Must NOT expose the outfall ID in the rendered HTML
     expect(html).not.toContain('CSO 34');
   });
@@ -58,9 +58,9 @@ describe('AdvisoriesBanner', () => {
       makeCsoAdvisory('a3', 'CSO 07'),
     ]);
     // Only ONE aggregated block — not three separate rows
-    expect(html).toContain('3 active sewer overflows in Richmond');
+    expect(html).toContain('3 recent sewer overflows in Richmond');
     // Singular match must not appear when count is 3
-    expect(html).not.toContain('1 active sewer overflow');
+    expect(html).not.toContain('1 recent sewer overflow');
     // No individual outfall IDs must appear in the default render
     expect(html).not.toContain('CSO 34');
     expect(html).not.toContain('CSO 12');
@@ -91,7 +91,7 @@ describe('AdvisoriesBanner', () => {
     ]);
 
     // CSO block aggregated to count
-    expect(html).toContain('2 active sewer overflows in Richmond');
+    expect(html).toContain('2 recent sewer overflows in Richmond');
     expect(html).not.toContain('CSO 34');
     expect(html).not.toContain('CSO 12');
 
