@@ -1,0 +1,66 @@
+# RVA James
+
+> Family-focused James River conditions dashboard for Richmond, VA.
+> Consolidates fragmented public-sector data sources (USGS gage,
+> NWS weather, RVA DPU sewer overflow events, JRA water quality)
+> into kid-safe guidance tailored to a family's youngest child.
+> AI is used only for interpretation of stored sensor data — never
+> for fetching. Always defer to official emergency channels.
+
+## What the site provides
+
+- Live river conditions: gage height, discharge (cfs), water temperature
+- Active and forecast (today + 3 days) advisories: flood warnings,
+  combined sewer overflow events, water quality results
+- Per-access-point activity guidance (swim / kayak / rock-hop / hike /
+  bridge crossing) calibrated to the family's youngest child age
+- Trip-prep checklist generated from current conditions
+
+## Data sources
+
+- USGS Water Services — gage 02037500 (Richmond Locks), 02035000
+  (Cartersville upstream)
+- NOAA NWS Richmond office — hourly forecast + flood alerts
+- NOAA AHPS — river-stage forecast for the gage
+- City of Richmond DPU — combined sewer overflow event tracking via
+  EmNet public map (apps.emnet.net/richmond-pub-map-app)
+- James River Association — water quality program (E. coli, enterococcus)
+
+## AI involvement
+
+Anthropic Claude Haiku 4.5 (default) and Sonnet 4.6 (escalation when
+an active advisory has severity high or extreme) interpret the
+deterministic sensor data into plain-language guidance. The AI never
+fetches data, only narrates it. Every interpretation is cached and
+de-duplicated by prompt hash to keep cost bounded.
+
+## Key endpoints
+
+- /sitemap.xml — canonical URL list
+- /safety — official safety references (AAP / NPS / USCG sources)
+- /status — observability: last ingest per source, daily AI cost
+- /locations/[slug] — 9 access points (belle-isle, pony-pasture,
+  texas-beach, browns-island, mayo-island, shiplock-trail,
+  north-bank-trail, buttermilk-trail, pump-house)
+- /api/metro-summary?date=YYYY-MM-DD&age=<bucket> — metro AI summary
+- /api/location-interpretation?slug=<slug>&date=...&age=... — per-location AI
+
+## Age buckets
+
+0-2 · 3-5 · 6-9 · 10-13 · 14+ · none (no youngest child / adult default)
+
+## Limitations and caveats
+
+- AI-generated guidance is informational, NOT medical/professional advice
+- Conditions can change faster than the data refresh cadence
+- For emergencies, call 911 or check NWS directly
+- Twice-daily CSO ingest cadence means some staleness is normal — the
+  UI surfaces a "Data as of Nh ago" label to communicate freshness
+
+## Crawler notes
+
+- robots.txt at /robots.txt has explicit AI crawler rules
+- Stable URLs: location slugs are permanent; date params accept
+  YYYY-MM-DD; age params are the bucket enum above
+- Hreflang: this site serves a single English-language locale; any
+  hreflang tags found in the source are bugs to be removed
