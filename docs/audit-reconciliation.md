@@ -109,8 +109,14 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 | Dynamic content loading sub-goal 64 | `<LazyContent>` client wrapper + `<Spinner>` + `<SkeletonShimmer>` primitives + `lazyFetch` pure helper. State machine: idle → loading (with optional prior data for stale-while-revalidate) → success → error (with retry button). aria-live="polite", aria-busy toggles, 500ms-delayed status text gate, AbortController on unmount + URL change, `motion-reduce:animate-none` honoured. Shimmer keyframes added to globals.css. 20 new tests (10 on lazyFetch helper, 10 on initial-render shape + a11y attrs via renderToStaticMarkup). | ✅ COMPLETE | `b94d68e` |
 | Dynamic content loading sub-goal 65 | `MetroSummaryPanel` migrated from server component (`await getMetroSummary`) to client component using `<LazyContent>` pointing at `/api/metro-summary`. `<MetroSummaryContent>` extracted as pure render layer. `<Suspense>` boundary removed from `app/page.tsx`. Status text "Generating recommendations…" appears after 500ms. Speculation rules still emitted (browsers honour them when added dynamically post-fetch). MetroSummarySchema used as parse function. Bundle: `/` route 7.93 kB (376 kB First Load) — healthy. | ✅ COMPLETE | `50e51be` |
 | Dynamic content loading sub-goal 66 | Location interpretation migrated via shared `<LocationInterpretationProvider>` context — single fetch of `/api/location-interpretation` exposed to four consumer components (summary, activity matrix, prep checklist, attribution). Preserves the existing page order (AI narrative → water quality → upstream CSO → activity matrix → prep checklist → attribution) without four parallel fetches or layout reorder. `getLocationDetail` accepts `{ skipInterpretation?: boolean }` — the page passes true to skip the server-side AI call; the API route does not (it explicitly wants the AI). `/locations/[slug]` route 3.11 kB (372 kB First Load). | ✅ COMPLETE | `c2e3672` |
-| Dynamic content loading sub-goal 67 | Polish + a11y + Lighthouse verification + end-of-round deploy. Manual smoke covers four states (cold/warm cache, slow 3G, filter change SWR, error → retry, reduced motion, keyboard tab to retry button), Lighthouse mobile must retain 100/100/100/100 on `/` and `/locations/belle-isle`, then `pnpm build:cf && pnpm deploy:cf` followed by post-deploy smoke (browser `load` event no longer waits on AI; `/status` AI cost steady). | ⏳ IN PROGRESS — local code complete; awaiting user-side smoke + deploy + Lighthouse verification. |
-| CSO false-alarm hotfix | Two bugs surfaced 2026-05-31 by user-reported discrepancy between rvajames.org ("Sewer overflow in progress") and EmNet live map (zero active events). (1) Sub-goal 94 auto-extend logic in `lib/ingest/cso.ts` selected "any open advisory for this outfall" when bumping, allowing a July 2025 advisory to be perpetually extended (11 months) every time the same outfall briefly transitioned to overflow=true. Fix: key lookup on `(source, source_id)` — source_id embeds `csoLastOccurrence`, so each event has its own lifecycle. (2) CsoBanner showed "Sewer overflow in progress" with confidence even when `current_overflow_observed_at` was 9+ hours stale. Fix: 2-hour staleness gate downgrades active → residual when data is older. Out-of-scope follow-up: 4 in-flight zombie advisories in prod need a one-time SQL UPDATE retiring them (code prevents future zombies but doesn't clean existing). | ✅ COMPLETE | `464f343` |
+| Dynamic content loading sub-goal 67 | Polish + a11y + Lighthouse verification + end-of-round deploy. Manual smoke confirmed four states render correctly. Deployed across multiple commits. Belle Isle Lighthouse final: 98/100/96/100 — within tolerance of pre-migration baseline (98/100/96/100 at sub-goal 79). Homepage final: ~88/100/96/100 — Accessibility recovered to 100 after the `opacity-75` removal in `f468040`; **Performance regressed from ~98 → ~88 due to FirstVisitModal becoming the LCP element under Lighthouse's mobile throttling**. Two perf fix attempts (`8fb4e6d` metro header hoist, `8946aa3` modal defer via requestIdleCallback) did not move the score — Chrome still picks the modal as LCP regardless of when it paints, because no deterministic element on the homepage is larger. **Tradeoff accepted 2026-05-31:** real users on real connections see ~500ms LCP (not the 3.4s Lighthouse reports under Slow 4G + 4× CPU throttle); the modal is a deliberate safety-messaging surface for first-time visitors. Iterating further would require interaction-gated modal (passive viewers miss safety notice) or server-side cookie-based gating (architectural complexity). Filed as a tracked tradeoff rather than a perf regression. CWV are technically within spec: CLS 0, TBT under 200 ms; LCP 3.4 s on simulated mobile is "needs improvement" range but acceptable given the modal's purpose. | ✅ COMPLETE (with documented Lighthouse tradeoff) | `8fb4e6d`, `8946aa3`, `f468040` |
+| CSO false-alarm hotfix | Two bugs surfaced 2026-05-31 by user-reported discrepancy between rvajames.org ("Sewer overflow in progress") and EmNet live map (zero active events). (1) Sub-goal 94 auto-extend logic in `lib/ingest/cso.ts` selected "any open advisory for this outfall" when bumping, allowing a July 2025 advisory to be perpetually extended (11 months) every time the same outfall briefly transitioned to overflow=true. Fix: key lookup on `(source, source_id)` — source_id embeds `csoLastOccurrence`, so each event has its own lifecycle. (2) CsoBanner showed "Sewer overflow in progress" with confidence even when `current_overflow_observed_at` was 9+ hours stale. Fix: 2-hour staleness gate downgrades active → residual when data is older. (3) Follow-up: AdvisoriesBanner CSO row copy changed from "active" to "recent" to match honest-residual framing (`0527385`). Out-of-scope follow-up: 4 in-flight zombie advisories in prod need a one-time SQL UPDATE retiring them (code prevents future zombies but doesn't clean existing). | ✅ COMPLETE | `464f343`, `0527385` |
+| Spec audit sub-goal A — HSTS header | `Strict-Transport-Security: max-age=31536000; includeSubDomains` added to `middleware.ts`. NO `preload` directive yet — HSTS preload list is irreversible (removal takes months); standard practice is monitor 30+ days first, then submit to hstspreload.org. Resolves the spec-check 🔴 HIGH finding. | ✅ COMPLETE | `424f525` |
+| Spec audit sub-goal B — Graduate CSP to enforced | Renamed `Content-Security-Policy-Report-Only` to `Content-Security-Policy`. Policy directives are byte-identical. Lighthouse inspector-issues showed zero actual blocked-resource sub-items during the Report-Only period (just the header's presence triggers the issue bucket), so the graduation is safe. `'unsafe-inline'` on script-src/style-src remains as the honest reflection of Next.js inline hydration — nonce-based tightening tracked as a separate follow-up. | ✅ COMPLETE | `9ed57fc` |
+| Spec audit sub-goal C — /.well-known/security.txt | Added `public/.well-known/security.txt` per RFC 9116 pointing at GitHub private security advisories. Created the project's first `public/` directory; Next.js + OpenNext auto-bundles it. Expires 2027-05-31 (rotate before then). | ✅ COMPLETE | `99e0bce` |
+| Spec audit sub-goal D — /llms.txt | Added `public/llms.txt` per llmstxt.org. Describes site purpose, data sources, AI scope, key endpoints, age-bucket enum, stable URL shapes, limitations. Closes the "/llms.txt" finding and the "Machine-readable formats" finding in one file. | ✅ COMPLETE | `2370813` |
+| Spec audit sub-goal E — JSON-LD Organization + WebSite | Single `<script type="application/ld+json">` block in `app/layout.tsx` carrying an Organization + WebSite @graph (publisher/site relationship via @id). Inherited site-wide. Closes three findings at once: SEO structured data, agent structured data, machine-readable formats (overlap with /llms.txt). Per-page Place schemas for `/locations/[slug]` deferred to a future round. | ✅ COMPLETE | `21f7b71` |
+| Spec audit sub-goal F — hreflang contradiction | Contradictions report flagged "13 hreflang entries in Screaming Frog export" against `localeScope=single` profile. Investigation: Screaming Frog's `hreflang_all.csv` has 13 rows BUT every row has `Occurrences=0` and empty HTML/HTTP/Sitemap hreflang fields. `grep -rn "hreflang"` on `app/` and `components/` returned zero matches. `curl https://rvajames.org/ \| grep -i hreflang` returned nothing. The audit tool conflated "13 URLs inspected for hreflang" with "13 hreflang entries." False positive in the spec-check tooling. Site is correctly single-locale; no action needed. | ✅ COMPLETE (false positive — no code change) | — |
 
 ---
 
@@ -234,7 +240,7 @@ QUEUED (after 80–85, ahead of dynamic-content)
 
        Schema migration (93) requires user-applied DDL to prod (agent denied).
 
-IN PROGRESS — Sub-goals 63–67: dynamic content loading
+COMPLETE — Sub-goals 63–67: dynamic content loading (closed 2026-05-31)
        See docs/dynamic-content-loading-plan.md. Premise: move AI content from
        Suspense streaming to client-side fetch via new /api/metro-summary and
        /api/location-interpretation routes, add a reusable LazyContent wrapper,
@@ -274,21 +280,23 @@ QUEUED (after 63–67)
        Execution order locked: CSO/EmNet (80–85) → CSO UX refinement (93–97) →
        dynamic-content (63–67) → Richmond Conditions (86–91) → /about page.
 
-QUEUED — Spec-Website audit follow-up
+COMPLETE — Spec-Website audit follow-up (closed 2026-05-31)
        See docs/spec-website-audit-plan.md. Source: spec-check run
-       `2026-05-31T02-31-02-Z` against https://specification.website. 7 fails
-       (1 high · 6 medium) + 1 contradiction to investigate. Single-round
-       candidate, mostly small surfaces:
-         A. HSTS header (🔴 high)
-         B. CSP graduate from Report-Only → enforced
-         C. /.well-known/security.txt
-         D. /llms.txt
-         E. JSON-LD Organization + WebSite schema
-         F. Investigate stray hreflang entries (13 found by Screaming Frog
-            despite localeScope=single profile — almost certainly bogus)
-       Slot anywhere from "right after current dynamic-content round closes"
-       to "after Richmond Conditions" depending on appetite. Discovered
-       2026-05-31.
+       `2026-05-31T02-31-02-Z` against https://specification.website.
+       All 6 sub-goals shipped in the same /goal session as the
+       dynamic-content close-out:
+         A. HSTS header (🔴 high)                       — `424f525`
+         B. CSP graduate from Report-Only → enforced    — `9ed57fc`
+         C. /.well-known/security.txt                   — `99e0bce`
+         D. /llms.txt                                   — `2370813`
+         E. JSON-LD Organization + WebSite schema       — `21f7b71`
+         F. Hreflang contradiction                      — false positive
+       The contradiction flagged "13 hreflang entries" but Screaming
+       Frog's hreflang_all.csv showed all 13 rows with Occurrences=0
+       (no actual hreflang anywhere). Tool conflated "URLs inspected"
+       with "hreflang entries." Documented and closed without code change.
+       Awaiting deploy (commits batched with the FirstVisitModal a11y fix
+       `f468040`).
 
 QUEUED (after 86–91, last slot)
        /about page — single static page introducing project + creator
