@@ -508,3 +508,338 @@ export function riverConditionSummary(input: RiverConditionInput): RiverConditio
     translation,
   };
 }
+
+// ─── Richmond Conditions — sub-goal 87 ────────────────────────────────────────
+//
+// Functions powering the Richmond Conditions section above the homepage's
+// river panel. All deterministic; AI consumes none of these — it narrates
+// alongside via the `richmond_microcopy` field (sub-goal 89).
+//
+// Reads scoring/band config from `thresholds.json` → `richmondConditions`.
+
+import { type HeatStressZone } from '@/lib/utils/wet-bulb';
+
+const RC = thresholds.richmondConditions;
+
+// ── Swim Today ────────────────────────────────────────────────────────────────
+
+export type SwimStatus = 'recommended' | 'wade' | 'avoid';
+
+export interface SwimTodayInput {
+  /** Latest water temperature in °F. Null when no fresh reading is available. */
+  waterTempF: number | null;
+  /** JRA water-quality bacterial advisory in effect right now. */
+  bacterialAdvisoryActive: boolean;
+  /** Active CSO advisory window covers today. */
+  csoActive48h: boolean;
+  /** River is at or above flood stage. */
+  floodStage: boolean;
+}
+
+export interface SwimTodayResult {
+  status: SwimStatus;
+  /** Single-line reason surfaced under the badge. */
+  primaryReason: string;
+  /** Additional reasons revealed on tap / tooltip. Always includes primaryReason. */
+  contributingReasons: string[];
+}
+
+/**
+ * Decide swim status for the day.
+ *
+ * Avoid reasons are tried in priority order so the most actionable signal is
+ * the primary one shown under the badge:
+ *   1. flood stage    (physical hazard, overrides everything)
+ *   2. bacterial      (health hazard, water quality already failed)
+ *   3. CSO 48h        (health hazard, contamination probable)
+ *   4. cold water     (hypothermia / shock risk under 60°F)
+ * Then:
+ *   60 ≤ T < 70 → wade-only (too cold for swim, ok for ankle play)
+ *   T ≥ 70     → recommended
+ *   null T     → wade with explicit "data unavailable" reason
+ */
+export function swimToday(input: SwimTodayInput): SwimTodayResult {
+  const reasons: string[] = [];
+
+  if (input.floodStage) {
+    reasons.push('River at flood stage — strong currents and submerged hazards.');
+  }
+  if (input.bacterialAdvisoryActive) {
+    reasons.push('Bacterial water-quality advisory in effect.');
+  }
+  if (input.csoActive48h) {
+    reasons.push('Sewer overflow in the past 48 hours — bacterial contamination likely.');
+  }
+  if (input.waterTempF !== null && input.waterTempF < 60) {
+    reasons.push(`Water is ${input.waterTempF.toFixed(0)}°F — too cold for safe immersion.`);
+  }
+
+  if (reasons.length > 0) {
+    return {
+      status:              'avoid',
+      primaryReason:       reasons[0],
+      contributingReasons: reasons,
+    };
+  }
+
+  if (input.waterTempF === null) {
+    const reason = 'Water temperature unavailable — wade with caution.';
+    return {
+      status:              'wade',
+      primaryReason:       reason,
+      contributingReasons: [reason],
+    };
+  }
+
+  if (input.waterTempF < RC.swim.recommended_min_water_f) {
+    const reason = `Water is ${input.waterTempF.toFixed(0)}°F — comfortable for wading, cool for swimming.`;
+    return {
+      status:              'wade',
+      primaryReason:       reason,
+      contributingReasons: [reason],
+    };
+  }
+
+  const reason = `Water is ${input.waterTempF.toFixed(0)}°F — comfortable for swimming.`;
+  return {
+    status:              'recommended',
+    primaryReason:       reason,
+    contributingReasons: [reason],
+  };
+}
+
+// ── Happiness Index ───────────────────────────────────────────────────────────
+
+export type HappinessBand = 'excellent' | 'good' | 'fair' | 'poor' | 'avoid';
+
+export interface HappinessIndexInput {
+  waterTempF:    number | null;
+  apparentTempF: number;
+  wetBulbF:      number;
+  /** Max precipitation probability in the next 4 hours, 0–100. */
+  precip4hChance: number;
+  uv:            number;
+  advisorySeverity: 'none' | 'low' | 'moderate' | 'high' | 'extreme';
+  closuresAtTopLocations: number;
+}
+
+export interface HappinessIndexResult {
+  score: number;
+  band: HappinessBand;
+  bandLabel: string;
+}
+
+/**
+ * Compute holistic happiness score (0–100) for "is this a nice day to be at
+ * the river overall?" Starts at 100 and subtracts penalties.
+ *
+ * Penalty table (each capped, see code for the cap values):
+ *   water temp out of [72, 84]°F   : -2 per °F off, cap -25
+ *   apparent temp out of [68, 82]°F: -2 per °F off, cap -20
+ *   wet bulb zone                  : 0 / -10 / -25 / -40 / -60
+ *   precip 4h chance               : -0.3 per pct, cap -30
+ *   UV                             : 0 (<8), -10 (8-9), -15 (≥10)
+ *   advisory severity              : 0 / -5 / -15 / -30 / -45
+ *   closures at top locations      : -3 per, cap -15
+ *
+ * Null water temp does not penalise — uncertainty isn't badness.
+ */
+export function happinessIndex(input: HappinessIndexInput): HappinessIndexResult {
+  const cfg = RC.happinessIndex;
+  let score = 100;
+
+  // Water temp deviation from the ideal band
+  if (input.waterTempF !== null) {
+    const wOff =
+      input.waterTempF < cfg.ideal_water_min_f
+        ? cfg.ideal_water_min_f - input.waterTempF
+        : input.waterTempF > cfg.ideal_water_max_f
+          ? input.waterTempF - cfg.ideal_water_max_f
+          : 0;
+    score -= Math.min(25, wOff * 2);
+  }
+
+  // Apparent temp deviation
+  const aOff =
+    input.apparentTempF < cfg.ideal_apparent_min_f
+      ? cfg.ideal_apparent_min_f - input.apparentTempF
+      : input.apparentTempF > cfg.ideal_apparent_max_f
+        ? input.apparentTempF - cfg.ideal_apparent_max_f
+        : 0;
+  score -= Math.min(20, aOff * 2);
+
+  // Wet bulb zone — map via heatStressZone thresholds (same as wet-bulb.ts)
+  const zone: HeatStressZone =
+    input.wetBulbF >= 90 ? 'avoid'
+    : input.wetBulbF >= 88 ? 'danger'
+    : input.wetBulbF >= 85 ? 'extreme'
+    : input.wetBulbF >= 80 ? 'caution'
+    : 'normal';
+  score -= { normal: 0, caution: 10, extreme: 25, danger: 40, avoid: 60 }[zone];
+
+  // Precipitation
+  score -= Math.min(30, input.precip4hChance * 0.3);
+
+  // UV (only at high values; mild UV doesn't move the needle)
+  if      (input.uv >= 10) score -= 15;
+  else if (input.uv >=  8) score -= 10;
+
+  // Advisories
+  score -= { none: 0, low: 5, moderate: 15, high: 30, extreme: 45 }[input.advisorySeverity];
+
+  // Closures
+  score -= Math.min(15, input.closuresAtTopLocations * 3);
+
+  // Clamp + map to band
+  score = Math.max(0, Math.min(100, Math.round(score)));
+  const band = cfg.bands.find((b) => score >= b.min_score) ?? cfg.bands[cfg.bands.length - 1];
+
+  return {
+    score,
+    band:      band.name as HappinessBand,
+    bandLabel: band.label,
+  };
+}
+
+// ── Headline (deterministic, paired with AI microcopy) ────────────────────────
+
+/**
+ * Returns a 3–6 word headline for the section. The full table is too large
+ * to enumerate (5 bands × 3 swim × 5 zones = 75 combos) — we cover the
+ * common cases explicitly and fall back to a band-only headline otherwise.
+ *
+ * Why pair this with AI microcopy: the headline is the LCP-eligible
+ * deterministic text (paints from initial HTML); the AI sentence below
+ * adds situational context that varies day to day.
+ */
+export function headlineForRichmondConditions(
+  band: HappinessBand,
+  swim: SwimStatus,
+  heatZone: HeatStressZone,
+): string {
+  // Highest-severity cases first
+  if (band === 'avoid')                                       return 'Stay home today';
+  if (heatZone === 'avoid'  || heatZone === 'danger')         return 'Tough day — limit time outside';
+  if (band === 'poor'       && heatZone === 'extreme')        return 'Hard day — stay close to shade';
+  if (band === 'poor')                                        return 'Tough conditions today';
+
+  // Mid-band cases
+  if (band === 'fair'       && heatZone === 'caution')        return 'OK day — pack water';
+  if (band === 'fair')                                        return 'Fair day to be out';
+
+  if (band === 'good'       && swim === 'wade')               return "Decent day — water's a bit cool";
+  if (band === 'good')                                        return 'Solid day for the river';
+
+  // Excellent
+  if (band === 'excellent'  && heatZone === 'caution')        return 'Good day — manage the heat';
+  if (band === 'excellent'  && swim === 'wade')               return 'Great day — water still warming';
+  if (band === 'excellent')                                   return 'Great day to head out';
+
+  // Fallback (should be unreachable)
+  return 'Check conditions before heading out';
+}
+
+// ── Next Hours Outlook ────────────────────────────────────────────────────────
+
+export interface HourlyForecast {
+  /** Period start time, ISO string. Used only for relative ordering. */
+  startTimeIso:    string;
+  /** Ambient air temperature in °F. */
+  ambientF:        number;
+  /** Apparent temperature in °F (caller pre-computes via apparentTemperatureF). */
+  apparentF:       number;
+  /** Precipitation probability, 0–100. */
+  precipChancePct: number;
+  /** NWS-style short forecast string e.g. "Mostly Sunny", "Showers Likely". */
+  shortForecast:   string;
+}
+
+export type SkyCover = 'clear' | 'partly' | 'mostly cloudy' | 'overcast';
+export type Trend    = 'rising' | 'falling' | 'steady';
+
+export interface NextHoursOutlook {
+  precipitationChance:  number;
+  precipitationSummary: string;
+  skyCover:             SkyCover;
+  temperatureTrend:     Trend;
+  apparentTempTrend:    Trend;
+  series: Array<{
+    hourIso:         string;
+    ambientF:        number;
+    apparentF:       number;
+    precipChancePct: number;
+  }>;
+}
+
+/**
+ * Derives the next-N-hours outlook from an NWS-style hourly forecast.
+ * Caller is responsible for slicing/aligning the input array to "from now"
+ * — we just take the first N entries.
+ *
+ * shortForecast strings drive both the precipitation summary (when rain is
+ * implied) and the sky cover bucket. The matching is intentionally loose to
+ * absorb NWS phrasing variants ("Showers Likely" vs "Chance Showers" etc.).
+ */
+export function nextHoursOutlook(
+  hourly: HourlyForecast[],
+  hours: number = 4,
+): NextHoursOutlook {
+  const window = hourly.slice(0, hours);
+
+  if (window.length === 0) {
+    return {
+      precipitationChance:  0,
+      precipitationSummary: 'No data',
+      skyCover:             'partly',
+      temperatureTrend:     'steady',
+      apparentTempTrend:    'steady',
+      series:               [],
+    };
+  }
+
+  const precipitationChance = Math.max(...window.map((p) => p.precipChancePct));
+
+  // Sky cover bucket — vote across the window via keyword presence.
+  // First match wins per priority: overcast > mostly cloudy > partly > clear.
+  const forecastBlob = window.map((p) => p.shortForecast.toLowerCase()).join(' ');
+  const skyCover: SkyCover =
+      forecastBlob.includes('overcast')                                 ? 'overcast'
+    : forecastBlob.includes('cloudy') || forecastBlob.includes('mostly')? 'mostly cloudy'
+    : forecastBlob.includes('partly') || forecastBlob.includes('few')   ? 'partly'
+    : 'clear';
+
+  // Precipitation summary — derive from worst forecast term in the window.
+  const precipitationSummary = (() => {
+    if (forecastBlob.includes('thunder')) return 'Thunderstorms possible';
+    if (forecastBlob.includes('heavy'))   return 'Heavy rain';
+    if (forecastBlob.includes('rain') || forecastBlob.includes('showers')) {
+      return precipitationChance >= 60 ? 'Rain likely' : 'Showers possible';
+    }
+    if (precipitationChance >= 30) return 'Chance of precipitation';
+    return 'No rain expected';
+  })();
+
+  const trend = (start: number, end: number): Trend => {
+    const delta = end - start;
+    if (delta >=  2) return 'rising';
+    if (delta <= -2) return 'falling';
+    return 'steady';
+  };
+
+  const temperatureTrend  = trend(window[0].ambientF,  window[window.length - 1].ambientF);
+  const apparentTempTrend = trend(window[0].apparentF, window[window.length - 1].apparentF);
+
+  return {
+    precipitationChance,
+    precipitationSummary,
+    skyCover,
+    temperatureTrend,
+    apparentTempTrend,
+    series: window.map((p) => ({
+      hourIso:         p.startTimeIso,
+      ambientF:        p.ambientF,
+      apparentF:       p.apparentF,
+      precipChancePct: p.precipChancePct,
+    })),
+  };
+}

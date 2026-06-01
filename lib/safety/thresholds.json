@@ -121,5 +121,24 @@
     "pump-house": {
       "notes": "Sheltered cove stays calmer longer than open-channel locations; parking floods at high water"
     }
+  },
+  "richmondConditions": {
+    "swim": {
+      "recommended_min_water_f": 70,
+      "wade_min_water_f":        60
+    },
+    "happinessIndex": {
+      "ideal_water_min_f":    72,
+      "ideal_water_max_f":    84,
+      "ideal_apparent_min_f": 68,
+      "ideal_apparent_max_f": 82,
+      "bands": [
+        { "name": "excellent", "min_score": 80, "label": "Excellent day for the river" },
+        { "name": "good",      "min_score": 60, "label": "Good day for the river"      },
+        { "name": "fair",      "min_score": 40, "label": "Fair day — manageable"       },
+        { "name": "poor",      "min_score": 20, "label": "Tough conditions today"      },
+        { "name": "avoid",     "min_score":  0, "label": "Stay home today"             }
+      ]
+    }
   }
 }

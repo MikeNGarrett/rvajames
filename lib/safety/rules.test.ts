@@ -10,6 +10,11 @@ import {
   riverWideActivityStatuses,
   riverConditionSummary,
   type RiverConditionInput,
+  swimToday,
+  happinessIndex,
+  headlineForRichmondConditions,
+  nextHoursOutlook,
+  type HourlyForecast,
 } from './rules';
 
 // ─── gageHeightStatus ─────────────────────────────────────────────────────────
@@ -693,5 +698,278 @@ describe('riverConditionSummary', () => {
       const wordCount = r.translation.split(/\s+/).length;
       expect(wordCount, `band ${r.band} translation too long (${wordCount} words)`).toBeLessThanOrEqual(18);
     }
+  });
+});
+
+// ─── Richmond Conditions — sub-goal 87 ───────────────────────────────────────
+
+describe('swimToday', () => {
+  const baseSafe = {
+    bacterialAdvisoryActive: false,
+    csoActive48h:            false,
+    floodStage:              false,
+  } as const;
+
+  it('returns recommended when water is warm and no advisories', () => {
+    const r = swimToday({ ...baseSafe, waterTempF: 75 });
+    expect(r.status).toBe('recommended');
+    expect(r.primaryReason).toContain('75°F');
+  });
+
+  it('returns wade when water is 60-69°F', () => {
+    expect(swimToday({ ...baseSafe, waterTempF: 65 }).status).toBe('wade');
+    expect(swimToday({ ...baseSafe, waterTempF: 60 }).status).toBe('wade');
+    expect(swimToday({ ...baseSafe, waterTempF: 69 }).status).toBe('wade');
+  });
+
+  it('returns wade with explicit "data unavailable" reason when water temp is null', () => {
+    const r = swimToday({ ...baseSafe, waterTempF: null });
+    expect(r.status).toBe('wade');
+    expect(r.primaryReason).toMatch(/unavailable/i);
+  });
+
+  it('returns avoid for water below 60°F (cold-water hazard)', () => {
+    const r = swimToday({ ...baseSafe, waterTempF: 55 });
+    expect(r.status).toBe('avoid');
+    expect(r.primaryReason).toContain('55°F');
+  });
+
+  it('returns avoid for active bacterial advisory regardless of temp', () => {
+    const r = swimToday({ ...baseSafe, waterTempF: 80, bacterialAdvisoryActive: true });
+    expect(r.status).toBe('avoid');
+    expect(r.primaryReason.toLowerCase()).toContain('bacterial');
+  });
+
+  it('returns avoid for CSO 48h regardless of temp', () => {
+    const r = swimToday({ ...baseSafe, waterTempF: 80, csoActive48h: true });
+    expect(r.status).toBe('avoid');
+    expect(r.primaryReason.toLowerCase()).toContain('sewer');
+  });
+
+  it('returns avoid for flood stage regardless of temp', () => {
+    const r = swimToday({ ...baseSafe, waterTempF: 80, floodStage: true });
+    expect(r.status).toBe('avoid');
+    expect(r.primaryReason.toLowerCase()).toContain('flood');
+  });
+
+  it('priority order: flood > bacterial > CSO > cold water', () => {
+    const r = swimToday({
+      waterTempF: 50,
+      bacterialAdvisoryActive: true,
+      csoActive48h:            true,
+      floodStage:              true,
+    });
+    expect(r.status).toBe('avoid');
+    expect(r.primaryReason.toLowerCase()).toContain('flood');
+    expect(r.contributingReasons).toHaveLength(4);
+  });
+});
+
+describe('happinessIndex', () => {
+  const ideal = {
+    waterTempF:    78,
+    apparentTempF: 75,
+    wetBulbF:      72,      // normal zone
+    precip4hChance: 0,
+    uv:            5,
+    advisorySeverity: 'none' as const,
+    closuresAtTopLocations: 0,
+  };
+
+  it('returns excellent band for ideal conditions (score 80–100)', () => {
+    const r = happinessIndex(ideal);
+    expect(r.band).toBe('excellent');
+    expect(r.score).toBeGreaterThanOrEqual(80);
+    expect(r.bandLabel).toMatch(/excellent/i);
+  });
+
+  it('null water temp does not penalise', () => {
+    const r = happinessIndex({ ...ideal, waterTempF: null });
+    expect(r.band).toBe('excellent');
+  });
+
+  it('cold water (-25 cap)', () => {
+    // Drop water temp WAY off → cap penalty at 25, score = 100 - 25 = 75 = good
+    const r = happinessIndex({ ...ideal, waterTempF: 40 });
+    expect(r.band).toBe('good');
+    expect(r.score).toBe(75);
+  });
+
+  it('very hot apparent temp pushes to fair via wet-bulb caution + apparent off-ideal', () => {
+    const r = happinessIndex({
+      ...ideal,
+      apparentTempF: 95,    // -20 cap (apparent off by 13)
+      wetBulbF:      82,    // caution zone -10
+    });
+    expect(r.score).toBe(70); // 100 - 20 - 10
+    expect(r.band).toBe('good');
+  });
+
+  it('wet bulb in extreme zone (-25)', () => {
+    const r = happinessIndex({ ...ideal, wetBulbF: 86 });
+    expect(r.score).toBe(75);
+    expect(r.band).toBe('good');
+  });
+
+  it('wet bulb in avoid zone tanks the score into poor', () => {
+    const r = happinessIndex({ ...ideal, wetBulbF: 91 });
+    expect(r.score).toBe(40);
+    expect(r.band).toBe('fair');
+  });
+
+  it('precip penalty maxes at 30 (100% chance)', () => {
+    const r = happinessIndex({ ...ideal, precip4hChance: 100 });
+    expect(r.score).toBe(70);
+  });
+
+  it('UV penalty kicks in at 8, stronger at 10+', () => {
+    expect(happinessIndex({ ...ideal, uv: 7 }).score).toBe(100);
+    expect(happinessIndex({ ...ideal, uv: 8 }).score).toBe(90);
+    expect(happinessIndex({ ...ideal, uv: 10 }).score).toBe(85);
+  });
+
+  it('high-severity advisory drops the score by 30', () => {
+    const r = happinessIndex({ ...ideal, advisorySeverity: 'high' });
+    expect(r.score).toBe(70);
+  });
+
+  it('extreme advisory drops the score by 45', () => {
+    const r = happinessIndex({ ...ideal, advisorySeverity: 'extreme' });
+    expect(r.score).toBe(55);
+    expect(r.band).toBe('fair');
+  });
+
+  it('closures penalty caps at 15 (max 5 closures matter)', () => {
+    expect(happinessIndex({ ...ideal, closuresAtTopLocations: 5 }).score).toBe(85);
+    expect(happinessIndex({ ...ideal, closuresAtTopLocations: 9 }).score).toBe(85);
+  });
+
+  it('stacked penalties land in avoid band', () => {
+    const r = happinessIndex({
+      waterTempF:    50,    // -25 cap
+      apparentTempF: 100,   // -20 cap (off by 18)
+      wetBulbF:      91,    // -60 avoid zone
+      precip4hChance: 90,   // -27
+      uv:            10,    // -15
+      advisorySeverity: 'high', // -30
+      closuresAtTopLocations: 5, // -15
+    });
+    // 100 - 25 - 20 - 60 - 27 - 15 - 30 - 15 → way negative, clamped to 0
+    expect(r.score).toBe(0);
+    expect(r.band).toBe('avoid');
+  });
+});
+
+describe('headlineForRichmondConditions', () => {
+  it('avoid band → "Stay home today"', () => {
+    expect(headlineForRichmondConditions('avoid', 'avoid', 'avoid')).toBe('Stay home today');
+  });
+
+  it('danger heat zone → "Tough day — limit time outside"', () => {
+    expect(headlineForRichmondConditions('good', 'wade', 'danger')).toBe('Tough day — limit time outside');
+  });
+
+  it('excellent + normal heat → "Great day to head out"', () => {
+    expect(headlineForRichmondConditions('excellent', 'recommended', 'normal')).toBe('Great day to head out');
+  });
+
+  it('excellent + caution heat → "Good day — manage the heat"', () => {
+    expect(headlineForRichmondConditions('excellent', 'recommended', 'caution')).toBe('Good day — manage the heat');
+  });
+
+  it('good + wade swim → "Decent day — water\'s a bit cool"', () => {
+    expect(headlineForRichmondConditions('good', 'wade', 'normal')).toBe("Decent day — water's a bit cool");
+  });
+
+  it('good + recommended swim → "Solid day for the river"', () => {
+    expect(headlineForRichmondConditions('good', 'recommended', 'normal')).toBe('Solid day for the river');
+  });
+
+  it('fair + caution heat → "OK day — pack water"', () => {
+    expect(headlineForRichmondConditions('fair', 'wade', 'caution')).toBe('OK day — pack water');
+  });
+
+  it('poor + extreme heat → "Hard day — stay close to shade"', () => {
+    expect(headlineForRichmondConditions('poor', 'avoid', 'extreme')).toBe('Hard day — stay close to shade');
+  });
+});
+
+describe('nextHoursOutlook', () => {
+  const makeHour = (i: number, overrides: Partial<HourlyForecast> = {}): HourlyForecast => ({
+    startTimeIso:    `2026-06-01T${String(10 + i).padStart(2, '0')}:00:00`,
+    ambientF:        78,
+    apparentF:       80,
+    precipChancePct: 10,
+    shortForecast:   'Mostly Sunny',
+    ...overrides,
+  });
+
+  it('handles empty input gracefully', () => {
+    const r = nextHoursOutlook([], 4);
+    expect(r.series).toHaveLength(0);
+    expect(r.precipitationChance).toBe(0);
+    expect(r.precipitationSummary).toBe('No data');
+  });
+
+  it('captures max precipitation chance within the window', () => {
+    const hours = [
+      makeHour(0, { precipChancePct: 10 }),
+      makeHour(1, { precipChancePct: 30 }),
+      makeHour(2, { precipChancePct: 70 }),
+      makeHour(3, { precipChancePct: 50 }),
+    ];
+    expect(nextHoursOutlook(hours).precipitationChance).toBe(70);
+  });
+
+  it('rising temperature trend', () => {
+    const hours = [
+      makeHour(0, { ambientF: 72, apparentF: 74 }),
+      makeHour(1, { ambientF: 75, apparentF: 77 }),
+      makeHour(2, { ambientF: 78, apparentF: 80 }),
+      makeHour(3, { ambientF: 80, apparentF: 82 }),
+    ];
+    const r = nextHoursOutlook(hours);
+    expect(r.temperatureTrend).toBe('rising');
+    expect(r.apparentTempTrend).toBe('rising');
+  });
+
+  it('steady when delta is small', () => {
+    const hours = [
+      makeHour(0, { ambientF: 78 }),
+      makeHour(1, { ambientF: 79 }),
+      makeHour(2, { ambientF: 78 }),
+      makeHour(3, { ambientF: 79 }),
+    ];
+    expect(nextHoursOutlook(hours).temperatureTrend).toBe('steady');
+  });
+
+  it('detects sky cover from shortForecast keywords', () => {
+    const clear     = [makeHour(0, { shortForecast: 'Sunny' })];
+    const partly    = [makeHour(0, { shortForecast: 'Partly Sunny' })];
+    const cloudy    = [makeHour(0, { shortForecast: 'Mostly Cloudy' })];
+    const overcast  = [makeHour(0, { shortForecast: 'Overcast' })];
+    expect(nextHoursOutlook(clear).skyCover).toBe('clear');
+    expect(nextHoursOutlook(partly).skyCover).toBe('partly');
+    expect(nextHoursOutlook(cloudy).skyCover).toBe('mostly cloudy');
+    expect(nextHoursOutlook(overcast).skyCover).toBe('overcast');
+  });
+
+  it('precipitation summary escalates with forecast keywords', () => {
+    const sunny      = [makeHour(0, { shortForecast: 'Sunny', precipChancePct: 5 })];
+    const lowChance  = [makeHour(0, { shortForecast: 'Mostly Sunny', precipChancePct: 35 })];
+    const showers    = [makeHour(0, { shortForecast: 'Showers Likely', precipChancePct: 75 })];
+    const thunder    = [makeHour(0, { shortForecast: 'Thunderstorms Likely', precipChancePct: 85 })];
+
+    expect(nextHoursOutlook(sunny).precipitationSummary).toBe('No rain expected');
+    expect(nextHoursOutlook(lowChance).precipitationSummary).toBe('Chance of precipitation');
+    expect(nextHoursOutlook(showers).precipitationSummary).toMatch(/rain likely|showers/i);
+    expect(nextHoursOutlook(thunder).precipitationSummary).toMatch(/thunder/i);
+  });
+
+  it('respects the hours parameter (default 4, override possible)', () => {
+    const hours = Array.from({ length: 6 }, (_, i) => makeHour(i));
+    expect(nextHoursOutlook(hours).series).toHaveLength(4);
+    expect(nextHoursOutlook(hours, 2).series).toHaveLength(2);
+    expect(nextHoursOutlook(hours, 6).series).toHaveLength(6);
   });
 });
