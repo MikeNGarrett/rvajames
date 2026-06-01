@@ -21,10 +21,15 @@ import { NextRequest, NextResponse } from 'next/server';
  *                  request in middleware and threading it through the app.
  *                  Deferred to a future round; 'unsafe-inline' is the honest
  *                  baseline that reflects current reality.
- *      connect-src — Supabase JS client is server-only in this app, but the
- *                  `NEXT_PUBLIC_SUPABASE_URL` token is available to the browser
- *                  bundle; allow it as a precaution. Include wss: for Realtime
- *                  if it is ever switched on.
+ *      connect-src — `'self'` for `/api/*` calls from client components.
+ *                  `cloudflareinsights.com` for the Web Analytics beacon.
+ *                  `a.nel.cloudflare.com` for Cloudflare's auto-injected
+ *                  Network Error Logging endpoint (success_fraction=0.0, so
+ *                  only failures phone home). Supabase is intentionally NOT
+ *                  here — the JS client is server-only in this app and the
+ *                  browser never connects directly. If a future feature
+ *                  needs client-side Supabase, CSP errors will surface it
+ *                  visibly and that's the moment to allow-list deliberately.
  *      img-src     data: — status-badge inline SVGs use data URIs.
  *      font-src    'self' — Nunito Sans is self-hosted via next/font/google.
  */
@@ -103,7 +108,7 @@ export function middleware(request: NextRequest) {
       "style-src 'self' 'unsafe-inline'",
       "font-src 'self'",
       "img-src 'self' data: blob:",
-      "connect-src 'self' https://buokjdntsitjpqfjxano.supabase.co wss://buokjdntsitjpqfjxano.supabase.co https://cloudflareinsights.com",
+      "connect-src 'self' https://cloudflareinsights.com https://a.nel.cloudflare.com",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
