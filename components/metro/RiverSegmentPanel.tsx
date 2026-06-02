@@ -185,18 +185,15 @@ export function RiverSegmentPanel({ metroState }: Props) {
       {/* ── Translation sentence ── */}
       <p className="text-sm text-text leading-snug mb-3 max-w-prose">{summary.translation}</p>
 
-      {/* ── Secondary stat chips ── */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1 mb-3 text-xs text-text-muted">
-        {upriver.waterTempF !== null && (
-          <span>💧 Water {upriver.waterTempF.toFixed(0)}°F</span>
-        )}
-        {upriver.dischargeCfs !== null && (
-          <span>🌊 {upriver.dischargeCfs.toLocaleString()} cfs</span>
-        )}
-        {classResult && (
-          <span>🛶 {classResult.label}</span>
-        )}
-      </div>
+      {/*
+       * The water-temp / cfs / rapids-label chip strip was removed in
+       * sub-goal 90 — water temp now lives in the Richmond Conditions
+       * inline strip above this panel, and the rapids class pill is
+       * already shown next to the gauge headline (line ~125). Discharge
+       * cfs surfaces in the detail dialog. Keeping this panel focused on
+       * the gauge sparkline + translation sentence — the "river state"
+       * job — rather than duplicating the at-a-glance stats above.
+       */}
 
       {/* ── More detail trigger ── */}
       <div className="border-t border-border/50 pt-3">

@@ -18,6 +18,8 @@ import { EmptyState } from '@/components/states/Empty';
 import { StaleState } from '@/components/states/Stale';
 import { RiverSegmentPanel } from '@/components/metro/RiverSegmentPanel';
 import { MetroSummaryPanel } from '@/components/metro/MetroSummaryPanel';
+import { RichmondConditionsSection } from '@/components/richmond/RichmondConditionsSection';
+import { getRichmondConditionsData } from '@/lib/queries/richmond-conditions';
 import { PageContainer } from '@/components/ui/PageContainer';
 import { isStale } from '@/lib/freshness';
 
@@ -62,6 +64,13 @@ export default async function Home({ searchParams }: Props) {
     }
     throw err;
   }
+
+  // Richmond Conditions data (sub-goal 90). Sequential after metroState
+  // because the resolver needs upriver water temp + gage; cheap to compute
+  // since the heavy lifting is already in metroState.
+  const richmondData = data.mode === 'observed'
+    ? await getRichmondConditionsData(dateStr, metroState)
+    : null;
 
   const hasFlood = data.activeAdvisories.some((a) => a.kind === 'flood_warning');
 
@@ -134,6 +143,26 @@ export default async function Home({ searchParams }: Props) {
           <div className="mb-4">
             <StaleState source="USGS" ageMinutes={staleSnapshotAge} />
           </div>
+        )}
+
+        {/*
+         * ── Richmond Conditions section ── (sub-goal 90)
+         *
+         * Broad daily context above the river-specific panel:
+         *   swim today · feels like + heat zone · next 4 hours · happiness
+         *
+         * Observed-mode only. On forecast dates the underlying rules-engine
+         * inputs (live water temp, current humidity) aren't meaningful, so
+         * the section is omitted; the forecast story stays with the metro
+         * summary + location tiles below.
+         *
+         * Headline is the LCP-eligible deterministic text — paints from the
+         * initial HTML and gives Chrome a strong text candidate near TTFB,
+         * potentially mitigating the FirstVisitModal LCP issue documented
+         * in sub-goal 67.
+         */}
+        {richmondData && (
+          <RichmondConditionsSection date={dateStr} ageBucket={ageBucket} data={richmondData} />
         )}
 
         {/*

@@ -12,28 +12,35 @@ const NWS_HOURLY_URL = 'https://api.weather.gov/gridpoints/AKQ/36,78/forecast/ho
 const NWS_ALERTS_URL = 'https://api.weather.gov/alerts/active?area=VA&status=actual';
 
 /**
- * Open-Meteo UV index endpoint — sub-goal 86.
+ * Open-Meteo hourly forecast — sub-goals 86 + 90.
  *
- * NWS does NOT expose UV index in their JSON API (verified 2026-05-31:
- * the gridpoint endpoint has 59 properties, none of them UV). The
- * official NWS UV product is text-only at cpc.ncep.noaa.gov.
+ * Why Open-Meteo at all (sub-goal 86 rationale): NWS does NOT expose
+ * UV index in their JSON API (verified 2026-05-31: the gridpoint
+ * endpoint has 59 properties, none of them UV). The official NWS UV
+ * product is text-only.
  *
- * Open-Meteo is a free, no-auth weather API that publishes hourly UV
- * forecast for any lat/lon. We pull 48h of values aligned to America/
- * New_York so the timestamps match the rest of our Richmond-anchored
- * data.
+ * Why MORE fields (sub-goal 90 expansion): the Richmond Conditions
+ * rules engine (sub-goal 87) needs:
+ *   - apparentTempF (Rothfusz/wind chill) → needs RH + wind speed
+ *   - wetBulbF (Stull approximation)      → needs RH
+ *   - nextHoursOutlook precip chance      → needs precip probability
+ * NWS's /forecast/hourly endpoint has temperature + precip probability
+ * but NOT humidity or numeric wind (only a "10 mph" string). Pulling
+ * the same fields from Open-Meteo gives us a clean numeric source.
  *
- * Coords are Belle Isle (~river mid-point). UV index is a regional
- * value at this scale — same value across all 9 access points.
+ * Coords are Belle Isle (~river mid-point). All values are regional
+ * at this scale — single fetch covers all 9 access points.
  *
- * Failure path: if Open-Meteo is unreachable, we skip UV but the NWS
- * ingest still completes (with `uv_hourly: null` in the snapshot
- * payload). The happinessIndex rule handles null UV as neutral.
+ * Failure path: returns null. NWS ingest still completes; consumers
+ * handle null per-field as neutral (no UV penalty, can't compute
+ * apparent-temp → fall back to ambient, etc.).
  */
-const OPEN_METEO_UV_URL =
+const OPEN_METEO_HOURLY_URL =
   'https://api.open-meteo.com/v1/forecast' +
   '?latitude=37.54&longitude=-77.43' +
-  '&hourly=uv_index' +
+  '&hourly=uv_index,relative_humidity_2m,wind_speed_10m,precipitation_probability,temperature_2m' +
+  '&temperature_unit=fahrenheit' +
+  '&wind_speed_unit=mph' +
   '&timezone=America/New_York' +
   '&forecast_days=2';
 
@@ -55,47 +62,64 @@ const HourlyForecastSchema = z.object({
   }),
 });
 
-// Open-Meteo UV response. Defensive — Open-Meteo is generally reliable
-// but their schema can grow new fields; we only consume what we need.
-const OpenMeteoUvSchema = z.object({
+// Open-Meteo hourly response — sub-goal 90 expanded shape.
+// Defensive: Open-Meteo is generally reliable but their schema can grow
+// new fields; we only consume what we need.
+const OpenMeteoHourlySchema = z.object({
   hourly: z.object({
-    time:     z.array(z.string()),
-    uv_index: z.array(z.number().nullable()),
+    time:                       z.array(z.string()),
+    uv_index:                   z.array(z.number().nullable()),
+    relative_humidity_2m:       z.array(z.number().nullable()),
+    wind_speed_10m:             z.array(z.number().nullable()),
+    precipitation_probability:  z.array(z.number().nullable()),
+    temperature_2m:             z.array(z.number().nullable()),
   }),
 });
 
+/** Single hourly record persisted into conditions_snapshots.payload.open_meteo_hourly. */
+export interface OpenMeteoHour {
+  time:        string;          // local ET ISO ("YYYY-MM-DDTHH:mm")
+  uv:          number | null;
+  humidityPct: number | null;
+  windMph:     number | null;
+  precipPct:   number | null;
+  ambientF:    number | null;   // cross-check vs NWS temperature
+}
+
 /**
- * Fetch UV index hourly forecast from Open-Meteo. Returns null on any
- * failure — never throws — so the NWS ingest can continue with UV
- * omitted rather than failing the whole cron run.
+ * Fetch hourly weather forecast from Open-Meteo. Returns null on any
+ * failure — never throws — so the NWS ingest can continue with the
+ * supplemental data omitted rather than failing the whole cron run.
  */
-async function fetchOpenMeteoUv(): Promise<
-  Array<{ time: string; uv: number | null }> | null
-> {
+async function fetchOpenMeteoHourly(): Promise<OpenMeteoHour[] | null> {
   try {
-    const resp = await fetch(OPEN_METEO_UV_URL, {
+    const resp = await fetch(OPEN_METEO_HOURLY_URL, {
       headers: { Accept: 'application/json' },
       signal:  AbortSignal.timeout(10_000),
     });
     if (!resp.ok) {
-      console.warn(`[nws] Open-Meteo UV fetch returned ${resp.status}; skipping UV`);
+      console.warn(`[nws] Open-Meteo fetch returned ${resp.status}; skipping supplemental data`);
       return null;
     }
     const json   = await resp.json();
-    const parsed = OpenMeteoUvSchema.safeParse(json);
+    const parsed = OpenMeteoHourlySchema.safeParse(json);
     if (!parsed.success) {
-      console.warn('[nws] Open-Meteo UV response failed schema parse; skipping UV');
+      console.warn('[nws] Open-Meteo response failed schema parse; skipping supplemental data');
       return null;
     }
-    const { time, uv_index } = parsed.data.hourly;
-    // Zip the two parallel arrays into a single records list, slice to
-    // the same 24h horizon as the NWS hourly forecast.
-    return time.slice(0, 24).map((t, i) => ({
-      time: t,
-      uv:   uv_index[i] ?? null,
+    const h = parsed.data.hourly;
+    // Zip parallel arrays into a single records list, slice to the
+    // same 24h horizon as the NWS hourly forecast.
+    return h.time.slice(0, 24).map((t, i) => ({
+      time:        t,
+      uv:          h.uv_index[i]                   ?? null,
+      humidityPct: h.relative_humidity_2m[i]       ?? null,
+      windMph:     h.wind_speed_10m[i]             ?? null,
+      precipPct:   h.precipitation_probability[i]  ?? null,
+      ambientF:    h.temperature_2m[i]             ?? null,
     }));
   } catch (err) {
-    console.warn(`[nws] Open-Meteo UV fetch threw; skipping UV: ${String(err)}`);
+    console.warn(`[nws] Open-Meteo fetch threw; skipping supplemental data: ${String(err)}`);
     return null;
   }
 }
@@ -154,12 +178,12 @@ export async function runNwsIngestion(): Promise<RunResult> {
   // --- Hourly forecast snapshot (NWS) + UV (Open-Meteo) in parallel ---
   // Open-Meteo's UV pull is independent of NWS; running them concurrently
   // saves ~300 ms on the cron's total runtime under typical latency.
-  const [hourlyResp, uvHourly] = await Promise.all([
+  const [hourlyResp, openMeteoHourly] = await Promise.all([
     fetch(NWS_HOURLY_URL, {
       headers: NWS_HEADERS,
       signal:  AbortSignal.timeout(15_000),
     }),
-    fetchOpenMeteoUv(),
+    fetchOpenMeteoHourly(),
   ]);
 
   if (hourlyResp.ok) {
@@ -181,10 +205,12 @@ export async function runNwsIngestion(): Promise<RunResult> {
         const { error } = await supabase.from('conditions_snapshots').insert({
           location_id: belleLoc.id,
           source: 'nws_hourly',
-          // uv_hourly is null when Open-Meteo failed (logged in
-          // fetchOpenMeteoUv). Consumers (happinessIndex rule) treat
-          // null UV as neutral — no UV penalty applied.
-          payload: { periods: next24, uv_hourly: uvHourly } as Json,
+          // open_meteo_hourly is null when Open-Meteo failed (logged
+          // in fetchOpenMeteoHourly). Consumers (happinessIndex,
+          // apparent-temp, wet-bulb) handle null gracefully — UV
+          // penalty becomes neutral; apparent-temp falls back to
+          // ambient; etc.
+          payload: { periods: next24, open_meteo_hourly: openMeteoHourly } as Json,
           air_temp_f: airTempF,
           precip_in: precipPct !== null ? precipPct / 100 : null,
         });
