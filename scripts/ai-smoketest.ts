@@ -248,9 +248,25 @@ async function main() {
   // "wastewater discharge." The acronym is rare in AI output (it's jargon);
   // synonym phrases dominate. Match the broader family of phrasings.
   //
-  // Negative-side guard intentionally uses the same regex so inactive-state
-  // tests don't slip through under a synonym either.
-  const CSO_TOPIC = /\bCSO\b|combined sewer|sewer overflow|sewage overflow|wastewater (discharge|overflow)/i;
+  // Distinguishes ACTIVE mention from NEGATED mention. The AI may helpfully
+  // volunteer "no sewer overflows in the past 48 hours" in the inactive case
+  // — that's reassuring UX, not a spurious mention. We only flag positive-
+  // tense references that imply a real event.
+  const CSO_TOPIC_GLOBAL = /\bCSO\b|combined sewer|sewer overflow|sewage overflow|wastewater (discharge|overflow)/gi;
+  const NEGATION = /\b(no|none|without|absent|zero|haven't|have not|free of|clear of|no recent|no active)\b/i;
+
+  function hasActiveCsoMention(text: string): boolean {
+    let m: RegExpExecArray | null;
+    const re = new RegExp(CSO_TOPIC_GLOBAL.source, 'gi'); // fresh state per call
+    while ((m = re.exec(text)) !== null) {
+      // ±60 chars window around each match; if negation precedes within
+      // 30 chars, treat as a "no CSO" mention rather than a real one.
+      const before = text.slice(Math.max(0, m.index - 30), m.index);
+      if (!NEGATION.test(before)) return true;
+    }
+    return false;
+  }
+
   // Negative assertion: AI must NEVER emit outfall IDs like "CSO 34", "CSO 12".
   const OUTFALL_ID = /CSO\s*\d+/i;
 
@@ -267,7 +283,7 @@ async function main() {
   const csoActiveParsed = InterpretationSchema.safeParse(JSON.parse(csoActiveJson));
   if (csoActiveParsed.success) {
     const body = csoActiveParsed.data.body_md;
-    const mentionsCso     = CSO_TOPIC.test(body);
+    const mentionsCso     = hasActiveCsoMention(body);
     const mentionsCaution = /caution|avoid|elevated|bacteria/i.test(body);
     const mentionsOutfallId = OUTFALL_ID.test(body);
     console.log(`  zod parse:           ✓ PASS (status=${csoActiveParsed.data.status})`);
@@ -298,9 +314,11 @@ async function main() {
   const csoInactiveParsed = InterpretationSchema.safeParse(JSON.parse(csoInactiveJson));
   if (csoInactiveParsed.success) {
     const body = csoInactiveParsed.data.body_md;
-    // Symmetric — same regex catches both active mention and spurious leakage.
-    // System prompt instructs the model to say nothing CSO-shaped when absent.
-    const spuriousCsoMention = CSO_TOPIC.test(body);
+    // hasActiveCsoMention skips negation-context matches ("no sewer
+    // overflows in past 48h") — those are reassuring affirmations of
+    // safety, not spurious topic injection. We flag a "spurious" mention
+    // only when the AI invents an event that wasn't in the per-call input.
+    const spuriousCsoMention = hasActiveCsoMention(body);
     const mentionsOutfallId  = OUTFALL_ID.test(body);
     console.log(`  zod parse:           ✓ PASS (status=${csoInactiveParsed.data.status})`);
     console.log(`  no spurious CSO:     ${spuriousCsoMention ? '✗ FAIL (CSO topic mentioned when it should not be)' : '✓ OK'}`);

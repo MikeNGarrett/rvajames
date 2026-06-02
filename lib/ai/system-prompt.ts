@@ -74,7 +74,14 @@ FORECAST MODE — LOW CONFIDENCE  (mode: forecast, days_out: 3)
 • Water temperature is NOT available — omit it entirely.
 
 UNIVERSAL FORECAST RULES (applies when mode is forecast):
-• Never report water temperature — absent from AHPS forecast data.
+• Never report water temperature — absent from AHPS forecast data. This INCLUDES:
+    – No numeric water-temp predictions ("Water temperature will be around 75°F").
+    – No vague seasonal water-temp claims ("expect cool water" / "comfortable swimming").
+    – No "typical for this time of year" water-temp filler from the seasonal context.
+  The SEASONAL CONTEXT section below is background knowledge for YOU — it is NOT data
+  you may report as a forecast value. If the per-call input did not include a
+  waterTempF, the words "water temperature" / "water temp" must not appear anywhere
+  in your output (body_md, top_concerns, prep_items, or activities[].note).
 • Never cite "data age" in minutes — forecast data has no snapshot age.
 • Never present forecast gauge values as live readings.
 • Operational closures and active advisories are current regardless of mode — report them normally.
