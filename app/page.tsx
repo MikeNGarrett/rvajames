@@ -12,7 +12,7 @@ import { FloodBanner } from '@/components/banners/FloodBanner';
 import { CsoBanner } from '@/components/banners/CsoBanner';
 import { DateUnavailableBanner } from '@/components/banners/DateUnavailableBanner';
 import { DisclaimerFooter } from '@/components/legal/DisclaimerFooter';
-import { FirstVisitModal } from '@/components/legal/FirstVisitModal';
+import { FirstVisitBanner } from '@/components/legal/FirstVisitBanner';
 import { ConditionsForm } from '@/components/filters/ConditionsForm';
 import { EmptyState } from '@/components/states/Empty';
 import { StaleState } from '@/components/states/Stale';
@@ -99,7 +99,6 @@ export default async function Home({ searchParams }: Props) {
       <CsoBanner cso={data.cso} ageBucket={ageBucket} mode={data.mode} />
       {hasFlood && <FloodBanner />}
       <DateUnavailableBanner notice={notice} />
-      <FirstVisitModal />
 
       <main>
       <PageContainer className="py-5">
@@ -109,6 +108,14 @@ export default async function Home({ searchParams }: Props) {
             James River conditions for Richmond families
           </p>
         </header>
+
+        {/*
+         * First-visit safety banner — renders client-side, only for
+         * users who haven't dismissed it. Inline (not a modal) so it
+         * doesn't compete with the Richmond Conditions headline for
+         * LCP. See FirstVisitBanner.tsx for the rationale.
+         */}
+        <FirstVisitBanner />
 
         <ConditionsForm currentAge={ageBucket} chips={chips} />
 
@@ -157,9 +164,10 @@ export default async function Home({ searchParams }: Props) {
          * summary + location tiles below.
          *
          * Headline is the LCP-eligible deterministic text — paints from the
-         * initial HTML and gives Chrome a strong text candidate near TTFB,
-         * potentially mitigating the FirstVisitModal LCP issue documented
-         * in sub-goal 67.
+         * initial HTML and gives Chrome a strong text candidate near TTFB.
+         * The FirstVisitModal LCP issue from sub-goal 67 was resolved in
+         * sub-goal 91 by converting the modal to an inline banner with
+         * compact text (see FirstVisitBanner.tsx).
          */}
         {richmondData && (
           <RichmondConditionsSection date={dateStr} ageBucket={ageBucket} data={richmondData} />
