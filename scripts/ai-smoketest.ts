@@ -197,6 +197,13 @@ async function callMode(ai: Anthropic, label: string, input: InterpretLocationIn
       const body = parsed.data.body_md;
       const mentionsWaterTemp = /water temp(?:erature)?/i.test(body);
       console.log(`  no fabricated water temp: ${mentionsWaterTemp ? '✗ FAIL (water temp mentioned)' : '✓ OK'}`);
+      if (mentionsWaterTemp) {
+        // Surface the offending sentence so prompt tightening vs. test
+        // relaxing can be decided from the actual AI phrasing — not
+        // guesswork. Show ±60 chars around the first match.
+        const m = body.match(/.{0,60}water temp(?:erature)?[^.]{0,80}\.?/i);
+        if (m) console.log(`  offending phrase:        "…${m[0].trim()}…"`);
+      }
     }
   } else {
     console.log(`  zod parse: ✗ FAIL`);
