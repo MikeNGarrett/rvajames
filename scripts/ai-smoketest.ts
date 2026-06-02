@@ -382,21 +382,29 @@ async function main() {
     console.error(metroParsed.error.format());
     process.exit(1);
   }
+  // richmond_microcopy is optional on Write schema (sub-goal 91 hotfix —
+  // AI omits it ~30% of the time, schema strictness was causing 502s).
+  // The smoketest still WARNS when it's absent to surface flakiness,
+  // but doesn't fail the run.
   const mc = metroParsed.data.richmond_microcopy;
-  console.log(`  zod parse:             ✓ PASS (richmond_microcopy ${mc.length} chars)`);
-  console.log(`  microcopy text:        "${mc}"`);
+  if (!mc) {
+    console.log('  richmond_microcopy:    ⚠ ABSENT (AI omitted; not fatal under optional Write schema)');
+  } else {
+    console.log(`  zod parse:             ✓ PASS (richmond_microcopy ${mc.length} chars)`);
+    console.log(`  microcopy text:        "${mc}"`);
 
-  // Headline-leakage guard — microcopy must not start with a deterministic headline phrase.
-  const HEADLINES = [
-    'Stay home today', 'Heat alert', 'Hot day', 'Tough conditions', 'OK day',
-    'Fair day', 'Decent day', 'Solid day', 'Good day', 'Great day',
-  ];
-  const leakage = HEADLINES.find((h) => mc.toLowerCase().startsWith(h.toLowerCase()));
-  if (leakage) {
-    console.error(`  ✗ FAIL — microcopy starts with the headline phrase "${leakage}"`);
-    process.exit(1);
+    // Headline-leakage guard — microcopy must not start with a deterministic headline phrase.
+    const HEADLINES = [
+      'Stay home today', 'Heat alert', 'Hot day', 'Tough conditions', 'OK day',
+      'Fair day', 'Decent day', 'Solid day', 'Good day', 'Great day',
+    ];
+    const leakage = HEADLINES.find((h) => mc.toLowerCase().startsWith(h.toLowerCase()));
+    if (leakage) {
+      console.error(`  ✗ FAIL — microcopy starts with the headline phrase "${leakage}"`);
+      process.exit(1);
+    }
+    console.log('  no headline leakage:   ✓ OK');
   }
-  console.log('  no headline leakage:   ✓ OK');
 
   console.log('\nSmoketest PASSED');
 }

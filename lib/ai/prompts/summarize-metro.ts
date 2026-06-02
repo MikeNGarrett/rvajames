@@ -37,17 +37,25 @@ const BaseMetroSummarySchema = z.object({
   disclaimer_kind: z.enum(['standard', 'children', 'general_audience']),
 });
 
-// ─── Write schema (strict) — used to validate fresh AI output ────────────────
-// All b2+b3 new fields are REQUIRED. If the AI omits them, validation throws.
+// ─── Write schema — used to validate fresh AI output ─────────────────────────
+// b2 fields (activities, rapids_class, rapids_note) are required — they've
+// been in the prompt long enough that the model reliably includes them.
+//
+// b3 richmond_microcopy is OPTIONAL on writes (sub-goal 91 hotfix, 2026-06-02).
+// Live testing showed the model omits it on ~30% of fresh generations,
+// which would otherwise cascade to a 502 every time. The system prompt
+// still asks for it; we just don't fail the whole response when it's missing.
+// When present, it gets persisted + rendered; when absent, the UI shows
+// only the deterministic headline + tiles. Graceful degrade.
 
 export const MetroSummaryWriteSchema = BaseMetroSummarySchema.extend({
   activities:   z.array(ActivityStatusSchema).length(4),
   rapids_class: z.enum(RAPIDS_CLASSES),
   rapids_note:  z.string().max(150), // ≤ 15 words
-  // b3 — 1–2 sentences for the Richmond Conditions section microcopy.
+  // 1–2 sentences for the Richmond Conditions section microcopy.
   // 20-180 chars constrains it to one or two short, conversational
-  // sentences — enough to add context without dominating the section.
-  richmond_microcopy: z.string().min(20).max(180),
+  // sentences. Optional on writes per the note above.
+  richmond_microcopy: z.string().min(20).max(180).optional(),
 });
 
 // ─── Read schema (lenient) — used when reading cached rows ───────────────────

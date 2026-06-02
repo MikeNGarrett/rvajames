@@ -378,11 +378,14 @@ export async function getOrGenerateMetro(
       body_md:      summary.body_md,
       top_concerns: summary.top_concerns as unknown as string[],
       best_bets:    summary.best_bets_today as unknown as string[],
-      // b2/b3 fields — Write schema makes them required, so they're always present on fresh generations.
+      // b2 fields — required by Write schema, always present on fresh generations.
       activities:         summary.activities   as unknown as string[],
       rapids_class:       summary.rapids_class,
       rapids_note:        summary.rapids_note,
-      richmond_microcopy: summary.richmond_microcopy,
+      // b3 richmond_microcopy — optional on Write schema (sub-goal 91
+      // hotfix). When the AI omits it the column gets null and the UI
+      // degrades cleanly; ?? null keeps the column nullable-correct.
+      richmond_microcopy: summary.richmond_microcopy ?? null,
       tokens_in:    tokensIn,
       tokens_out:   tokensOut,
       cost_usd:     costUsd,
