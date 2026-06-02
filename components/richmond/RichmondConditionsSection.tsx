@@ -10,8 +10,6 @@
  *   RICHMOND CONDITIONS  ◀─ small uppercase eyebrow
  *
  *   Great day to head out  ◀─ deterministic headline (LCP candidate)
- *   [AI microcopy here]    ◀─ LazyContent: /api/metro-summary
- *                              consumes richmond_microcopy when present
  *
  *   ┌──────────┐ ┌──────────┐ ┌──────────┐
  *   │ Swim    │ │ Feels    │ │ Next 4h  │
@@ -19,6 +17,12 @@
  *   └──────────┘ └──────────┘ └──────────┘
  *
  *   💧 Water 72°F · 💦 Quality OK · ☀ UV 7 (high) · 🌫 Happiness 82
+ *
+ *   [AI microcopy here]    ◀─ LazyContent: /api/metro-summary
+ *                              consumes richmond_microcopy when present.
+ *                              Rendered at the bottom (below fold on
+ *                              most mobile viewports) so it's NOT an
+ *                              LCP candidate — see LCP note below.
  *
  * Data
  *   - `data` (typed RichmondConditionsData) is built server-side by the
@@ -30,12 +34,35 @@
  *     and we render only the deterministic headline + tiles. Graceful
  *     degrade — section is fully usable without AI.
  *
- * LCP note
- *   The deterministic headline is the largest text-bearing element in
- *   the initial paint of this section. When sub-goal 90 places this
- *   section above the river panel + AdvisoriesBanner, the headline
- *   becomes a strong LCP candidate, potentially mitigating the
- *   FirstVisitModal LCP issue documented in sub-goal 67.
+ * LCP note (sub-goal 91 revision)
+ *   Sub-goal 88 placed the headline (text-xl) above the AI microcopy
+ *   paragraph. Live Lighthouse against prod showed that the ~140-char
+ *   microcopy at text-sm (3 lines × ~340 px wide ≈ 23k sq px) was a
+ *   larger painted element than the headline (text-xl × 1-2 lines
+ *   ≈ 10k sq px). When /api/metro-summary resolved ~9 s into the page
+ *   load, the microcopy paragraph became the new LCP element — 15 s
+ *   observed, 4 s simulated. Both bad.
+ *
+ *   The fix is two-pronged:
+ *
+ *   1. Bump the headline to `text-3xl sm:text-4xl font-extrabold
+ *      text-balance` so it's both visually dominant and larger in
+ *      pixel area. `text-balance` keeps short headlines like
+ *      "Stay home today" from looking like a forlorn single thin line.
+ *
+ *   2. Move the AI microcopy to the BOTTOM of the section, after the
+ *      tiles and stats strip. On a 375x667 mobile viewport, the
+ *      microcopy now renders ~700 px from the top of the page (below
+ *      the fold) and is therefore not eligible as an LCP candidate at
+ *      all. The headline remains the only above-fold contentful
+ *      element competing for LCP.
+ *
+ *   UX trade-off: the AI elaboration is no longer immediately under
+ *   the headline. Acceptable because (a) the deterministic headline
+ *   already conveys the essential message in plain English, (b) the
+ *   microcopy is supplementary context, and (c) the alternative is a
+ *   user-perceived LCP of 9-15 s that tanks the Performance score and
+ *   genuinely feels slow.
  */
 
 'use client';
@@ -121,26 +148,10 @@ export function RichmondConditionsSection({ date, ageBucket, data }: Props) {
         Richmond conditions
       </h2>
 
-      {/* Deterministic headline — LCP candidate */}
-      <p className="text-xl font-extrabold leading-tight text-text mb-2">
+      {/* Deterministic headline — LCP candidate. See LCP note in file header. */}
+      <p className="text-3xl sm:text-4xl font-extrabold leading-tight text-balance text-text mb-3">
         {data.headline}
       </p>
-
-      {/* AI microcopy — fetched client-side; renders nothing if absent (pre-89). */}
-      <LazyContent
-        url={microcopyUrl}
-        parse={parseMicrocopy}
-        skeleton={<MicrocopySkeleton />}
-        spinnerLabel="Loading conditions context"
-      >
-        {(text) =>
-          text ? (
-            <p className="text-sm text-text-secondary leading-relaxed mb-4 max-w-prose">
-              {text}
-            </p>
-          ) : null
-        }
-      </LazyContent>
 
       {/* Three primary tiles */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
@@ -185,7 +196,7 @@ export function RichmondConditionsSection({ date, ageBucket, data }: Props) {
           </div>
         )}
         <div className="flex items-center gap-2 flex-1 min-w-[160px]">
-          <span aria-hidden="true">🌫</span>
+          <span aria-hidden="true">🌈</span>
           <dt className="sr-only">Happiness index</dt>
           <dd className="flex items-center gap-2 flex-1">
             <span className="whitespace-nowrap">
@@ -203,6 +214,28 @@ export function RichmondConditionsSection({ date, ageBucket, data }: Props) {
           </dd>
         </div>
       </dl>
+
+      {/*
+       * AI microcopy — fetched client-side; renders nothing if absent (pre-89).
+       *
+       * Deliberately placed last in the section so it falls below the
+       * fold on most mobile viewports and is therefore NOT an LCP
+       * candidate. See LCP note in file header for the rationale.
+       */}
+      <LazyContent
+        url={microcopyUrl}
+        parse={parseMicrocopy}
+        skeleton={<MicrocopySkeleton />}
+        spinnerLabel="Loading conditions context"
+      >
+        {(text) =>
+          text ? (
+            <p className="text-sm text-text-secondary leading-relaxed mt-4 max-w-prose">
+              {text}
+            </p>
+          ) : null
+        }
+      </LazyContent>
     </section>
   );
 }
@@ -210,7 +243,7 @@ export function RichmondConditionsSection({ date, ageBucket, data }: Props) {
 /** Skeleton placeholder for the AI microcopy section. */
 function MicrocopySkeleton() {
   return (
-    <div className="animate-pulse motion-reduce:animate-none mb-4 space-y-1.5">
+    <div className="animate-pulse motion-reduce:animate-none mt-4 space-y-1.5">
       <div className="h-3 bg-surface rounded w-5/6" />
       <div className="h-3 bg-surface rounded w-4/6" />
     </div>
