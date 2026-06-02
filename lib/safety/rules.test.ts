@@ -861,36 +861,84 @@ describe('happinessIndex', () => {
 });
 
 describe('headlineForRichmondConditions', () => {
+  // ── Highest-severity gates ─────────────────────────────────────────────
   it('avoid band → "Stay home today"', () => {
     expect(headlineForRichmondConditions('avoid', 'avoid', 'avoid')).toBe('Stay home today');
   });
 
-  it('danger heat zone → "Tough day — limit time outside"', () => {
-    expect(headlineForRichmondConditions('good', 'wade', 'danger')).toBe('Tough day — limit time outside');
+  it('danger/avoid heat zone → "Heat alert — water and shade today"', () => {
+    expect(headlineForRichmondConditions('good', 'wade', 'danger'))
+      .toBe('Heat alert — water and shade today');
+    expect(headlineForRichmondConditions('excellent', 'recommended', 'avoid'))
+      .toBe('Heat alert — water and shade today');
   });
 
-  it('excellent + normal heat → "Great day to head out"', () => {
-    expect(headlineForRichmondConditions('excellent', 'recommended', 'normal')).toBe('Great day to head out');
+  it('poor + extreme heat → "Hot day — pack water, find shade"', () => {
+    expect(headlineForRichmondConditions('poor', 'avoid', 'extreme'))
+      .toBe('Hot day — pack water, find shade');
   });
 
-  it('excellent + caution heat → "Good day — manage the heat"', () => {
-    expect(headlineForRichmondConditions('excellent', 'recommended', 'caution')).toBe('Good day — manage the heat');
+  it('poor band → "Tough conditions today"', () => {
+    expect(headlineForRichmondConditions('poor', 'wade', 'normal'))
+      .toBe('Tough conditions today');
   });
 
-  it('good + wade swim → "Decent day — water\'s a bit cool"', () => {
-    expect(headlineForRichmondConditions('good', 'wade', 'normal')).toBe("Decent day — water's a bit cool");
-  });
-
-  it('good + recommended swim → "Solid day for the river"', () => {
-    expect(headlineForRichmondConditions('good', 'recommended', 'normal')).toBe('Solid day for the river');
-  });
-
+  // ── Fair band ──────────────────────────────────────────────────────────
   it('fair + caution heat → "OK day — pack water"', () => {
     expect(headlineForRichmondConditions('fair', 'wade', 'caution')).toBe('OK day — pack water');
   });
 
-  it('poor + extreme heat → "Hard day — stay close to shade"', () => {
-    expect(headlineForRichmondConditions('poor', 'avoid', 'extreme')).toBe('Hard day — stay close to shade');
+  it('fair + normal heat → "Fair day to be out"', () => {
+    expect(headlineForRichmondConditions('fair', 'recommended', 'normal'))
+      .toBe('Fair day to be out');
+  });
+
+  // ── Good band — modulated by swim status ───────────────────────────────
+  it('good + swim wade → "Decent day — good for wading"', () => {
+    expect(headlineForRichmondConditions('good', 'wade', 'normal'))
+      .toBe('Decent day — good for wading');
+  });
+
+  it('good + swim avoid → "Decent day — stay out of the water"', () => {
+    expect(headlineForRichmondConditions('good', 'avoid', 'normal'))
+      .toBe('Decent day — stay out of the water');
+  });
+
+  it('good + swim recommended → "Solid day for the river"', () => {
+    expect(headlineForRichmondConditions('good', 'recommended', 'normal'))
+      .toBe('Solid day for the river');
+  });
+
+  // ── Excellent band ─────────────────────────────────────────────────────
+  it('excellent + swim recommended + caution heat → "Good day — pack water, take shade breaks"', () => {
+    expect(headlineForRichmondConditions('excellent', 'recommended', 'caution'))
+      .toBe('Good day — pack water, take shade breaks');
+  });
+
+  it('excellent + swim wade → "Great day — good for wading"', () => {
+    expect(headlineForRichmondConditions('excellent', 'wade', 'normal'))
+      .toBe('Great day — good for wading');
+  });
+
+  it('excellent + swim avoid → "Great day on land — skip the water"', () => {
+    expect(headlineForRichmondConditions('excellent', 'avoid', 'normal'))
+      .toBe('Great day on land — skip the water');
+  });
+
+  it('excellent + swim recommended + normal heat → "Great day to head out"', () => {
+    expect(headlineForRichmondConditions('excellent', 'recommended', 'normal'))
+      .toBe('Great day to head out');
+  });
+
+  // ── Editorial principle: no directional language anywhere ──────────────
+  it('headlines contain no directional/seasonal words ("warming", "cooling")', () => {
+    const bands  = ['excellent', 'good', 'fair', 'poor', 'avoid'] as const;
+    const swims  = ['recommended', 'wade', 'avoid'] as const;
+    const zones  = ['normal', 'caution', 'extreme', 'danger', 'avoid'] as const;
+    for (const b of bands) for (const s of swims) for (const z of zones) {
+      const h = headlineForRichmondConditions(b, s, z).toLowerCase();
+      expect(h, `${b}/${s}/${z} contained directional language`).not.toMatch(/warming|cooling|getting (warmer|cooler)/);
+    }
   });
 });
 

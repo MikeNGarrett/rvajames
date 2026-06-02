@@ -704,9 +704,18 @@ export function happinessIndex(input: HappinessIndexInput): HappinessIndexResult
 // ── Headline (deterministic, paired with AI microcopy) ────────────────────────
 
 /**
- * Returns a 3–6 word headline for the section. The full table is too large
+ * Returns a 3–7 word headline for the section. The full table is too large
  * to enumerate (5 bands × 3 swim × 5 zones = 75 combos) — we cover the
  * common cases explicitly and fall back to a band-only headline otherwise.
+ *
+ * Editorial principles (per user review 2026-06-02):
+ *   1. No directional language ("water still warming" / "water's a bit
+ *      cool"). Seasonally false in fall. State conditions, not trajectory.
+ *   2. Heat warnings always include "water" + "shade" guidance.
+ *   3. Swim status surfaced when meaningful:
+ *        - wade  → "good for wading"
+ *        - avoid → explicit "skip the water" / "stay out of the water"
+ *        - recommended → no special mention (the day's headline carries it)
  *
  * Why pair this with AI microcopy: the headline is the LCP-eligible
  * deterministic text (paints from initial HTML); the AI sentence below
@@ -717,23 +726,28 @@ export function headlineForRichmondConditions(
   swim: SwimStatus,
   heatZone: HeatStressZone,
 ): string {
-  // Highest-severity cases first
-  if (band === 'avoid')                                       return 'Stay home today';
-  if (heatZone === 'avoid'  || heatZone === 'danger')         return 'Tough day — limit time outside';
-  if (band === 'poor'       && heatZone === 'extreme')        return 'Hard day — stay close to shade';
-  if (band === 'poor')                                        return 'Tough conditions today';
+  // ── Highest-severity gates ──────────────────────────────────────────────
+  if (band === 'avoid')                                  return 'Stay home today';
+  if (heatZone === 'avoid' || heatZone === 'danger')     return 'Heat alert — water and shade today';
+  if (band === 'poor' && heatZone === 'extreme')         return 'Hot day — pack water, find shade';
+  if (band === 'poor')                                   return 'Tough conditions today';
 
-  // Mid-band cases
-  if (band === 'fair'       && heatZone === 'caution')        return 'OK day — pack water';
-  if (band === 'fair')                                        return 'Fair day to be out';
+  // ── Fair band ───────────────────────────────────────────────────────────
+  if (band === 'fair' && heatZone === 'caution')         return 'OK day — pack water';
+  if (band === 'fair')                                   return 'Fair day to be out';
 
-  if (band === 'good'       && swim === 'wade')               return "Decent day — water's a bit cool";
-  if (band === 'good')                                        return 'Solid day for the river';
+  // ── Good band (modulated by swim status) ────────────────────────────────
+  if (band === 'good' && swim === 'wade')                return 'Decent day — good for wading';
+  if (band === 'good' && swim === 'avoid')               return 'Decent day — stay out of the water';
+  if (band === 'good')                                   return 'Solid day for the river'; // swim recommended
 
-  // Excellent
-  if (band === 'excellent'  && heatZone === 'caution')        return 'Good day — manage the heat';
-  if (band === 'excellent'  && swim === 'wade')               return 'Great day — water still warming';
-  if (band === 'excellent')                                   return 'Great day to head out';
+  // ── Excellent band (heat caution still gets water+shade) ────────────────
+  if (band === 'excellent' && swim === 'recommended' && heatZone === 'caution') {
+    return 'Good day — pack water, take shade breaks';
+  }
+  if (band === 'excellent' && swim === 'wade')           return 'Great day — good for wading';
+  if (band === 'excellent' && swim === 'avoid')          return 'Great day on land — skip the water';
+  if (band === 'excellent')                              return 'Great day to head out';
 
   // Fallback (should be unreachable)
   return 'Check conditions before heading out';
