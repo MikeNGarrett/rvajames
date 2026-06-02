@@ -306,14 +306,14 @@ export async function getOrGenerateMetro(
   // ── 1. Cache hit ─────────────────────────────────────────────────────────
   const { data: exact } = await supabase
     .from('metro_summaries')
-    .select('body_md, headline, top_concerns, best_bets, activities, rapids_class, rapids_note, tokens_in, tokens_out, cost_usd, model')
+    .select('body_md, headline, top_concerns, best_bets, activities, rapids_class, rapids_note, richmond_microcopy, tokens_in, tokens_out, cost_usd, model')
     .eq('date', input.date)
     .eq('age_bucket', input.ageBucket)
     .eq('prompt_hash', promptHash)
     .maybeSingle();
 
   if (exact) {
-    // metro_summaries stores structured columns; spread new b2 fields only when non-null.
+    // metro_summaries stores structured columns; spread new b2/b3 fields only when non-null.
     try {
       const summary: MetroSummary = {
         headline:        exact.headline,
@@ -321,10 +321,11 @@ export async function getOrGenerateMetro(
         top_concerns:    exact.top_concerns as string[],
         best_bets_today: exact.best_bets as MetroSummary['best_bets_today'],
         disclaimer_kind: 'standard',
-        // New b2 fields — null for pre-b2 rows, treated as absent by MetroSummaryReadSchema
-        ...(exact.activities   != null && { activities:   exact.activities   as MetroSummary['activities'] }),
-        ...(exact.rapids_class != null && { rapids_class: exact.rapids_class as MetroSummary['rapids_class'] }),
-        ...(exact.rapids_note  != null && { rapids_note:  exact.rapids_note }),
+        // New b2/b3 fields — null for pre-version rows, treated as absent by MetroSummaryReadSchema
+        ...(exact.activities         != null && { activities:         exact.activities         as MetroSummary['activities'] }),
+        ...(exact.rapids_class       != null && { rapids_class:       exact.rapids_class       as MetroSummary['rapids_class'] }),
+        ...(exact.rapids_note        != null && { rapids_note:        exact.rapids_note }),
+        ...(exact.richmond_microcopy != null && { richmond_microcopy: exact.richmond_microcopy }),
       };
       return {
         kind: 'metro',
@@ -377,10 +378,11 @@ export async function getOrGenerateMetro(
       body_md:      summary.body_md,
       top_concerns: summary.top_concerns as unknown as string[],
       best_bets:    summary.best_bets_today as unknown as string[],
-      // b2 fields (null until sub-goal 31 switches to MetroSummaryWriteSchema)
-      activities:   summary.activities   as unknown as string[],
-      rapids_class: summary.rapids_class,
-      rapids_note:  summary.rapids_note,
+      // b2/b3 fields — Write schema makes them required, so they're always present on fresh generations.
+      activities:         summary.activities   as unknown as string[],
+      rapids_class:       summary.rapids_class,
+      rapids_note:        summary.rapids_note,
+      richmond_microcopy: summary.richmond_microcopy,
       tokens_in:    tokensIn,
       tokens_out:   tokensOut,
       cost_usd:     costUsd,
@@ -389,7 +391,7 @@ export async function getOrGenerateMetro(
     if (insertErr) {
       const { data: winner } = await supabase
         .from('metro_summaries')
-        .select('body_md, headline, top_concerns, best_bets, activities, rapids_class, rapids_note, tokens_in, tokens_out, cost_usd, model')
+        .select('body_md, headline, top_concerns, best_bets, activities, rapids_class, rapids_note, richmond_microcopy, tokens_in, tokens_out, cost_usd, model')
         .eq('date', input.date)
         .eq('age_bucket', input.ageBucket)
         .eq('prompt_hash', promptHash)
@@ -403,9 +405,10 @@ export async function getOrGenerateMetro(
             top_concerns:    winner.top_concerns as string[],
             best_bets_today: winner.best_bets as MetroSummary['best_bets_today'],
             disclaimer_kind: 'standard',
-            ...(winner.activities   != null && { activities:   winner.activities   as MetroSummary['activities'] }),
-            ...(winner.rapids_class != null && { rapids_class: winner.rapids_class as MetroSummary['rapids_class'] }),
-            ...(winner.rapids_note  != null && { rapids_note:  winner.rapids_note }),
+            ...(winner.activities         != null && { activities:         winner.activities         as MetroSummary['activities'] }),
+            ...(winner.rapids_class       != null && { rapids_class:       winner.rapids_class       as MetroSummary['rapids_class'] }),
+            ...(winner.rapids_note        != null && { rapids_note:        winner.rapids_note }),
+            ...(winner.richmond_microcopy != null && { richmond_microcopy: winner.richmond_microcopy }),
           },
           source: 'cache',
           tokensIn: winner.tokens_in,
@@ -423,7 +426,7 @@ export async function getOrGenerateMetro(
     // ── 4. Stale-while-revalidate ────────────────────────────────────────
     const { data: stale } = await supabase
       .from('metro_summaries')
-      .select('body_md, headline, top_concerns, best_bets, activities, rapids_class, rapids_note, tokens_in, tokens_out, cost_usd, model')
+      .select('body_md, headline, top_concerns, best_bets, activities, rapids_class, rapids_note, richmond_microcopy, tokens_in, tokens_out, cost_usd, model')
       .eq('age_bucket', input.ageBucket)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -437,9 +440,10 @@ export async function getOrGenerateMetro(
           top_concerns:    stale.top_concerns as string[],
           best_bets_today: stale.best_bets as MetroSummary['best_bets_today'],
           disclaimer_kind: 'standard',
-          ...(stale.activities   != null && { activities:   stale.activities   as MetroSummary['activities'] }),
-          ...(stale.rapids_class != null && { rapids_class: stale.rapids_class as MetroSummary['rapids_class'] }),
-          ...(stale.rapids_note  != null && { rapids_note:  stale.rapids_note }),
+          ...(stale.activities         != null && { activities:         stale.activities         as MetroSummary['activities'] }),
+          ...(stale.rapids_class       != null && { rapids_class:       stale.rapids_class       as MetroSummary['rapids_class'] }),
+          ...(stale.rapids_note        != null && { rapids_note:        stale.rapids_note }),
+          ...(stale.richmond_microcopy != null && { richmond_microcopy: stale.richmond_microcopy }),
         },
         source: 'stale',
         tokensIn: stale.tokens_in,

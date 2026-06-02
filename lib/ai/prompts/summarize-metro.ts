@@ -38,21 +38,26 @@ const BaseMetroSummarySchema = z.object({
 });
 
 // ─── Write schema (strict) — used to validate fresh AI output ────────────────
-// All three new fields are REQUIRED. If the AI omits them, validation throws.
+// All b2+b3 new fields are REQUIRED. If the AI omits them, validation throws.
 
 export const MetroSummaryWriteSchema = BaseMetroSummarySchema.extend({
   activities:   z.array(ActivityStatusSchema).length(4),
   rapids_class: z.enum(RAPIDS_CLASSES),
   rapids_note:  z.string().max(150), // ≤ 15 words
+  // b3 — 1–2 sentences for the Richmond Conditions section microcopy.
+  // 20-180 chars constrains it to one or two short, conversational
+  // sentences — enough to add context without dominating the section.
+  richmond_microcopy: z.string().min(20).max(180),
 });
 
 // ─── Read schema (lenient) — used when reading cached rows ───────────────────
-// Pre-b2 rows have NULL for these columns; treat them as absent.
+// Pre-b2/b3 rows have NULL for these columns; treat them as absent.
 
 export const MetroSummaryReadSchema = BaseMetroSummarySchema.extend({
-  activities:   z.array(ActivityStatusSchema).length(4).optional(),
-  rapids_class: z.enum(RAPIDS_CLASSES).optional(),
-  rapids_note:  z.string().max(150).optional(),
+  activities:         z.array(ActivityStatusSchema).length(4).optional(),
+  rapids_class:       z.enum(RAPIDS_CLASSES).optional(),
+  rapids_note:        z.string().max(150).optional(),
+  richmond_microcopy: z.string().min(20).max(180).optional(),
 });
 
 // Backward-compat alias
@@ -63,8 +68,11 @@ export type MetroSummary = z.infer<typeof MetroSummaryReadSchema>;
 // ─── Prompt version ───────────────────────────────────────────────────────────
 // Bump this constant whenever Schema B changes. It enters the prompt_hash so that
 // all pre-existing metro_summaries rows are orphaned (hash never matches again).
+//
+// b2 → b3 (2026-06-02): added richmond_microcopy field for the new
+// Richmond Conditions section. Migration 0015 adds the nullable column.
 
-export const PROMPT_VERSION = 'b2' as const;
+export const PROMPT_VERSION = 'b3' as const;
 
 // ─── Input / user message builder ────────────────────────────────────────────
 
@@ -223,9 +231,12 @@ export function buildMetroUserMessage(input: MetroSummaryInput): string {
   lines.push(
     '',
     'Produce a metro-level river summary for Richmond families planning a James River visit today.',
-    'Respond with a single JSON object matching SCHEMA B (prompt version b2) in the system prompt.',
+    'Respond with a single JSON object matching SCHEMA B (prompt version b3) in the system prompt.',
     'The activities[] array must have EXACTLY 4 entries (same order as the baseline above).',
     `Copy rapids_class: "${classResult.class}" verbatim. Do not derive your own class.`,
+    'Include richmond_microcopy: 1–2 sentences (20–180 chars total) of plain-language',
+    'context for the Richmond Conditions section — see SCHEMA B RULES — Richmond Microcopy',
+    'in the system prompt for tone and content guidance.',
   );
 
   return lines.join('\n');

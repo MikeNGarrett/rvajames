@@ -476,6 +476,7 @@ export type Database = {
           prompt_hash: string
           rapids_class: string | null
           rapids_note: string | null
+          richmond_microcopy: string | null
           tokens_in: number
           tokens_out: number
           top_concerns: Json
@@ -494,6 +495,7 @@ export type Database = {
           prompt_hash: string
           rapids_class?: string | null
           rapids_note?: string | null
+          richmond_microcopy?: string | null
           tokens_in?: number
           tokens_out?: number
           top_concerns?: Json
@@ -512,6 +514,7 @@ export type Database = {
           prompt_hash?: string
           rapids_class?: string | null
           rapids_note?: string | null
+          richmond_microcopy?: string | null
           tokens_in?: number
           tokens_out?: number
           top_concerns?: Json

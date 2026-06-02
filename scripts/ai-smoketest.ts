@@ -16,6 +16,11 @@ import {
   InterpretationSchema,
   type InterpretLocationInput,
 } from '../lib/ai/prompts/interpret-location';
+import {
+  buildMetroUserMessage,
+  MetroSummaryWriteSchema,
+  type MetroSummaryInput,
+} from '../lib/ai/prompts/summarize-metro';
 
 const today = new Date().toISOString().split('T')[0];
 
@@ -294,6 +299,70 @@ async function main() {
     console.error(csoInactiveParsed.error.format());
     process.exit(1);
   }
+
+  // ─── Metro summary pass — Richmond microcopy (b3) ─────────────────────────
+  // Added in sub-goal 89. Verifies fresh AI output includes the new
+  // richmond_microcopy field within the 20-180 char schema bounds and
+  // doesn't echo any of the deterministic headline phrases verbatim
+  // (a regression that would happen if the system-prompt's "DO NOT
+  // repeat the deterministic headline" guidance gets ignored).
+  console.log('\n--- Metro summary (Richmond microcopy b3) ---');
+  // buildMetroUserMessage only reads a subset of MetroRiverState fields
+  // (upriver.gageFt / dischargeCfs / waterTempF, downriver.gageFt,
+  // lastUpdatedAt). The full GaugeReading shape includes locationId, slug,
+  // stationId etc. that the prompt doesn't touch — cast to keep the
+  // synthetic fixture minimal.
+  const METRO_INPUT: MetroSummaryInput = {
+    date:                    today,
+    ageBucket:               '6-9',
+    metroState: {
+      upriver:   { gageFt: 3.6, dischargeCfs: 1050, waterTempF: 74 },
+      downriver: { gageFt: 1.0, dischargeCfs: null, waterTempF: null },
+      lastUpdatedAt: new Date().toISOString(),
+    } as unknown as MetroSummaryInput['metroState'],
+    activeAdvisoryHeadlines: [],
+    airTempF:                85,
+    mode:                    'observed',
+    forecastConfidence:      null,
+    daysOut:                 0,
+    rain48hIn:               0,
+    activeCSOAdvisory:       false,
+    hasHighSeverityAdvisory: false,
+    activeClosures:          [],
+    cso: {
+      activelyDischarging:      { count: 0 },
+      advisoriesOnSelectedDate: { count: 0, windowEndsAt: null },
+    },
+  };
+  const metroResp = await ai.messages.create({
+    model: 'claude-haiku-4-5',
+    max_tokens: 1500,
+    system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+    messages: [{ role: 'user', content: buildMetroUserMessage(METRO_INPUT) }],
+  });
+  const metroText = metroResp.content[0]?.type === 'text' ? metroResp.content[0].text : '';
+  const metroJson = metroText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+  const metroParsed = MetroSummaryWriteSchema.safeParse(JSON.parse(metroJson));
+  if (!metroParsed.success) {
+    console.log('  zod parse:             ✗ FAIL');
+    console.error(metroParsed.error.format());
+    process.exit(1);
+  }
+  const mc = metroParsed.data.richmond_microcopy;
+  console.log(`  zod parse:             ✓ PASS (richmond_microcopy ${mc.length} chars)`);
+  console.log(`  microcopy text:        "${mc}"`);
+
+  // Headline-leakage guard — microcopy must not start with a deterministic headline phrase.
+  const HEADLINES = [
+    'Stay home today', 'Heat alert', 'Hot day', 'Tough conditions', 'OK day',
+    'Fair day', 'Decent day', 'Solid day', 'Good day', 'Great day',
+  ];
+  const leakage = HEADLINES.find((h) => mc.toLowerCase().startsWith(h.toLowerCase()));
+  if (leakage) {
+    console.error(`  ✗ FAIL — microcopy starts with the headline phrase "${leakage}"`);
+    process.exit(1);
+  }
+  console.log('  no headline leakage:   ✓ OK');
 
   console.log('\nSmoketest PASSED');
 }
