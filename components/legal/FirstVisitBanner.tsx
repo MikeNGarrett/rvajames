@@ -13,11 +13,20 @@
  *   delayed mount still happened within the LCP observation window).
  *
  *   Path B from the sub-goal 91 triage: convert to an inline banner.
- *   No overlay, no LCP race — the banner is part of normal page flow,
- *   sits below the page header, and is sized small enough (text-sm,
- *   compact 1-line body, ≤ ~80 px tall on mobile) that the Richmond
- *   Conditions headline (text-3xl, ~80 px tall × full width) remains
- *   the largest above-fold contentful element.
+ *   First iteration placed it above the Richmond Conditions section;
+ *   that still lost LCP (the banner's body paragraph won over the
+ *   headline) AND caused CLS = 0.188 (mounting post-hydration pushed
+ *   the 820 px-tall Richmond section down by ~80 px).
+ *
+ *   Second iteration (current): banner is rendered at the BOTTOM of
+ *   the page, just above the DisclaimerFooter. This kills both
+ *   problems simultaneously:
+ *
+ *     - LCP: banner is below the fold, so it's never an LCP
+ *       candidate. The Richmond headline wins LCP unchallenged.
+ *     - CLS: when the banner mounts post-hydration, the only thing
+ *       that shifts is the DisclaimerFooter (already far below the
+ *       viewport), which Lighthouse doesn't count toward CLS.
  *
  * Storage key
  *   Preserves `rva-james-safety-acknowledged` so anyone who already
@@ -31,12 +40,14 @@
  *   - Dismiss button is a real `<button>` with adequate touch target.
  *   - Link to /safety inherits app underline + focus styles.
  *
- * CLS note
- *   The banner mounts client-side after hydration reads localStorage,
- *   so first-time visitors see a one-time content shift (~80 px) as the
- *   banner appears. Returning visitors see no shift. Lighthouse runs
- *   with cleared storage so will tick CLS up slightly — acceptable
- *   trade for eliminating the much larger LCP problem.
+ * UX note
+ *   First-time visitors see the banner only after scrolling past the
+ *   river content. Trade-off accepted because (a) the disclaimer
+ *   footer is also at the bottom — "informational" content groups
+ *   naturally there, (b) the full AAP/NPS/USCG safety guidance lives
+ *   at /safety (linked from the banner), and (c) the alternative is
+ *   a Performance score in the 70s and a position-fixed modal
+ *   interrupting every first visit.
  */
 
 import { useEffect, useState } from 'react';

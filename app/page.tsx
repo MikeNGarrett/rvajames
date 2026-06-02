@@ -109,14 +109,6 @@ export default async function Home({ searchParams }: Props) {
           </p>
         </header>
 
-        {/*
-         * First-visit safety banner — renders client-side, only for
-         * users who haven't dismissed it. Inline (not a modal) so it
-         * doesn't compete with the Richmond Conditions headline for
-         * LCP. See FirstVisitBanner.tsx for the rationale.
-         */}
-        <FirstVisitBanner />
-
         <ConditionsForm currentAge={ageBucket} chips={chips} />
 
         {/*
@@ -220,6 +212,31 @@ export default async function Home({ searchParams }: Props) {
             </div>
           )}
         </section>
+
+        {/*
+         * First-visit safety banner — renders client-side, only for
+         * users who haven't dismissed it. Placed at the bottom of the
+         * page (above the disclaimer footer) for two reasons:
+         *
+         *   1. LCP — anywhere above the fold the banner's text content
+         *      competed with the Richmond headline for largest paint.
+         *      Below the fold, it's not LCP-eligible.
+         *   2. CLS — mounting client-side after hydration was pushing
+         *      the visible Richmond section downward by ~80 px,
+         *      registering as a layout shift. Below the fold, the
+         *      mount shifts only the DisclaimerFooter (already well
+         *      below the viewport), which Lighthouse doesn't count.
+         *
+         * UX trade-off: first-time visitors see the safety banner only
+         * after scrolling past the river content. Acceptable because
+         * (a) the disclaimer footer is also at the bottom, so this
+         * keeps "informational" content grouped, (b) the full
+         * disclaimer + AAP/NPS/USCG sources live at /safety which the
+         * banner links to, and (c) the alternative is a Performance
+         * score in the 70s and a position-fixed modal interrupting
+         * every first visit.
+         */}
+        <FirstVisitBanner />
 
         <DisclaimerFooter ageBucket={ageBucket} />
       </PageContainer>
