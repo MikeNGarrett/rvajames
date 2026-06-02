@@ -94,9 +94,18 @@ export function middleware(request: NextRequest) {
   // browser console during smoke tests, graduated to enforcement. The policy
   // string is byte-identical to the prior Report-Only header.
   //
+  // 2026-06-02 — added 'unsafe-eval' to script-src in development only.
+  // Next.js's Fast Refresh / HMR runtime uses eval() to apply hot module
+  // updates in `next dev`. Production builds don't (verified — `pnpm
+  // build` output contains no eval calls in app bundles). Keeping the
+  // production policy strict so a real XSS payload can't escalate via
+  // eval; allowing it in dev so HMR works.
+  //
   // If a violation surfaces post-graduation, revert just this line back to
   // the `Content-Security-Policy-Report-Only` header name — the existing
   // policy directives are tuned for this app's actual fetches.
+  const isDev = process.env.NODE_ENV === 'development';
+  const scriptSrc = `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://static.cloudflareinsights.com`;
   response.headers.set(
     'Content-Security-Policy',
     [
@@ -104,7 +113,7 @@ export function middleware(request: NextRequest) {
       // Cloudflare Web Analytics beacon is injected by Cloudflare edge (Finding 10).
       // Include its CDN in script-src and its reporting endpoint in connect-src so
       // these don't generate violations under enforcement.
-      "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com",
+      scriptSrc,
       "style-src 'self' 'unsafe-inline'",
       "font-src 'self'",
       "img-src 'self' data: blob:",
