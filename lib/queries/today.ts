@@ -326,6 +326,7 @@ async function getObservedTodayData(
       .from('locations')
       .select('id, slug, name, tags, lng')
       .eq('kind', 'access_point')
+      .eq('published', true)
       .order('name'),
     supabase
       .from('advisories')
@@ -432,6 +433,7 @@ async function getForecastTodayData(
       .from('locations')
       .select('id, slug, name, tags, lng')
       .eq('kind', 'access_point')
+      .eq('published', true)
       .order('name'),
     // Advisories that are currently active; any still-active advisory is relevant
     // for a near-future date too (they rarely resolve within 72 h).

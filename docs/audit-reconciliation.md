@@ -399,6 +399,77 @@ FOLLOW-UP  Skip-to-content link missing (WCAG 2.4.1 Level A)
            Fix: one <a href="#main" class="sr-only focus:not-sr-only ..."> in app/layout.tsx
            + matching id="main" on <main> elements.
 
+FOLLOW-UP  Tile redesign — location-state row + activity row + flavor row
+           Design proposal captured in the 2026-06-02 thread; data layer
+           shipped via migration 0016 + thresholds.json updates. Remaining
+           work for the UX round:
+             - Extract a unified <WaterQualityIcon> component (closes the
+               water-quality-icon followup below)
+             - Build <LocationStatusRow> (Open/Closed badge + WQ icon + CSO label)
+             - Build <ActivityChipRow> (top-3 activities, sort by status worst-first)
+             - Refactor RiverLevelTile to render three new rows + closure branch
+             - Decide whether to render the "Coming soon" section (Mayo Island,
+               future Pump House cove) or leave hidden until more candidates
+               accumulate
+             - Per-activity rules-engine verdicts for the 6 new slugs (today
+               lib/safety/rules.ts has only `nonRiverwideActivityVerdict()`
+               returning a generic 'check site before visiting' for all of them)
+           Sized for a single /goal session once we have JRPS outreach answers.
+
+FOLLOW-UP  JRPS direct-outreach research questions (queued 2026-06-02)
+           Public sources don't answer these. Direct contact with JRPS staff,
+           Friends of James River Park (jamesriverpark.org), or local outfitters
+           (Riverside Outfitters, RVA Paddlesports) needed:
+             1. Specific Westham gauge values that make Belle Isle south-channel
+                rock crossing, Pony Pasture beach, Brown's Island riverbank, and
+                Shiplock Trail walkway unusable. The current `beach_submerge_ft
+                = 6.0` for Pony Pasture is unsourced and was flagged in 2026-06-02
+                research; keep until verified, then revise.
+             2. Has the T. Tyler Potterfield Memorial Bridge ever been formally
+                closed since its 2016 opening? At what gauge value? User intuition
+                + 2019 evidence (open at 16 ft) suggests no closures at moderate
+                flood — but a definitive event would let us pin a hard threshold.
+             3. Mayo Island public-access timeline post-2022 Capital Region Land
+                Conservancy acquisition. Currently unpublished
+                (locations.published=false); needed to decide when to re-publish.
+             4. JRPS or City of Richmond published age guidance for the Bicycle
+                Skills Area, paddle launches, swim entries. None exists today;
+                dashboard ages currently derived from USCG/AAP and must be framed
+                that way.
+
+FOLLOW-UP  Validate + seed 14 additional adjacent locations (queued 2026-06-02)
+           User surfaced these during the 2026-06-02 redesign thread. Each needs
+           its own deep-research pass (activity matrix, thresholds where
+           applicable, age guidance from authoritative sources), seed data, and a
+           ≤60-char flavor line. Group by river-access vs trail-only vs hybrid
+           when planning:
+             - RVA Free Climbing wall (Belle Isle + Manchester floodwall sites)
+             - Canal Walk (downtown)
+             - Tredegar rope swing
+             - Manchester floodwall walk
+             - 14th Street takeout
+             - Tredegar boat ramp
+             - Chapel Island (adjacent to Great Shiplock Park)
+             - Dock Street Park
+             - Ancarrow's Landing (Richmond Slave Trail terminus)
+             - Virginia Capital Trail
+             - Reedy Creek Trail
+             - The wetlands trails
+             - Williams Island (+ two dams nearby)
+             - Huguenot flatwater + boat ramp
+           Sized as a multi-session research + seed round, not a single /goal.
+
+FOLLOW-UP  "Coming soon" UI section design (queued 2026-06-02)
+           Migration 0016 added `locations.published BOOLEAN DEFAULT true` so
+           Mayo Island can be excluded from the homepage grid without losing
+           historical data. The current behavior is "unpublished = invisible."
+           Future design decision: do we surface unpublished/future locations
+           in a separate "Coming soon" section below the main grid? Initial
+           candidates would be Mayo Island (post-CRLC future park) and the
+           Pump House cove (when restoration funded). Defer until we have ≥2
+           candidates AND a tile-redesign that has space for the secondary
+           section.
+
 FOLLOW-UP  Water-quality icons on RiverLevelTile not visually distinct
            Component: `WaterDropBadge` in components/tiles/RiverLevelTile.tsx.
            Renders one of two states next to the status pill on every location card:

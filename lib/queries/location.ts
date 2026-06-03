@@ -99,12 +99,15 @@ export async function getLocationDetail(
 ): Promise<LocationDetail | null> {
   const supabase = await createServerClient('anon');
 
-  // Fetch the access point location
+  // Fetch the access point location. Unpublished locations (locations.published=false)
+  // are intentionally invisible — /locations/[slug] will 404 for them. This matches the
+  // homepage grid which also excludes unpublished rows.
   const { data: loc } = await supabase
     .from('locations')
     .select('id, slug, name, lat, lng, tags')
     .eq('slug', slug)
     .eq('kind', 'access_point')
+    .eq('published', true)
     .single();
 
   if (!loc) return null;
@@ -338,6 +341,11 @@ export async function getLocationDetail(
 
 export async function getAllLocationSlugs(): Promise<string[]> {
   const supabase = await createServerClient('anon');
-  const { data } = await supabase.from('locations').select('slug').eq('kind', 'access_point');
+  // Sitemap excludes unpublished locations so search engines don't index them.
+  const { data } = await supabase
+    .from('locations')
+    .select('slug')
+    .eq('kind', 'access_point')
+    .eq('published', true);
   return data?.map((l) => l.slug) ?? [];
 }

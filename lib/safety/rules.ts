@@ -208,6 +208,55 @@ export function riverWideActivityStatuses(input: RiverwideInput): RiverwideActiv
   ];
 }
 
+/**
+ * Stub verdict for activity slugs not yet covered by riverWideActivityStatuses.
+ *
+ * Migration 0016 (2026-06-02) added six new activity slugs to the
+ * activities table — wade, rock-climbing, fishing, snorkeling, tubing,
+ * bird-watching — plus surfaced bridge-crossing, belle-isle-pedestrian,
+ * and beach-access on the per-location matrix. The rules engine doesn't
+ * have specific per-activity logic for any of these yet; the tile
+ * redesign round will add real verdicts.
+ *
+ * Until then, callers that need to render these activities (e.g. on the
+ * location detail page or the new tile activity row) should use this
+ * stub so the UI shows a deterministic, honest "check before visiting"
+ * note rather than a default-blank state.
+ *
+ * Returns `safe` for the slugs we know about (so they don't surface as
+ * scary warnings without a real rule behind them) and a no-op
+ * `{ status: 'safe', baseReason: '' }` for unknown slugs.
+ */
+export type NonRiverwideActivitySlug =
+  | 'wade'
+  | 'rock-climbing'
+  | 'fishing'
+  | 'snorkeling'
+  | 'tubing'
+  | 'bird-watching'
+  | 'bridge-crossing'
+  | 'belle-isle-pedestrian'
+  | 'beach-access';
+
+export function nonRiverwideActivityVerdict(
+  slug: string,
+): { status: 'safe' | 'caution' | 'deny'; baseReason: string } {
+  switch (slug) {
+    case 'wade':
+    case 'rock-climbing':
+    case 'fishing':
+    case 'snorkeling':
+    case 'tubing':
+    case 'bird-watching':
+    case 'bridge-crossing':
+    case 'belle-isle-pedestrian':
+    case 'beach-access':
+      return { status: 'safe', baseReason: 'Conditions vary — check site before visiting' };
+    default:
+      return { status: 'safe', baseReason: '' };
+  }
+}
+
 // ─── Combined status ──────────────────────────────────────────────────────────
 
 export interface CombinedStatus {

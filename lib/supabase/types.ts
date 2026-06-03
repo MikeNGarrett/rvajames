@@ -296,14 +296,17 @@ export type Database = {
         Row: {
           activity_id: string
           location_id: string
+          min_age_override: number | null
         }
         Insert: {
           activity_id: string
           location_id: string
+          min_age_override?: number | null
         }
         Update: {
           activity_id?: string
           location_id?: string
+          min_age_override?: number | null
         }
         Relationships: [
           {
@@ -429,6 +432,7 @@ export type Database = {
           lng: number
           name: string
           nws_grid: string | null
+          published: boolean
           slug: string
           tags: string[]
           usgs_station_id: string | null
@@ -442,6 +446,7 @@ export type Database = {
           lng: number
           name: string
           nws_grid?: string | null
+          published?: boolean
           slug: string
           tags?: string[]
           usgs_station_id?: string | null
@@ -455,6 +460,7 @@ export type Database = {
           lng?: number
           name?: string
           nws_grid?: string | null
+          published?: boolean
           slug?: string
           tags?: string[]
           usgs_station_id?: string | null

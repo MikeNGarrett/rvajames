@@ -310,10 +310,18 @@ describe('combinedLocationStatus', () => {
     expect(result.status).toBe('danger');
   });
 
-  it('returns danger for Browns Island at flood stage (10+ ft)', () => {
-    const result = combinedLocationStatus({ gageFt: 10.5 }, noAdvisories, 'browns-island');
+  it('still escalates Browns Island to danger at extreme high water via the global gage thresholds', () => {
+    // Brown's Island's per-location `flood_close_ft: 10.0` threshold was
+    // removed in 2026-06-02 after deep-research found no primary source for
+    // it and confirmed the Potterfield Bridge (20 ft deck above the river)
+    // remained open at the 2019 16 ft moderate-flood crest. At extreme high
+    // water the global gage-band logic still escalates correctly — verify
+    // that 12 ft (above the gage.high_max_ft 8.0 ft threshold) lands on
+    // danger via the standard gage reason, not the synthesized location-
+    // specific "closes this location" reason that no longer applies.
+    const result = combinedLocationStatus({ gageFt: 12.0 }, noAdvisories, 'browns-island');
     expect(result.status).toBe('danger');
-    expect(result.reason).toMatch(/closes this location/i);
+    expect(result.reason).toMatch(/above 8 ft high threshold/i);
   });
 
   it('returns danger on active CSO advisory regardless of gage', () => {
