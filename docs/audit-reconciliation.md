@@ -423,26 +423,90 @@ FOLLOW-UP  Tile redesign — location-state row + activity row + flavor row
                returning a generic 'check site before visiting' for all of them)
            Sized for a single /goal session once we have JRPS outreach answers.
 
-FOLLOW-UP  JRPS direct-outreach research questions (queued 2026-06-02)
-           Public sources don't answer these. Direct contact with JRPS staff,
-           Friends of James River Park (jamesriverpark.org), or local outfitters
-           (Riverside Outfitters, RVA Paddlesports) needed:
-             1. Specific Westham gauge values that make Belle Isle south-channel
-                rock crossing, Pony Pasture beach, Brown's Island riverbank, and
-                Shiplock Trail walkway unusable. The current `beach_submerge_ft
-                = 6.0` for Pony Pasture is unsourced and was flagged in 2026-06-02
-                research; keep until verified, then revise.
-             2. Has the T. Tyler Potterfield Memorial Bridge ever been formally
-                closed since its 2016 opening? At what gauge value? User intuition
-                + 2019 evidence (open at 16 ft) suggests no closures at moderate
-                flood — but a definitive event would let us pin a hard threshold.
-             3. Mayo Island public-access timeline post-2022 Capital Region Land
-                Conservancy acquisition. Currently unpublished
-                (locations.published=false); needed to decide when to re-publish.
-             4. JRPS or City of Richmond published age guidance for the Bicycle
-                Skills Area, paddle launches, swim entries. None exists today;
-                dashboard ages currently derived from USCG/AAP and must be framed
-                that way.
+PARTIALLY ANSWERED  JRPS direct-outreach research questions
+           Original queue from 2026-06-02. Subsequent 2026-06-03 follow-up
+           identified the USACE/NWS HEC-RAS-derived Flood Inundation Mapping
+           ArcGIS Experience as a model-based source for per-location gauge
+           thresholds (`docs/jrps-flood-inundation-thresholds-2026-06-03.md`).
+           Status of the four open questions:
+
+             1. Per-location Westham gauge thresholds.
+                PROVISIONAL via tile-probe of the Richmond-Westham FIM
+                ArcGIS Experience (USACE NAO + NWS Wakefield):
+                  - Belle Isle south-channel rocks fully submerged: 20 ft
+                  - Brown's Island riverbank inundates: ≤ 11 ft (lowest stage
+                    in the modeled set; could be lower)
+                  - Potterfield Bridge deck overtops: 25 ft
+                  - Pony Pasture beach + Shiplock Trail walkway: pixel-probe
+                    couldn't resolve cleanly (coordinate slop near polygon
+                    edges OR features sit slightly above the modeled flood
+                    line). NOAA-published Pony Pasture parking-lot entry
+                    threshold of 16 ft Westham remains the anchor.
+                NEEDS Chrome UI validation pass to visually cross-check the
+                three high-confidence numbers AND resolve the two unresolved
+                locations by panning directly to the spot in the Experience.
+
+                Pony Pasture is upstream of Westham gauge, so the Westham
+                FIM polygon may not extend that far west; if the visual
+                check confirms that, that location stays "no model-based
+                threshold available" pending JRPS direct outreach.
+
+             2. Has Potterfield Memorial Bridge ever closed?
+                ANSWERED. User-confirmed 2026-06-03: bridge has not been
+                permanently closed for high water since its 2016 opening.
+                Has had documented scheduled maintenance closures (no
+                flooding cause). Combined with the 25 ft HEC-RAS model
+                threshold above, this gives a defensible answer: deck
+                overtopping happens at 25 ft Westham, but no formal
+                policy of closure between routine high water and that
+                level. Aligns with our 22 ft conservative
+                `activities.bridge_crossing.gage_deny_above_ft`.
+
+             3. Mayo Island public-access timeline post-CRLC 2022.
+                ANSWERED via 2026-06-03 follow-up web research:
+                  - Dec 2022: CRLC acquisition under contract
+                  - Aug 2025: Public park concept released (trails, kayak
+                    launches, fishing access, picnic areas, habitat
+                    restoration). Fall 2025 demolition/site prep planned.
+                  - Oct 2026 (target): initial public opening
+                Codebase action: Mayo Island remains unpublished
+                (locations.published=false) until October 2026 opening
+                confirms. Then re-publish with seed activities derived
+                from the public park plan.
+
+             4. JRPS-published age guidance.
+                CONFIRMED ABSENT. JRPS does not publish per-activity
+                minimum ages. Dashboard ages stay framed as
+                conservative defaults derived from USCG (PFDs under 13)
+                + AAP (swim lessons 1+, unsupervised water under 13
+                discouraged), not as JRPS rules. This is settled — no
+                further outreach needed.
+
+FOLLOW-UP  Chrome UI validation of FIM thresholds (queued 2026-06-03)
+           The 2026-06-03 ArcGIS tile probe (see
+           docs/jrps-flood-inundation-thresholds-2026-06-03.md) produced
+           three high-confidence Westham gauge thresholds via raw tile
+           pixel sampling. Visual validation is the necessary next step:
+
+             1. Open the Richmond-Westham FIM Experience in Chrome
+             2. Pan + zoom to each of the 4 locations
+             3. Step the stage slider from 11 ft upward
+             4. Record the stage at which each location's polygon edge
+                crosses the feature
+             5. Reconcile with the tile-probe values:
+                  - Belle Isle south-channel rocks: probe says 20 ft
+                  - Brown's Island riverbank: probe says ≤ 11 ft
+                  - Potterfield Bridge midspan: probe says 25 ft
+                  - Pony Pasture beach: probe unresolved → visually check
+                    whether the polygon ever crosses it within 11–28 ft
+                  - Shiplock Trail walkway: probe unresolved → same
+
+           After validation, the `thresholds.json` update sketched in
+           docs/jrps-flood-inundation-thresholds-2026-06-03.md (Belle Isle
+           20 ft, Brown's 11 ft, Potterfield 25 ft, bridge_crossing
+           gage_deny_above_ft 22 → 25) becomes safe to commit. Use the
+           Chrome MCP tools (navigate, javascript_tool, screenshot) since
+           the Experience Builder app exposes a stage slider via the UI.
 
 FOLLOW-UP  Validate + seed 14 additional adjacent locations (queued 2026-06-02)
            User surfaced these during the 2026-06-02 redesign thread. Each needs
