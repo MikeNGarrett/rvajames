@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { searchParamsCache, isValidAgeBucket, type AgeBucket } from '@/lib/url-state';
@@ -72,6 +73,12 @@ export default async function Home({ searchParams }: Props) {
     ? await getRichmondConditionsData(dateStr, metroState)
     : null;
 
+  // First-visit banner — render in initial HTML only if the user hasn't
+  // already dismissed the safety notice. Server-side cookie read avoids
+  // the client-mount layout shift the localStorage-only approach caused.
+  const cookieStore = await cookies();
+  const showFirstVisitBanner = !cookieStore.get('rva-james-safety-acknowledged');
+
   const hasFlood = data.activeAdvisories.some((a) => a.kind === 'flood_warning');
 
   const staleSnapshotAge = data.locations[0]?.snapshotAge ?? null;
@@ -108,6 +115,15 @@ export default async function Home({ searchParams }: Props) {
             James River conditions for Richmond families
           </p>
         </header>
+
+        {/*
+         * First-visit safety banner — server-rendered conditionally
+         * based on the `rva-james-safety-acknowledged` cookie. When
+         * shown, it's part of the initial HTML so there's no
+         * client-mount layout shift. Sized small enough that the
+         * Richmond Conditions headline below still wins LCP.
+         */}
+        <FirstVisitBanner initiallyVisible={showFirstVisitBanner} />
 
         <ConditionsForm currentAge={ageBucket} chips={chips} />
 
@@ -212,31 +228,6 @@ export default async function Home({ searchParams }: Props) {
             </div>
           )}
         </section>
-
-        {/*
-         * First-visit safety banner — renders client-side, only for
-         * users who haven't dismissed it. Placed at the bottom of the
-         * page (above the disclaimer footer) for two reasons:
-         *
-         *   1. LCP — anywhere above the fold the banner's text content
-         *      competed with the Richmond headline for largest paint.
-         *      Below the fold, it's not LCP-eligible.
-         *   2. CLS — mounting client-side after hydration was pushing
-         *      the visible Richmond section downward by ~80 px,
-         *      registering as a layout shift. Below the fold, the
-         *      mount shifts only the DisclaimerFooter (already well
-         *      below the viewport), which Lighthouse doesn't count.
-         *
-         * UX trade-off: first-time visitors see the safety banner only
-         * after scrolling past the river content. Acceptable because
-         * (a) the disclaimer footer is also at the bottom, so this
-         * keeps "informational" content grouped, (b) the full
-         * disclaimer + AAP/NPS/USCG sources live at /safety which the
-         * banner links to, and (c) the alternative is a Performance
-         * score in the 70s and a position-fixed modal interrupting
-         * every first visit.
-         */}
-        <FirstVisitBanner />
 
         <DisclaimerFooter ageBucket={ageBucket} />
       </PageContainer>
