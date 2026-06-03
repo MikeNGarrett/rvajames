@@ -117,6 +117,7 @@ Cross-references each finding from `modern-web-evaluation-findings.md` against t
 | Spec audit sub-goal D — /llms.txt | Added `public/llms.txt` per llmstxt.org. Describes site purpose, data sources, AI scope, key endpoints, age-bucket enum, stable URL shapes, limitations. Closes the "/llms.txt" finding and the "Machine-readable formats" finding in one file. | ✅ COMPLETE | `2370813` |
 | Spec audit sub-goal E — JSON-LD Organization + WebSite | Single `<script type="application/ld+json">` block in `app/layout.tsx` carrying an Organization + WebSite @graph (publisher/site relationship via @id). Inherited site-wide. Closes three findings at once: SEO structured data, agent structured data, machine-readable formats (overlap with /llms.txt). Per-page Place schemas for `/locations/[slug]` deferred to a future round. | ✅ COMPLETE | `21f7b71` |
 | Spec audit sub-goal F — hreflang contradiction | Contradictions report flagged "13 hreflang entries in Screaming Frog export" against `localeScope=single` profile. Investigation: Screaming Frog's `hreflang_all.csv` has 13 rows BUT every row has `Occurrences=0` and empty HTML/HTTP/Sitemap hreflang fields. `grep -rn "hreflang"` on `app/` and `components/` returned zero matches. `curl https://rvajames.org/ \| grep -i hreflang` returned nothing. The audit tool conflated "13 URLs inspected for hreflang" with "13 hreflang entries." False positive in the spec-check tooling. Site is correctly single-locale; no action needed. | ✅ COMPLETE (false positive — no code change) | — |
+| Richmond Conditions Section (sub-goals 86–91) | New at-a-glance "is today good at the river?" panel introduced above the river-specific gauge. Sub-goal 86: UV-index ingest from Open-Meteo (NWS doesn't publish it), apparent-temperature (Rothfusz NWS formula) and wet-bulb (Stull 2011) utilities + thresholds. Sub-goal 87: rules engine additions — `swimToday()`, `happinessIndex()`, `nextHoursOutlook()`, `headlineForRichmondConditions()` (rewritten after user feedback to kill directional language and add water+shade prompts on heat warnings). Sub-goal 88: `RichmondConditionsSection` + `SwimTodayTile` + `FeelsLikeTile` + `NextHoursTile` components, deterministic headline as LCP candidate, AI microcopy via LazyContent. Sub-goal 89: `richmond_microcopy` field on MetroSummary schema with PROMPT_VERSION b2 → b3 hash bump (migration 0015), Write schema relaxed to optional after live 502s revealed ~30% AI omission rate. Sub-goal 90: data resolver `lib/queries/richmond-conditions.ts`, homepage reorder (Richmond above RiverSegmentPanel), redundant chip strip removed. Sub-goal 91: A11y verification + Lighthouse round + bonus scope: (a) FirstVisitModal → FirstVisitBanner conversion across three iterations — inline at top → bottom of page → cookie-driven SSR at top, resolving the sub-goal 67 LCP tradeoff entirely; (b) HorizontalGauge meter `overflow-hidden` fix for clean pill clipping; (c) deep-research validation of the JRPS activity matrix (105 agents, 23 sources, full report in `docs/jrps-research-2026-06-02.md`); (d) migration 0016 — six new activity slugs (wade, rock-climbing, fishing, snorkeling, tubing, bird-watching), `min_age_override` column on `location_activities`, `published` boolean on `locations` (Mayo Island unpublished), validated activity matrix per location, threshold cleanup (removed unsourced 5.0/10.0 ft per-location closures, added global `pfdRequiredAboveGageFt` rule). **Lighthouse mobile final: 98/100/96/100 — Performance recovered from sub-goal 67's ~88 baseline. LCP 2.4 s (under "good" 2.5 s), CLS 0 (perfect), Speed Index 2.1 s, TBT 80 ms, FCP 1.1 s, TTFB 20 ms.** Sub-goal 67's documented FirstVisitModal LCP tradeoff is fully resolved. | ✅ COMPLETE | `321cb40`, `b0e11c0`, `772cf76`, `cd3542c`, `87177eb`, `7961e21`, `20b7403`, `1c19ef6`, `b5757a4`, `ce946c5`, `8adb170`, `4f25263`, `f52e11d`, `ca1a117`, `d43ff68`, `f69d453`, `ca52f45` |
 
 ---
 
@@ -265,20 +266,26 @@ COMPLETE — Sub-goals 63–67: dynamic content loading (closed 2026-05-31)
          - Sub-goal 66 uses a React Context provider (not four parallel
            LazyContent boundaries) so page order is preserved with one fetch.
 
-QUEUED (after 63–67)
-       Sub-goals 86–91: Richmond Conditions Section (post-launch enhancement)
-       See docs/richmond-conditions-section-plan.md. Plan is fully spec'd (21KB) — UV
-       ingest extension in NWS, Happiness Index logic, Swim Today categorical, Feels
-       Like + heat-stress consolidation, richmond_microcopy AI field, RichmondConditions
-       section reordered above River Conditions on the home page. Zero implementation
-       in codebase.
+COMPLETE — Richmond Conditions Section (sub-goals 86–91, closed 2026-06-03)
+       See the dedicated row above in the round-summary table for the full
+       commit list and Lighthouse verification (Performance recovered to 98
+       from sub-goal 67's documented ~88 tradeoff).
 
-       Originally numbered 80–85 (collided with CSO/EmNet). User decision 2026-05-28:
-       defer post-launch, renumber 86–91 to clear the collision, queue AFTER dynamic-
-       content (63–67). Plan doc renumbered in the same commit as this update.
+       The original sub-goal 91 scope (a11y verification, modern-web pass,
+       Lighthouse verify, single deploy) expanded mid-round to cover three
+       follow-on items surfaced by the verification run:
+         - FirstVisitModal → FirstVisitBanner conversion across 3 iterations,
+           ending with cookie-driven SSR at the top of <main>
+         - HorizontalGauge meter clipping fix (overflow-hidden pill mask)
+         - JRPS data validation via deep-research + migration 0016
+           (validated activity matrix, threshold cleanup, Mayo Island
+           unpublished pending Capital Region Land Conservancy timeline)
 
-       Execution order locked: CSO/EmNet (80–85) → CSO UX refinement (93–97) →
-       dynamic-content (63–67) → Richmond Conditions (86–91) → /about page.
+       Execution order originally locked: CSO/EmNet (80–85) → CSO UX
+       refinement (93–97) → dynamic-content (63–67) → Richmond Conditions
+       (86–91) → /about page. Now: only /about page remains in the queued
+       work from the original plan; tile redesign + JRPS outreach + 14
+       new locations are queued as FOLLOW-UPs below for future rounds.
 
 COMPLETE — Spec-Website audit follow-up (closed 2026-05-31)
        See docs/spec-website-audit-plan.md. Source: spec-check run
