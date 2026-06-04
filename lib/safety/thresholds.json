@@ -104,8 +104,8 @@
     },
     "pony-pasture": {
       "notes": "Class II rapids, swim beach, easy gravel paths.",
-      "_betaSubmergeComment": "beach_submerge_ft 6.0 is the original seed value; no primary source confirms. Tile-probe 2026-06-03 reported 'dry through 28 ft' but Chrome UI cross-check showed the Westham FIM polygon DOES extend to the Pony Pasture area at high stages — probe likely missed due to coordinate precision near a thin polygon edge. NOAA-published 16 ft Westham (parking-lot entry) is the working anchor for parking access. Beach-specific threshold needs JRPS direct outreach.",
-      "beach_submerge_ft": 6.0,
+      "_comment": "flood_close_ft 14.0 is user-provided operational threshold (2026-06-03) — local knowledge, not extracted from the HEC-RAS model. NOAA-published 16 ft Westham is when water enters the parking lot specifically; access becomes problematic earlier (the user-provided 14 ft). The original seed beach_submerge_ft 6.0 was unsourced and is removed.",
+      "flood_close_ft": 14.0,
       "parking_entry_ft_published": 16.0
     },
     "texas-beach": {
@@ -122,7 +122,8 @@
       "notes": "Limited public access — verify before visiting."
     },
     "shiplock-trail": {
-      "_comment": "Original seed flood_close_ft 10.0 had no primary source and has been removed. Chrome UI validation 2026-06-03 confirmed Shiplock Trail is OUTSIDE the Westham FIM polygon at every stage — the Westham model's eastern boundary is around Mayo Island. Downstream features (Shiplock, Ancarrow's Landing, Rocketts) are covered by the separate City Locks FIM (gauge 02037705), not Westham. Per-location threshold for Shiplock needs either direct JRPS outreach OR a Westham→City-Locks stage correlation (the gauges peak hours apart during real events).",
+      "_comment": "flood_close_ft 16.0 is user-provided operational threshold (2026-06-03) — local knowledge for the Canal Walk walkway near Great Shiplock Park. Westham FIM doesn't cover this location (eastern boundary is ~Mayo Island); a fully model-derived value would require querying the separate City Locks FIM (gauge 02037705) and translating between gauges. The user-provided 16 ft anchors the Westham gauge to the walkway's practical access cutoff.",
+      "flood_close_ft": 16.0,
       "notes": "Canal Walk east of downtown, near river locks."
     },
     "north-bank-trail": {

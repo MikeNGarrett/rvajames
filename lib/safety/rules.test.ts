@@ -324,6 +324,38 @@ describe('combinedLocationStatus', () => {
     expect(result.reason).toMatch(/above 8 ft high threshold/i);
   });
 
+  it('closes Pony Pasture above 14 ft Westham (user-provided operational threshold)', () => {
+    // Per thresholds.json — user-provided 2026-06-03. Below 14 ft we still
+    // expect gage-band logic to apply normally.
+    expect(
+      combinedLocationStatus({ gageFt: 14.5 }, noAdvisories, 'pony-pasture').status,
+    ).toBe('danger');
+    expect(
+      combinedLocationStatus({ gageFt: 14.5 }, noAdvisories, 'pony-pasture').reason,
+    ).toMatch(/14 ft closes this location/i);
+    // Just below the threshold: should NOT trigger the flood_close branch.
+    // 13 ft is above the global high_max_ft 8 ft so still danger, but with
+    // the global gage reason rather than the location-specific closure reason.
+    const justBelow = combinedLocationStatus({ gageFt: 13.5 }, noAdvisories, 'pony-pasture');
+    expect(justBelow.reason).not.toMatch(/closes this location/i);
+  });
+
+  it('closes Shiplock Trail above 16 ft Westham (user-provided operational threshold)', () => {
+    // Per thresholds.json — user-provided 2026-06-03. Shiplock sits outside
+    // the Westham FIM model coverage; 16 ft is the practical Canal Walk
+    // access cutoff from local knowledge.
+    expect(
+      combinedLocationStatus({ gageFt: 16.5 }, noAdvisories, 'shiplock-trail').status,
+    ).toBe('danger');
+    expect(
+      combinedLocationStatus({ gageFt: 16.5 }, noAdvisories, 'shiplock-trail').reason,
+    ).toMatch(/16 ft closes this location/i);
+    // 15.5 ft is above the gage.very_high_max_ft 10.0 so global danger,
+    // but should not synthesize the location-specific closure reason yet.
+    const justBelow = combinedLocationStatus({ gageFt: 15.5 }, noAdvisories, 'shiplock-trail');
+    expect(justBelow.reason).not.toMatch(/closes this location/i);
+  });
+
   it('returns danger on active CSO advisory regardless of gage', () => {
     const result = combinedLocationStatus(
       { gageFt: 2.5 },

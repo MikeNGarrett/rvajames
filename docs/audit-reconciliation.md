@@ -431,25 +431,28 @@ PARTIALLY ANSWERED  JRPS direct-outreach research questions
            Status of the four open questions:
 
              1. Per-location Westham gauge thresholds.
-                PROVISIONAL via tile-probe of the Richmond-Westham FIM
-                ArcGIS Experience (USACE NAO + NWS Wakefield):
-                  - Belle Isle south-channel rocks fully submerged: 20 ft
-                  - Brown's Island riverbank inundates: ≤ 11 ft (lowest stage
-                    in the modeled set; could be lower)
-                  - Potterfield Bridge deck overtops: 25 ft
-                  - Pony Pasture beach + Shiplock Trail walkway: pixel-probe
-                    couldn't resolve cleanly (coordinate slop near polygon
-                    edges OR features sit slightly above the modeled flood
-                    line). NOAA-published Pony Pasture parking-lot entry
-                    threshold of 16 ft Westham remains the anchor.
-                NEEDS Chrome UI validation pass to visually cross-check the
-                three high-confidence numbers AND resolve the two unresolved
-                locations by panning directly to the spot in the Experience.
-
-                Pony Pasture is upstream of Westham gauge, so the Westham
-                FIM polygon may not extend that far west; if the visual
-                check confirms that, that location stays "no model-based
-                threshold available" pending JRPS direct outreach.
+                RESOLVED 2026-06-03 — six thresholds now in thresholds.json:
+                  - Belle Isle south-channel rocks submerged: 20 ft (model,
+                    HEC-RAS elev_118_8; Chrome UI confirmed at 22 ft Major)
+                  - Brown's Island riverbank inundates: 11 ft (model, lowest
+                    modeled stage)
+                  - Potterfield Bridge deck overtops: 25 ft (model,
+                    elev_123_8); activities.bridge_crossing.gage_deny_above_ft
+                    bumped from 22 → 25
+                  - Pony Pasture parking-lot entry: 16 ft (NOAA published)
+                  - Pony Pasture overall access: 14 ft (user-provided
+                    operational threshold, local knowledge; not extracted
+                    from HEC-RAS — model probe missed due to coord precision
+                    near a thin polygon edge, Chrome confirmed the polygon
+                    does reach the area at high stages)
+                  - Shiplock Trail walkway: 16 ft (user-provided operational
+                    threshold; Shiplock sits outside the Westham FIM extent
+                    so a fully model-derived value would require querying
+                    the separate City Locks FIM and translating between
+                    gauges)
+                Wired into rules engine via locations.{slug}.flood_close_ft;
+                tests/rules.test.ts asserts the danger escalation at the
+                threshold value for each location.
 
              2. Has Potterfield Memorial Bridge ever closed?
                 ANSWERED. User-confirmed 2026-06-03: bridge has not been
