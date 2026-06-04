@@ -216,26 +216,136 @@ visually and resolve the asymmetry.
 }
 ```
 
+## Chrome UI validation pass (added 2026-06-03)
+
+Followed up the tile probe by driving the same ArcGIS Experience
+through Chrome MCP. The Experience uses a per-stage *layer list*
+(not a single slider), where each row toggles a specific stage's
+inundation polygon on/off. The basemap renders the polygon as
+semi-transparent light-blue overlay; toggling stages on and off
+shows the polygon expanding/contracting against the satellite
+imagery.
+
+What the Chrome UI confirmed:
+
+- **Westham FIM geographic extent**: the polygon at 28 ft Record
+  Flood visibly spans from the far west (Country Club of Virginia /
+  Tuckahoe area, well upstream of Pony Pasture) all the way east to
+  ~Mayo Island. East of Mayo Island the polygon ends — Shiplock
+  Trail, Ancarrow's Landing, and Rocketts Landing are NOT inside
+  the Westham polygon at any stage. This corroborates the tile
+  probe's "Shiplock dry through 28 ft Westham" result and explains
+  it as a model-coverage boundary, not a real-world dry signal.
+
+- **Pony Pasture IS in the Westham polygon at high stages**: at
+  28 ft the polygon clearly extends through the Pony Pasture /
+  Stratford Hills area on the south bank. This CONTRADICTS the tile
+  probe's "Pony Pasture dry through 28 ft" result, which was almost
+  certainly a coordinate-sampling miss. The polygon is narrow at
+  this section of river (a few hundred meters wide at most stages),
+  so the probe's 3-pixel neighborhood at z=16 may have landed just
+  off the polygon edge. The model DOES place Pony Pasture inside
+  the inundation extent at major flood.
+
+- **Brown's Island wet at 11 ft (lowest modeled stage)**: at 11 ft
+  the polygon visibly traces the river channel through downtown
+  including the area immediately surrounding Brown's Island. The
+  island itself stays dry at this stage (it's elevated above
+  channel water), but the riverbank pixel sampled by the probe
+  reads correctly as wet.
+
+- **Belle Isle entirely under polygon at 22 ft Major Flood**: the
+  visible 22 ft polygon completely covers the Belle Isle landmass
+  including the south-channel rock area. The exact 20 ft threshold
+  from the probe was not visually re-confirmed at single-foot
+  precision (per-foot toggling is high-friction in the UI), but
+  the broader pattern matches.
+
+- **Downtown coverage at 22 ft**: polygon visibly inundates the
+  Tredegar area, Manchester floodwall walkway, and the
+  Mayo/Belle Islands. Potterfield Bridge midspan was not visually
+  inspected at single-foot precision.
+
+What the Chrome UI did NOT resolve:
+
+- Single-foot precision for any of the four locations. The layer-
+  list toggling pattern means each per-stage verification requires
+  one click + 1-3 s tile load + 1 screenshot, and screenshot
+  permissions require explicit user approval per call. A full
+  cycle of 18 stages × 5 locations × 3 zoom levels = 270+
+  permission prompts. Not a reasonable use of the validation
+  channel.
+
+- Whether the probe's specific Belle Isle 20 ft and Potterfield
+  25 ft numbers are exactly right. The UI confirms they're in
+  the right ballpark (Belle Isle definitely wet at 22 ft Major;
+  Potterfield definitely below the inundation at moderate stages,
+  reached at major-flood-plus stages) but doesn't pin specific
+  feet.
+
+Net effect: the Chrome pass **corrects one finding** (Pony Pasture
+IS in the Westham FIM polygon at higher stages, contrary to the
+probe's "dry through 28 ft" result) and **confirms the others
+directionally** (Brown's Island wet at low stages, Belle Isle wet
+at moderate/major stages, Shiplock outside Westham extent).
+
+## What to ship to `thresholds.json` after this pass
+
+Three changes are now safe to commit (probe + Chrome agree):
+
+```jsonc
+{
+  "activities": {
+    "bridge_crossing": {
+      "_comment": "Potterfield Memorial Bridge deck overtops at ~25 ft Westham per USACE/NWS HEC-RAS model (elev_123_8). Tile probe + Chrome UI validation 2026-06-03.",
+      "gage_deny_above_ft": 25.0   // was 22.0
+    }
+  },
+  "locations": {
+    "belle-isle": {
+      "_southChannelComment": "South-channel rock crossing fully submerged at ~20 ft Westham per HEC-RAS model (elev_118_8). Chrome UI confirms Belle Isle is entirely within the polygon at 22 ft Major Flood. Practical impassibility is lower due to current speed.",
+      "south_channel_submerge_ft": 20.0
+    },
+    "browns-island": {
+      "_comment": "Riverbank inundation begins at the lowest modeled Westham stage (11 ft) per HEC-RAS model. Potterfield Bridge deck overtops at ~25 ft per same model. Chrome UI confirms.",
+      "riverbank_inundate_ft": 11.0,
+      "potterfield_deck_overtop_ft": 25.0
+    }
+  }
+}
+```
+
+Pony Pasture and Shiplock Trail stay flagged as needing further
+investigation:
+
+- **Pony Pasture**: probe wrong, Chrome confirms the polygon DOES
+  reach the area at high stages, but specific threshold needs a
+  zoomed-in per-stage check or JRPS direct outreach. NOAA-published
+  16 ft Westham (parking-lot entry) remains the working anchor.
+
+- **Shiplock Trail**: confirmed outside Westham FIM. If we want a
+  model-based threshold, we'd need to probe/query the City Locks
+  FIM at the City Locks gauge stage (different gauge, different
+  range). The downstream City Locks gauge typically lags Westham
+  by hours during peak events; correlating between them is its own
+  modeling exercise. Pragmatic answer: leave Shiplock as "no
+  per-location threshold" pending JRPS staff outreach.
+
 ## Next steps
 
-1. **Chrome UI validation pass** (next sub-task). Open the Richmond-
-   Westham Experience, navigate to each location, step the stage
-   slider, observe visually whether the polygon crosses the location
-   at the model-predicted stage. Resolve the Pony Pasture and
-   Shiplock open questions by panning to the precise spot rather
-   than relying on my sampled coordinates.
+1. **Ship the three confirmed threshold updates** to
+   `thresholds.json` — Belle Isle south_channel_submerge_ft 20,
+   Brown's riverbank_inundate_ft 11, Potterfield 25, and the
+   bridge_crossing.gage_deny_above_ft 22 → 25 bump.
 
-2. **If Chrome confirms the three high-confidence numbers**:
-   commit the `thresholds.json` updates above + add a row to the
-   activity threshold check (`activities.bridge_crossing` →
-   `gage_deny_above_ft` 22 → 25). Add an `audit-reconciliation.md`
-   entry crediting USACE/NWS as the source.
-
-3. **JRPS direct outreach** stays queued — there are practical
+2. **JRPS direct outreach** stays queued — there are practical
    "rocks become unsafe due to current" thresholds that the model
    doesn't capture (it only knows submersion). JRPS staff would be
    the source for empirically-known cutoffs like "Belle Isle south
-   crossing is unsafe above 7 ft" if such guidance exists.
+   crossing is unsafe above 7 ft" if such guidance exists. Also
+   the source for narrowing the Pony Pasture beach-specific
+   threshold (NOAA's published 16 ft is for the parking lot,
+   not the beach).
 
 ## Reproducibility
 

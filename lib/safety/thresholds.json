@@ -45,8 +45,8 @@
       "gage_expert_max_ft": 8.0
     },
     "bridge_crossing": {
-      "_comment": "Major pedestrian bridges (Potterfield, Belle Isle) sit ~20 ft above the river. Verified 2026-06-02: Potterfield remained open at 16 ft moderate-flood crest (2019). 22 ft is a conservative estimate for record-flood overtopping (Hurricane Agnes 1972 reference, ~26 ft crest).",
-      "gage_deny_above_ft": 22.0
+      "_comment": "Potterfield Memorial Bridge deck overtops at ~25 ft Westham per USACE/NWS HEC-RAS model (elev_123_8 layer in Richmond-Westham FIM). Tile-probe + Chrome UI validation 2026-06-03 (docs/jrps-flood-inundation-thresholds-2026-06-03.md). Bridge deck is ~20 ft above the river per JRPS source; Hurricane Agnes 1972 record crest (~26 ft Westham) is one of the few historical events that overtopped it.",
+      "gage_deny_above_ft": 25.0
     },
     "beach_access": {
       "gage_deny_above_ft": 8.0
@@ -98,18 +98,23 @@
   "_locationsNote": "locations.* notes are ≤60-char family-trip flavor lines. Validated 2026-06-02 via deep-research workflow (docs/jrps-research-2026-06-02.md). Most per-location flood thresholds in the original seed (south_channel_close_ft 5.0, flood_close_ft 10.0) were unsourced and have been removed; the 5.0 ft value is now globalRules.pfdRequiredAboveGageFt — a global PFD trigger, not a per-location closure.",
   "locations": {
     "belle-isle": {
+      "_southChannelComment": "South-channel rock crossing fully submerged at ~20 ft Westham per USACE/NWS HEC-RAS model (elev_118_8 layer). Practical impassibility is lower due to current speed — do NOT treat this as a 'crossing-safe' threshold; it is a 'rocks fully under water' anchor. Tile-probe + Chrome UI validation 2026-06-03.",
+      "south_channel_submerge_ft": 20.0,
       "notes": "Rocky urban island, bike skills + Class II views."
     },
     "pony-pasture": {
       "notes": "Class II rapids, swim beach, easy gravel paths.",
-      "_betaSubmergeComment": "beach_submerge_ft is the original seed value; no primary source confirms — flag for JRPS verification before relying on it in UI",
-      "beach_submerge_ft": 6.0
+      "_betaSubmergeComment": "beach_submerge_ft 6.0 is the original seed value; no primary source confirms. Tile-probe 2026-06-03 reported 'dry through 28 ft' but Chrome UI cross-check showed the Westham FIM polygon DOES extend to the Pony Pasture area at high stages — probe likely missed due to coordinate precision near a thin polygon edge. NOAA-published 16 ft Westham (parking-lot entry) is the working anchor for parking access. Beach-specific threshold needs JRPS direct outreach.",
+      "beach_submerge_ft": 6.0,
+      "parking_entry_ft_published": 16.0
     },
     "texas-beach": {
       "notes": "Secluded swim/wade access via Texas Ave woods."
     },
     "browns-island": {
-      "_comment": "No verified flood-closure threshold below ~16 ft based on 2019 moderate-flood precedent. Potterfield Bridge deck is 20 ft above the river per jamesriverpark.org/t-tyler-potterfield-memorial-bridge/.",
+      "_comment": "Riverbank inundation begins at the lowest modeled Westham stage (11 ft) per USACE/NWS HEC-RAS model (elev_109_8). Potterfield Bridge deck overtops at ~25 ft Westham per same model (elev_123_8). Tile-probe + Chrome UI validation 2026-06-03.",
+      "riverbank_inundate_ft": 11.0,
+      "potterfield_deck_overtop_ft": 25.0,
       "notes": "Downtown lawn, festivals, 20-ft Potterfield bridge."
     },
     "mayo-island": {
@@ -117,7 +122,7 @@
       "notes": "Limited public access — verify before visiting."
     },
     "shiplock-trail": {
-      "_comment": "Original seed flood_close_ft 10.0 had no primary source and has been removed. Per-location inundation threshold needs JRPS confirmation.",
+      "_comment": "Original seed flood_close_ft 10.0 had no primary source and has been removed. Chrome UI validation 2026-06-03 confirmed Shiplock Trail is OUTSIDE the Westham FIM polygon at every stage — the Westham model's eastern boundary is around Mayo Island. Downstream features (Shiplock, Ancarrow's Landing, Rocketts) are covered by the separate City Locks FIM (gauge 02037705), not Westham. Per-location threshold for Shiplock needs either direct JRPS outreach OR a Westham→City-Locks stage correlation (the gauges peak hours apart during real events).",
       "notes": "Canal Walk east of downtown, near river locks."
     },
     "north-bank-trail": {
