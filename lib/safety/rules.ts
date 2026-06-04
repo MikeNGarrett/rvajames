@@ -209,23 +209,20 @@ export function riverWideActivityStatuses(input: RiverwideInput): RiverwideActiv
 }
 
 /**
- * Stub verdict for activity slugs not yet covered by riverWideActivityStatuses.
+ * Verdict for activity slugs not covered by riverWideActivityStatuses.
  *
  * Migration 0016 (2026-06-02) added six new activity slugs to the
  * activities table — wade, rock-climbing, fishing, snorkeling, tubing,
  * bird-watching — plus surfaced bridge-crossing, belle-isle-pedestrian,
- * and beach-access on the per-location matrix. The rules engine doesn't
- * have specific per-activity logic for any of these yet; the tile
- * redesign round will add real verdicts.
+ * and beach-access on the per-location matrix.
  *
- * Until then, callers that need to render these activities (e.g. on the
- * location detail page or the new tile activity row) should use this
- * stub so the UI shows a deterministic, honest "check before visiting"
- * note rather than a default-blank state.
- *
- * Returns `safe` for the slugs we know about (so they don't surface as
- * scary warnings without a real rule behind them) and a no-op
- * `{ status: 'safe', baseReason: '' }` for unknown slugs.
+ * 2026-06-04 update: bridge-crossing + beach-access now consume their
+ * existing thresholds.json values for real verdicts. The remaining new
+ * slugs (wade, rock-climbing, fishing, snorkeling, tubing, bird-watching)
+ * still return a generic "safe + check site" stub — they each warrant
+ * specific rules in a future round, but no specific hazard surface
+ * applies to them today beyond what the global gage / temperature /
+ * advisory escalation already covers at the location level.
  */
 export type NonRiverwideActivitySlug =
   | 'wade'
@@ -238,19 +235,64 @@ export type NonRiverwideActivitySlug =
   | 'belle-isle-pedestrian'
   | 'beach-access';
 
+export interface NonRiverwideInput {
+  /** Current Westham gauge reading in ft, or null when unavailable. */
+  gageFt: number | null;
+}
+
 export function nonRiverwideActivityVerdict(
   slug: string,
+  input: NonRiverwideInput,
 ): { status: 'safe' | 'caution' | 'deny'; baseReason: string } {
   switch (slug) {
+    case 'bridge-crossing':
+    case 'belle-isle-pedestrian': {
+      // Both pedestrian bridges (Potterfield + Belle Isle Pedestrian) sit
+      // ~20 ft above the river. The HEC-RAS model says deck overtopping at
+      // 25 ft, but the City has demonstrated they'll close the bridge below
+      // overtopping during severe events (Hurricane Florence Sep 2018
+      // closed Potterfield at ~13 ft Westham per local recall). The
+      // bridge_crossing.gage_deny_above_ft threshold reflects this
+      // operational precedent, not the physical overtopping number.
+      if (input.gageFt === null) return { status: 'safe', baseReason: '' };
+      const denyAbove = thresholds.activities.bridge_crossing.gage_deny_above_ft;
+      if (input.gageFt > denyAbove) {
+        return {
+          status: 'deny',
+          baseReason: `Gage ${input.gageFt} ft — bridge may be closed at this stage`,
+        };
+      }
+      return { status: 'safe', baseReason: '' };
+    }
+    case 'beach-access': {
+      // Shore/beach access. Existing threshold from thresholds.json:
+      // gage_deny_above_ft 8 ft — beach features (sand strips, low rocks,
+      // shore staging areas) become submerged at moderate-high flows.
+      // Per-location nuance (Pony Pasture's beach_submerge_ft 6.0,
+      // Browns Island's riverbank_inundate_ft 11.0) is not consumed here;
+      // those are descriptive informational fields and are surfaced via
+      // location.flood_close_ft when they translate to a closure.
+      if (input.gageFt === null) return { status: 'safe', baseReason: '' };
+      const denyAbove = thresholds.activities.beach_access.gage_deny_above_ft;
+      if (input.gageFt > denyAbove) {
+        return {
+          status: 'deny',
+          baseReason: `Gage ${input.gageFt} ft — beach access submerged`,
+        };
+      }
+      return { status: 'safe', baseReason: '' };
+    }
     case 'wade':
     case 'rock-climbing':
     case 'fishing':
     case 'snorkeling':
     case 'tubing':
     case 'bird-watching':
-    case 'bridge-crossing':
-    case 'belle-isle-pedestrian':
-    case 'beach-access':
+      // No specific gauge-based rule yet. The global gage-band logic at
+      // the location level (combinedLocationStatus) already escalates the
+      // whole location to caution/danger when conditions warrant, so the
+      // user sees the warning at the tile level; the per-activity verdict
+      // here defaults to 'safe' with a check-site note.
       return { status: 'safe', baseReason: 'Conditions vary — check site before visiting' };
     default:
       return { status: 'safe', baseReason: '' };

@@ -5,7 +5,12 @@ import { getActiveStatusMap } from './location-status';
 import { getForecast } from './forecast';
 import { getAllLatestWaterQualityReadings } from './water-quality';
 import type { NoaaAhpsForecastPoint, NoaaAhpsPayload } from '@/lib/ingest/noaa-ahps';
-import { combinedLocationStatus, type SafetyStatus } from '@/lib/safety/rules';
+import { combinedLocationStatus, riverWideActivityStatuses, type SafetyStatus } from '@/lib/safety/rules';
+import {
+  computeLocationActivities,
+  type LocationActivityVerdict,
+  type JoinedLocationActivity,
+} from '@/lib/safety/location-activities';
 import { formatRichmondDate, richmondUtcOffset } from '@/lib/utils/date-tz';
 import { isInWindow } from '@/lib/queries/date-range';
 import { getUpstreamCsoForLocation, addOneDayISO, type UpstreamCsoSignal } from '@/lib/safety/upstream-cso';
@@ -49,6 +54,18 @@ export interface LocationSummary {
    * null is equivalent to count === 0.
    */
   upstreamCso: UpstreamCsoSignal | null;
+  /**
+   * Age-filtered, verdict-mapped activities for this location. Populated
+   * from the location_activities ⨝ activities join, filtered by the
+   * youngest-member age bucket via min_age_override-aware logic, and
+   * mapped to status verdicts via the rules engine. Empty array when no
+   * activities are age-appropriate at this location (e.g. Buttermilk
+   * Trail at age 0-2 since the only activity is hike with min_age 2 —
+   * but 0-2 means youngest is 0-2, so activity must allow ≤ 2).
+   *
+   * Drives the ActivityChipRow component in the redesigned tile.
+   */
+  activities: LocationActivityVerdict[];
 }
 
 /**
@@ -309,6 +326,49 @@ function computeWaterQualityBadge(
   return { status, ecoliCfuPer100ml: ecoli };
 }
 
+/**
+ * Fetch per-location activity rows joined with activity metadata.
+ *
+ * One round-trip for all visible locations. Returns a Map keyed by
+ * location_id with each entry shaped to feed computeLocationActivities.
+ *
+ * Supabase types the embedded `activities` relation as either an object
+ * (many-to-one FK) or array depending on the inferred relationship
+ * direction; both shapes are handled defensively.
+ */
+async function fetchActivitiesByLocation(
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
+  locationIds: string[],
+): Promise<Map<string, JoinedLocationActivity[]>> {
+  const map = new Map<string, JoinedLocationActivity[]>();
+  if (locationIds.length === 0) return map;
+
+  const { data } = await supabase
+    .from('location_activities')
+    .select('location_id, min_age_override, activities(slug, name, min_age)')
+    .in('location_id', locationIds);
+
+  if (!data) return map;
+
+  for (const row of data) {
+    const raw = row.activities as unknown;
+    const activity = Array.isArray(raw) ? raw[0] : raw;
+    if (!activity || typeof activity !== 'object') continue;
+    const a = activity as { slug?: string; name?: string; min_age?: number };
+    if (typeof a.slug !== 'string' || typeof a.name !== 'string' || typeof a.min_age !== 'number') {
+      continue;
+    }
+
+    const existing = map.get(row.location_id) ?? [];
+    existing.push({
+      min_age_override: row.min_age_override,
+      activity: { slug: a.slug, name: a.name, min_age: a.min_age },
+    });
+    map.set(row.location_id, existing);
+  }
+  return map;
+}
+
 // ── Observed path (today) ─────────────────────────────────────────────────────
 
 async function getObservedTodayData(
@@ -362,18 +422,35 @@ async function getObservedTodayData(
     ? Math.round((Date.now() - new Date(upriverFetchedAt).getTime()) / 60_000)
     : null;
 
-  // Fetch upstream CSO signals for all locations in parallel
-  const upstreamCsoMap = new Map<string, UpstreamCsoSignal | null>();
-  await Promise.all(
-    locations.map(async (loc) => {
-      if (loc.lng == null) {
-        upstreamCsoMap.set(loc.id, null);
-        return;
-      }
-      const signal = await getUpstreamCsoForLocation(loc.lng);
-      upstreamCsoMap.set(loc.id, signal.count > 0 ? signal : null);
-    }),
-  );
+  // Fetch per-location activities (location_activities ⨝ activities) +
+  // upstream CSO signals in parallel.
+  const locationIds = locations.map((l) => l.id);
+  const [activitiesByLocation, _csoMapPopulated] = await Promise.all([
+    fetchActivitiesByLocation(supabase, locationIds),
+    Promise.all(
+      locations.map(async (loc) => {
+        if (loc.lng == null) return [loc.id, null] as const;
+        const signal = await getUpstreamCsoForLocation(loc.lng);
+        return [loc.id, signal.count > 0 ? signal : null] as const;
+      }),
+    ),
+  ]);
+  // _csoMapPopulated is the resolved tuple list; map it.
+  const upstreamCsoMap = new Map<string, UpstreamCsoSignal | null>(_csoMapPopulated);
+
+  // Compute river-wide activity verdicts ONCE per page (not per location).
+  // Reused by each location's computeLocationActivities call below.
+  const activeCSOAdvisory       = advisoriesForRules.some((a) => a.kind === 'cso_overflow');
+  const hasHighSeverityAdvisory = advisoriesForRules.some((a) => a.severity === 'high' || a.severity === 'extreme');
+  const riverwideVerdicts = upriverGageFt !== null
+    ? riverWideActivityStatuses({
+        upriverGageFt,
+        waterTempF: upriverWaterTempF ?? null,
+        rain48hIn: 0, // TODO: source from NWS precip when available; safe default per postRainSwimStatus
+        activeCSOAdvisory,
+        hasHighSeverityAdvisory,
+      })
+    : [];
 
   const summarized: LocationSummary[] = locations.map((loc) => {
     const opStatus = statusMap.get(loc.id) ?? null;
@@ -391,6 +468,13 @@ async function getObservedTodayData(
       loc.tags,
     );
 
+    const activities = computeLocationActivities({
+      locationActivities: activitiesByLocation.get(loc.id) ?? [],
+      ageBucket,
+      metroState: { gageFt: upriverGageFt },
+      riverwideVerdicts,
+    });
+
     return {
       id: loc.id, slug: loc.slug, name: loc.name, tags: loc.tags,
       latestGageFt: upriverGageFt,
@@ -399,6 +483,7 @@ async function getObservedTodayData(
       snapshotAge,
       waterQuality: computeWaterQualityBadge(wqReadings[loc.slug] ?? null),
       upstreamCso,
+      activities,
     };
   });
 
@@ -469,20 +554,37 @@ async function getForecastTodayData(
     kind: a.kind, severity: a.severity, headline: a.headline,
   }));
 
-  // Fetch upstream CSO signals for all locations in parallel.
-  // For forecast dates, pass forSelectedDate so the query uses date-overlap
-  // (advisory window covers the forecast date) rather than a now()-anchored window.
-  const upstreamCsoMapForecast = new Map<string, UpstreamCsoSignal | null>();
-  await Promise.all(
-    locations.map(async (loc) => {
-      if (loc.lng == null) {
-        upstreamCsoMapForecast.set(loc.id, null);
-        return;
-      }
-      const signal = await getUpstreamCsoForLocation(loc.lng, 48, date);
-      upstreamCsoMapForecast.set(loc.id, signal.count > 0 ? signal : null);
-    }),
-  );
+  // Fetch per-location activities + upstream CSO signals in parallel.
+  // For forecast dates, pass forSelectedDate to getUpstreamCsoForLocation
+  // so the query uses date-overlap (advisory window covers the forecast
+  // date) rather than a now()-anchored window.
+  const locationIds = locations.map((l) => l.id);
+  const [activitiesByLocation, _csoMapPopulated] = await Promise.all([
+    fetchActivitiesByLocation(supabase, locationIds),
+    Promise.all(
+      locations.map(async (loc) => {
+        if (loc.lng == null) return [loc.id, null] as const;
+        const signal = await getUpstreamCsoForLocation(loc.lng, 48, date);
+        return [loc.id, signal.count > 0 ? signal : null] as const;
+      }),
+    ),
+  ]);
+  const upstreamCsoMapForecast = new Map<string, UpstreamCsoSignal | null>(_csoMapPopulated);
+
+  // River-wide verdicts ONCE per page. Forecast mode has no water-temp
+  // (AHPS doesn't publish it), so temp-based caution branches default to
+  // safe — matches the existing combinedLocationStatus call below.
+  const activeCSOAdvisory       = advisoriesForRules.some((a) => a.kind === 'cso_overflow');
+  const hasHighSeverityAdvisory = advisoriesForRules.some((a) => a.severity === 'high' || a.severity === 'extreme');
+  const riverwideVerdicts = upriverGageFt !== null
+    ? riverWideActivityStatuses({
+        upriverGageFt,
+        waterTempF: null,
+        rain48hIn: 0,
+        activeCSOAdvisory,
+        hasHighSeverityAdvisory,
+      })
+    : [];
 
   const summarized: LocationSummary[] = locations.map((loc) => {
     const opStatus = statusMap.get(loc.id) ?? null;
@@ -504,6 +606,13 @@ async function getForecastTodayData(
       loc.tags,
     );
 
+    const activities = computeLocationActivities({
+      locationActivities: activitiesByLocation.get(loc.id) ?? [],
+      ageBucket,
+      metroState: { gageFt: upriverGageFt },
+      riverwideVerdicts,
+    });
+
     return {
       id: loc.id, slug: loc.slug, name: loc.name, tags: loc.tags,
       latestGageFt: upriverGageFt,
@@ -512,6 +621,7 @@ async function getForecastTodayData(
       snapshotAge: null, // forecast data has no snapshot age
       waterQuality: null, // water quality is historical — not shown on forecast views
       upstreamCso,
+      activities,
     };
   });
 
