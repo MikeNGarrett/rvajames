@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { StatusBadge } from './StatusBadge';
 import { WaterQualityIcon } from '@/components/ui/WaterQualityIcon';
+import { CsoBadge } from '@/components/ui/CsoBadge';
 import type { LocationSummary } from '@/lib/queries/today';
 import type { AgeBucket } from '@/lib/url-state';
 
@@ -17,43 +18,10 @@ interface Props {
   ageBucket: AgeBucket;
 }
 
-/**
- * Small amber circle with "!" shown on tiles when there is an active CSO
- * upstream of this access point in the past 48 hours.
- *
- * A11y: aria-label on the <span> covers screen readers. The circle shape
- * differs from WaterDropBadge so the two badges are distinguishable by
- * shape alone (WCAG 1.4.1).
- */
-function CsoBadge() {
-  return (
-    <span
-      aria-label="CSO event upstream in past 48 hours"
-      title="Upstream sewer overflow — bacterial levels may be elevated"
-      className="inline-flex items-center shrink-0 text-status-caution-fg"
-    >
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 10 10"
-        className="w-3 h-3"
-        fill="currentColor"
-      >
-        <circle cx="5" cy="5" r="5" />
-        <text
-          x="5"
-          y="7.8"
-          textAnchor="middle"
-          fontSize="7"
-          fontWeight="900"
-          fill="white"
-        >
-          !
-        </text>
-      </svg>
-    </span>
-  );
-}
-
+// Note: CsoBadge was extracted 2026-06-04 to components/ui/CsoBadge.tsx so
+// LocationStatusRow (and any future tile variant) can reuse the same
+// amber-circle-with-"!" visual. Imported above.
+//
 // Note: the prior inline WaterDropBadge here was replaced 2026-06-03 by the
 // reusable <WaterQualityIcon> in components/ui/. The old badge rendered too
 // small (10x14 px) to distinguish safe vs caution at a glance; the new
