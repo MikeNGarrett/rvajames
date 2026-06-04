@@ -455,35 +455,69 @@ PARTIALLY ANSWERED  JRPS direct-outreach research questions
                 threshold value for each location.
 
              2. Has Potterfield Memorial Bridge ever closed?
-                ANSWERED. User-confirmed 2026-06-03: bridge has not been
-                permanently closed for high water since its 2016 opening.
-                Has had documented scheduled maintenance closures (no
-                flooding cause). Combined with the 25 ft HEC-RAS model
-                threshold above, this gives a defensible answer: deck
-                overtopping happens at 25 ft Westham, but no formal
-                policy of closure between routine high water and that
-                level. Aligns with our 22 ft conservative
-                `activities.bridge_crossing.gage_deny_above_ft`.
+                ANSWERED. User-confirmed 2026-06-03: Hurricane Florence
+                (September 2018) is the ONE flood-cause closure since the
+                bridge opened in December 2016. All other closures since
+                opening have been scheduled maintenance. This refines the
+                earlier "no flood closures" framing.
+
+                Key distinction: deck-overtopping (model says 25 ft
+                Westham) is a different threshold from operational closure
+                (Florence 2018 closed it at a lower stage as an event-
+                driven safety call). 2019 reporting documented the bridge
+                staying OPEN at a 16 ft moderate-flood crest, so Florence's
+                closure was between 17 ft and 25 ft Westham.
+
+                Implication for the dashboard: `activities.bridge_crossing.
+                gage_deny_above_ft = 25` is the right physical threshold
+                (model-based deck overtopping). The bridge's actual
+                operational closure during severe events isn't a clean
+                gauge-only threshold — it depends on flood watch status,
+                debris flow, and event severity. The existing global gage-
+                band logic (status = 'danger' above 8 ft high_max_ft)
+                already triggers caution well before the bridge would
+                operationally close, so the dashboard's overall safety
+                framing is correct even without a more precise number.
 
              3. Mayo Island public-access timeline post-CRLC 2022.
-                ANSWERED via 2026-06-03 follow-up web research:
+                ANSWERED via 2026-06-03 follow-up web research +
+                user-confirmed source:
                   - Dec 2022: CRLC acquisition under contract
-                  - Aug 2025: Public park concept released (trails, kayak
-                    launches, fishing access, picnic areas, habitat
-                    restoration). Fall 2025 demolition/site prep planned.
-                  - Oct 2026 (target): initial public opening
+                  - Sep 2025: Governor Glenn Youngkin celebrated the
+                    conservation of historic Mayo's Island
+                    (capitalregionland.org/2025/09/governor-glenn-youngkin-
+                    celebrates-conservation-of-historic-mayos-island/)
+                  - Fall 2025: Demolition/site prep
+                  - October 2026 (target): initial public opening
                 Codebase action: Mayo Island remains unpublished
                 (locations.published=false) until October 2026 opening
                 confirms. Then re-publish with seed activities derived
                 from the public park plan.
 
              4. JRPS-published age guidance.
-                CONFIRMED ABSENT. JRPS does not publish per-activity
-                minimum ages. Dashboard ages stay framed as
-                conservative defaults derived from USCG (PFDs under 13)
-                + AAP (swim lessons 1+, unsupervised water under 13
-                discouraged), not as JRPS rules. This is settled — no
-                further outreach needed.
+                PARTIALLY ANSWERED (refined 2026-06-03 from earlier
+                "confirmed absent" framing): JRPS does NOT publish a
+                formal blanket minimum age for general park access, BUT
+                the City of Richmond and JRPS DO enforce mandatory safety
+                guidelines and varying age limits for specific river
+                activities, facilities, and city-run programming.
+
+                Examples likely in scope (need confirmation per item):
+                  - Virginia law: PFDs required for children under 13 on
+                    recreational vessels under 21 ft
+                  - City pools / aquatic facilities have their own age
+                    rules (separate from JRPS)
+                  - City-run programming (camps, classes, organized
+                    paddle trips) may set age minimums per program
+                  - Bicycle Skills Area may have helmet/age guidance
+
+                Codebase action: dashboard age defaults stay derived from
+                USCG + AAP (conservative), framed as suggested minimums
+                not JRPS rules. If we want to surface specific City of
+                Richmond ordinances (e.g., the under-13 PFD requirement
+                already captured in globalRules.pfdRequiredAboveGageFt
+                indirectly), they'd live in a new globalRules.ageRules
+                block. Queued as a follow-up rather than a blocker.
 
 FOLLOW-UP  Chrome UI validation of FIM thresholds (queued 2026-06-03)
            The 2026-06-03 ArcGIS tile probe (see

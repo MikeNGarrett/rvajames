@@ -45,7 +45,7 @@
       "gage_expert_max_ft": 8.0
     },
     "bridge_crossing": {
-      "_comment": "Potterfield Memorial Bridge deck overtops at ~25 ft Westham per USACE/NWS HEC-RAS model (elev_123_8 layer in Richmond-Westham FIM). Tile-probe + Chrome UI validation 2026-06-03 (docs/jrps-flood-inundation-thresholds-2026-06-03.md). Bridge deck is ~20 ft above the river per JRPS source; Hurricane Agnes 1972 record crest (~26 ft Westham) is one of the few historical events that overtopped it.",
+      "_comment": "Potterfield Memorial Bridge deck overtops at ~25 ft Westham per USACE/NWS HEC-RAS model (elev_123_8 layer). Bridge opened Dec 2016; Hurricane Florence (Sep 2018) is the ONLY documented flood-cause closure since opening, at a stage between 17 ft (open during 2019 16 ft moderate-flood) and 25 ft (model deck overtopping). gage_deny_above_ft = 25 reflects the physical overtopping threshold; actual operational closures during severe events depend on flood-watch status + debris + event severity, not a clean gauge cutoff — the global gage-band logic (status='danger' above 8 ft high_max_ft) already triggers caution well before any bridge closure call.",
       "gage_deny_above_ft": 25.0
     },
     "beach_access": {
