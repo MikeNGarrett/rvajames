@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { StatusBadge } from './StatusBadge';
-import { WaterQualityIcon } from '@/components/ui/WaterQualityIcon';
-import { CsoBadge } from '@/components/ui/CsoBadge';
+import { LocationStatusRow } from '@/components/ui/LocationStatusRow';
+import { ActivityChipRow } from '@/components/ui/ActivityChipRow';
 import type { LocationSummary } from '@/lib/queries/today';
 import type { AgeBucket } from '@/lib/url-state';
 
@@ -18,25 +18,43 @@ interface Props {
   ageBucket: AgeBucket;
 }
 
-// Note: CsoBadge was extracted 2026-06-04 to components/ui/CsoBadge.tsx so
-// LocationStatusRow (and any future tile variant) can reuse the same
-// amber-circle-with-"!" visual. Imported above.
+// Layout history
+//   2026-06-03 → 2026-06-04 redesign round:
+//     - Inline WaterDropBadge replaced by reusable <WaterQualityIcon>
+//       (24×24 viewBox, large centered "!" in caution state — old badge
+//       was 10×14 px and hard to read at a glance)
+//     - Inline CsoBadge extracted to components/ui/CsoBadge.tsx so the
+//       new LocationStatusRow can reuse the same amber-circle visual
+//     - Environmental indicators moved out of the title cluster into a
+//       dedicated <LocationStatusRow>, freeing the title row to carry
+//       just the operational pill
+//     - Per-activity verdicts added via <ActivityChipRow> reading from
+//       location.activities (populated by the resolver layer; see
+//       lib/safety/location-activities.ts + lib/queries/today.ts)
 //
-// Note: the prior inline WaterDropBadge here was replaced 2026-06-03 by the
-// reusable <WaterQualityIcon> in components/ui/. The old badge rendered too
-// small (10x14 px) to distinguish safe vs caution at a glance; the new
-// component uses a 24x24 viewBox with a large centered "!" in the caution
-// state and supports multiple sizes via a `size` prop.
+// Closure-mode rendering (2026-06-03 design decision)
+//   - Open (status === 'safe'): hide the StatusBadge — redundant with
+//     the lack of warnings — show all three rows.
+//   - Restricted (caution / danger): keep the badge, show all rows.
+//   - Closed (closed): keep the badge, show ONLY the closure reason —
+//     no environmental indicators, no activity chips. The location
+//     isn't accessible, so the rest is noise.
 
 export function RiverLevelTile({ location, dateStr, ageBucket }: Props) {
   const { status, reason } = location.deterministicStatus;
 
+  // Tile background + border — keyed off the deterministic status. The
+  // ?? fallback handles the (unused) 'flood' status from StatusBadge's
+  // type union, plus any future status the rules engine adds.
   const subtleClass = {
     safe:    'bg-status-safe-subtle border-status-safe',
     caution: 'bg-status-caution-subtle border-status-caution',
     danger:  'bg-status-danger-subtle border-status-danger',
     closed:  'bg-status-closed-subtle border-status-closed/40',
   }[status] ?? 'bg-surface border-border';
+
+  const showStatusPill = status !== 'safe';
+  const isClosed       = status === 'closed';
 
   return (
     <Link
@@ -48,18 +66,24 @@ export function RiverLevelTile({ location, dateStr, ageBucket }: Props) {
     >
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-base font-semibold text-text leading-tight">{location.name}</h3>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {location.upstreamCso && location.upstreamCso.count > 0 && (
-            <CsoBadge />
-          )}
-          {location.waterQuality && (
-            <WaterQualityIcon status={location.waterQuality.status} size={18} />
-          )}
-          <StatusBadge status={status} />
-        </div>
+        {showStatusPill && (
+          <div className="shrink-0">
+            <StatusBadge status={status} />
+          </div>
+        )}
       </div>
 
       <p className="text-sm text-text leading-snug">{reason}</p>
+
+      {!isClosed && (
+        <>
+          <LocationStatusRow
+            waterQuality={location.waterQuality}
+            upstreamCso={location.upstreamCso}
+          />
+          <ActivityChipRow activities={location.activities} />
+        </>
+      )}
 
       <p className="text-xs text-rva-blue mt-auto">
         Details &amp; resources →
