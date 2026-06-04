@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
@@ -112,7 +113,10 @@ export default async function Home({ searchParams }: Props) {
         <header className="mb-5">
           <h1 className="text-2xl font-extrabold text-rva-blue leading-tight">RVA James</h1>
           <p className="text-sm text-text-secondary mt-0.5">
-            James River conditions for Richmond families
+            James River conditions for Richmond families.{' '}
+            <Link href="/about" className="text-rva-blue underline">
+              Learn more →
+            </Link>
           </p>
         </header>
 

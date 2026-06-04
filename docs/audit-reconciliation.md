@@ -305,37 +305,33 @@ COMPLETE — Spec-Website audit follow-up (closed 2026-05-31)
        Awaiting deploy (commits batched with the FirstVisitModal a11y fix
        `f468040`).
 
-QUEUED (after 86–91, last slot)
-       /about page — single static page introducing project + creator
-       Single self-contained page at app/about/page.tsx. Sized for one /goal
-       session. User decision 2026-05-30: ship last, after all functional rounds.
+COMPLETE — /about page (closed 2026-06-04)
+       Last queued static page from the original plan. Ships in three sections
+       at app/about/page.tsx:
+         - "What this is" — project intent + AI-disclosure posture (mirrors
+           /safety + DisclaimerFooter)
+         - "About the creator" — user-supplied bio, VERBATIM (kickoff Q&A
+           2026-06-04). Five paragraphs + h3 subhead, no paraphrasing. Tests
+           assert the exact strings so future edits can't silently rewrite.
+         - "How it's built" — 2-paragraph plain-language overview + collapsible
+           <details>/<summary> "For the technically curious" sidebar covering
+           stack, ingestion crons, AI design (prompt caching + SHA-256 dedup
+           hash), freshness model, safety posture. Cross-links to /safety and
+           /status.
 
-       Content structure:
-       - Project intent — what RVA James is and why it exists (Richmond families,
-         James River, consolidating fragmented data sources into kid-safe guidance).
-         Tone matches the existing brand voice (warm, plain language, honest about
-         AI involvement — mirrors /safety + DisclaimerFooter posture).
-       - Creator section — short bio of Mike Garrett with his motivation for
-         building this. NEEDS USER INPUT at execution time: name confirmation,
-         role/title, what to share about his connection to Richmond + the river,
-         which contact links to surface (email? LinkedIn? GitHub?).
-       - "How it's built" — plain-language overview (2–3 sentences: Next.js +
-         Cloudflare + Supabase + Claude AI; data sources USGS / NWS / JRA /
-         Richmond DPU) PLUS a collapsible "For the technically curious" sidebar
-         using <details>/<summary>. Sidebar covers the stack at more depth —
-         cron schedule, prompt caching, freshness model. Decision per Q&A
-         2026-05-30.
+       User inputs resolved at kickoff (2026-06-04):
+         1. Bio: user wrote it themselves, supplied verbatim
+         2. Contact links: ONLY the public repo (https://github.com/MikeNGarrett/rvajames)
+         3. Photo: none
+         4. Navigation: BOTH — "Learn more →" link appended to the homepage
+            tagline ("James River conditions for Richmond families. Learn more →")
+            AND a footer link in DisclaimerFooter ("About RVA James")
+         5. Repo: public, link surfaced in both the plain-language overview
+            and the details sidebar
 
-       Navigation: confirm at execution time whether /about gets a nav link, a
-       footer link, or both. Existing footer is DisclaimerFooter — may need an
-       expansion or a sibling component.
-
-       Open inputs needed from user before execution:
-       1. Bio paragraph (or 3–5 facts to draft from)
-       2. Contact links to include
-       3. Photo? (optional)
-       4. Footer-only vs nav vs both
-       5. Any GitHub repo link if the project is/will-be public
+       Sitemap updated to include /about with monthly priority 0.5 (same tier
+       as /safety). 17 new tests across app/about/page.test.tsx and
+       components/legal/DisclaimerFooter.test.tsx. Full suite 543/543.
 
 DEFER  Finding 13 — dark mode (own round if/when prioritized)
 

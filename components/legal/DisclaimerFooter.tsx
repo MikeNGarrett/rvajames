@@ -61,6 +61,11 @@ export function DisclaimerFooter({ ageBucket }: Props = {}) {
       <p className="text-xs mt-2 text-text-muted">
         Not affiliated with the City of Richmond or James River Association.
       </p>
+      <p className="text-xs mt-3 text-text-muted">
+        <Link href="/about" className="underline">
+          About RVA James
+        </Link>
+      </p>
     </footer>
   );
 }
