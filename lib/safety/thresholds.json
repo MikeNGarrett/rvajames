@@ -45,8 +45,9 @@
       "gage_expert_max_ft": 8.0
     },
     "bridge_crossing": {
-      "_comment": "Potterfield Memorial Bridge deck overtops at ~25 ft Westham per USACE/NWS HEC-RAS model (elev_123_8 layer). Bridge opened Dec 2016; Hurricane Florence (Sep 2018) is the ONLY documented flood-cause closure since opening, at a stage between 17 ft (open during 2019 16 ft moderate-flood) and 25 ft (model deck overtopping). gage_deny_above_ft = 25 reflects the physical overtopping threshold; actual operational closures during severe events depend on flood-watch status + debris + event severity, not a clean gauge cutoff — the global gage-band logic (status='danger' above 8 ft high_max_ft) already triggers caution well before any bridge closure call.",
-      "gage_deny_above_ft": 25.0
+      "_comment": "Potterfield Memorial Bridge — two relevant thresholds: (1) physical deck overtopping at ~25 ft Westham per USACE/NWS HEC-RAS model (elev_123_8); (2) operational closure precedent at ~13 ft Westham — Hurricane Florence (Sep 2018) is the ONLY documented flood-cause closure since the bridge opened Dec 2016, and per user recall the Westham crest at that event was ~13 ft. The dashboard's gage_deny_above_ft uses the OPERATIONAL precedent (13 ft) for safety messaging because the City has demonstrated they'll close the bridge below physical overtopping when conditions warrant (debris, rapid rise, flood watch). Not all 13 ft events will trigger closure — but at or above this stage families should expect possible closure and verify before crossing. 2019 reporting documented the bridge OPEN at a 16 ft moderate-flood crest, so the 13 ft figure should be read as 'closures have been observed at this level during severe events,' not 'always closed above this stage.'",
+      "gage_deny_above_ft": 13.0,
+      "gage_deck_overtop_ft": 25.0
     },
     "beach_access": {
       "gage_deny_above_ft": 8.0

@@ -458,26 +458,29 @@ PARTIALLY ANSWERED  JRPS direct-outreach research questions
                 ANSWERED. User-confirmed 2026-06-03: Hurricane Florence
                 (September 2018) is the ONE flood-cause closure since the
                 bridge opened in December 2016. All other closures since
-                opening have been scheduled maintenance. This refines the
-                earlier "no flood closures" framing.
+                opening have been scheduled maintenance. Per user recall,
+                the Westham crest at Florence was ~13 ft.
 
-                Key distinction: deck-overtopping (model says 25 ft
-                Westham) is a different threshold from operational closure
-                (Florence 2018 closed it at a lower stage as an event-
-                driven safety call). 2019 reporting documented the bridge
-                staying OPEN at a 16 ft moderate-flood crest, so Florence's
-                closure was between 17 ft and 25 ft Westham.
+                Wait — earlier I treated 17-25 ft as the bracket for
+                Florence based on indirect evidence (bridge open at 16 ft
+                in 2019, model says deck overtops at 25 ft). User's first-
+                hand recall of ~13 ft is BELOW that bracket, which means
+                the bridge closed at a stage where the deck was nowhere
+                near overtopping. Operational closure during Florence was
+                event-driven (debris, rapid rise, accompanying flood
+                watch), not deck-submersion. The 16 ft 2019 event
+                presumably didn't trigger the same operational call —
+                different rate of rise + debris context.
 
-                Implication for the dashboard: `activities.bridge_crossing.
-                gage_deny_above_ft = 25` is the right physical threshold
-                (model-based deck overtopping). The bridge's actual
-                operational closure during severe events isn't a clean
-                gauge-only threshold — it depends on flood watch status,
-                debris flow, and event severity. The existing global gage-
-                band logic (status = 'danger' above 8 ft high_max_ft)
-                already triggers caution well before the bridge would
-                operationally close, so the dashboard's overall safety
-                framing is correct even without a more precise number.
+                Implication for the dashboard: lowered
+                `activities.bridge_crossing.gage_deny_above_ft` from 25 →
+                13 to match the operational precedent. The 25 ft physical
+                overtopping number is preserved as `gage_deck_overtop_ft`
+                for documentation. Net effect: dashboard now warns of
+                possible bridge closure at any stage at or above 13 ft
+                Westham, with framing that conveys "closures have been
+                observed at this level during severe events" rather than
+                "always closed above this stage."
 
              3. Mayo Island public-access timeline post-CRLC 2022.
                 ANSWERED via 2026-06-03 follow-up web research +
