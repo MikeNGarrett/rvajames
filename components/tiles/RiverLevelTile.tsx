@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { StatusBadge } from './StatusBadge';
+import { WaterQualityIcon } from '@/components/ui/WaterQualityIcon';
 import type { LocationSummary } from '@/lib/queries/today';
 import type { AgeBucket } from '@/lib/url-state';
 
@@ -53,51 +54,11 @@ function CsoBadge() {
   );
 }
 
-/**
- * Small water-drop indicator shown alongside the status pill when a fresh
- * JRA water-quality reading is available.
- *   - Blue drop:  within VDH thresholds (safe)
- *   - Amber drop with "!" mark: exceeds VDH single-sample max (caution)
- *
- * A11y: aria-label on the <span> covers screen readers. The "!" glyph inside
- * the caution SVG is a shape-based distinction so colorblind users don't rely
- * solely on hue to distinguish the two states (WCAG 1.4.1).
- */
-function WaterDropBadge({ status }: { status: 'safe' | 'caution' }) {
-  const isCaution = status === 'caution';
-  return (
-    <span
-      aria-label={`Water quality: ${isCaution ? 'elevated bacteria' : 'safe'}`}
-      title={`Water quality: ${isCaution ? 'Bacteria above VDH limit' : 'Within VDH safe range'}`}
-      className={`inline-flex items-center shrink-0 ${
-        isCaution ? 'text-status-caution-fg' : 'text-rva-blue/60'
-      }`}
-    >
-      {/* Water-drop SVG. Caution state adds an "!" glyph inside the drop
-          so the two states differ by shape as well as color. */}
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 8 11"
-        className="w-2.5 h-3.5"
-        fill="currentColor"
-      >
-        <path d="M4 0 C3 2 0 5.5 0 7.5 a4 4 0 0 0 8 0 C8 5.5 5 2 4 0 Z" />
-        {isCaution && (
-          <text
-            x="4"
-            y="9.5"
-            textAnchor="middle"
-            fontSize="5"
-            fontWeight="900"
-            fill="white"
-          >
-            !
-          </text>
-        )}
-      </svg>
-    </span>
-  );
-}
+// Note: the prior inline WaterDropBadge here was replaced 2026-06-03 by the
+// reusable <WaterQualityIcon> in components/ui/. The old badge rendered too
+// small (10x14 px) to distinguish safe vs caution at a glance; the new
+// component uses a 24x24 viewBox with a large centered "!" in the caution
+// state and supports multiple sizes via a `size` prop.
 
 export function RiverLevelTile({ location, dateStr, ageBucket }: Props) {
   const { status, reason } = location.deterministicStatus;
@@ -124,7 +85,7 @@ export function RiverLevelTile({ location, dateStr, ageBucket }: Props) {
             <CsoBadge />
           )}
           {location.waterQuality && (
-            <WaterDropBadge status={location.waterQuality.status} />
+            <WaterQualityIcon status={location.waterQuality.status} size={18} />
           )}
           <StatusBadge status={status} />
         </div>

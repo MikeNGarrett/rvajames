@@ -71,6 +71,7 @@ import { useMemo } from 'react';
 import { Sparkline } from '@/components/ui/Sparkline';
 import { HorizontalGauge } from '@/components/ui/HorizontalGauge';
 import { LazyContent } from '@/components/ui/LazyContent';
+import { WaterQualityIcon } from '@/components/ui/WaterQualityIcon';
 import { SwimTodayTile } from './SwimTodayTile';
 import { FeelsLikeTile } from './FeelsLikeTile';
 import { NextHoursTile } from './NextHoursTile';
@@ -175,7 +176,7 @@ export function RichmondConditionsSection({ date, ageBucket, data }: Props) {
         )}
         {data.waterQualityStatus !== null && (
           <div className="flex items-center gap-1.5">
-            <span aria-hidden="true">💦</span>
+            <WaterQualityIcon status={data.waterQualityStatus} size={18} />
             <dt className="sr-only">Water quality</dt>
             <dd
               className={

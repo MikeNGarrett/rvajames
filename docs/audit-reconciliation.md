@@ -581,35 +581,34 @@ FOLLOW-UP  "Coming soon" UI section design (queued 2026-06-02)
            candidates AND a tile-redesign that has space for the secondary
            section.
 
-FOLLOW-UP  Water-quality icons on RiverLevelTile not visually distinct
-           Component: `WaterDropBadge` in components/tiles/RiverLevelTile.tsx.
-           Renders one of two states next to the status pill on every location card:
-             - `safe`    → blue water drop (rva-blue/60)
-             - `caution` → amber water drop with white "!" glyph inside (status-caution-fg)
-           Both render at 10x14 px (`w-2.5 h-3.5`). The "!" glyph inside the caution
-           drop is set at font-size 5 on an 8x11 viewBox — too small to read at the
-           rendered card size. Side-by-side on the homepage grid the two states are
-           effectively indistinguishable, particularly to users glancing at multiple
-           tiles. There's also no on-card legend explaining what the drop means at
-           all — first-time visitors have no way to know the icon represents
-           bacterial water-quality status (it could be water level, water temp,
-           water source, etc.).
-           
-           Likely fix paths (pick one):
-             1. Bigger icon + clearer shape distinction (e.g., safe = drop, caution
-                = drop-with-warning-triangle-overlay), at ~16x16 px minimum.
-             2. Replace icon with a tiny text label: "Water OK" / "⚠ Bacteria".
-                Burns more horizontal space; clearest comprehension.
-             3. Move water-quality off the card entirely and surface it only on the
-                location detail page where there's room for a labeled callout.
-           
-           A11y today: `aria-label` + `title` on the wrapping span are correct, so
-           screen-reader and tooltip users see the actual state. This followup is
-           purely a sighted-glance comprehension problem on the tile grid.
-           
-           Reported via screenshot 2026-06-02 (Belle Isle vs Buttermilk Trail tiles
-           both reading "Caution" but with the safe-vs-caution water drop icons
-           that looked identical at card size).
+RESOLVED   Water-quality icons on RiverLevelTile not visually distinct
+           Original problem (2026-06-02 screenshot): WaterDropBadge in
+           components/tiles/RiverLevelTile.tsx rendered at 10x14 px with a
+           font-size-5 "!" glyph inside the caution drop — too small to
+           read, safe vs caution indistinguishable on the tile grid.
+
+           Fix shipped 2026-06-04: extracted a unified
+           components/ui/WaterQualityIcon.tsx with:
+             - 24x24 viewBox + size prop (default 16, used at 18 in both
+               RiverLevelTile and RichmondConditionsSection)
+             - Caution state adds a large centered "!" at fontSize 14
+               (~60% of drop interior height) — legible at any
+               render size from 16 px up
+             - aria-label, title, and aria-hidden on the SVG carry full
+               accessibility semantics
+             - Optional showLabel prop renders the short text label
+               ("Water OK" / "Water caution") inline next to the icon
+               for contexts where a glyph-only indicator isn't enough
+           Replaced the inline WaterDropBadge in RiverLevelTile AND the
+           ad-hoc 💦 emoji in RichmondConditionsSection's stats strip
+           with the new component, so both surfaces now use the same
+           visual treatment. 14 new tests cover the safe/caution
+           variants, size prop, showLabel, and SVG a11y attributes.
+
+           Component is also positioned as a building block for the
+           larger tile-redesign round (see "Tile redesign" follow-up
+           below) — when the LocationStatusRow ships, it'll consume
+           WaterQualityIcon at size 18 as part of its icon strip.
 ```
 
 ---
