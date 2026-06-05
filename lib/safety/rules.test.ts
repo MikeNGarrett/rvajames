@@ -356,6 +356,39 @@ describe('combinedLocationStatus', () => {
     expect(justBelow.reason).not.toMatch(/closes this location/i);
   });
 
+  it('closes Tredegar Rope Swing above 5 ft Westham (informal-site safety lever, migration 0017)', () => {
+    // The rope swing has a 4-incident drowning record. Per user decision
+    // 2026-06-05 the location is published but flood_close_ft = 5 ft —
+    // the same threshold at which JRPS requires PFDs across the river.
+    // Above 5 ft, the location escalates to danger; the activity card
+    // becomes inactionable. This is the safety lever for an informal
+    // site with no lifeguards.
+    expect(
+      combinedLocationStatus({ gageFt: 5.5 }, noAdvisories, 'tredegar-rope-swing').status,
+    ).toBe('danger');
+    expect(
+      combinedLocationStatus({ gageFt: 5.5 }, noAdvisories, 'tredegar-rope-swing').reason,
+    ).toMatch(/5 ft closes this location/i);
+    // Just below: should still be caution (gauge above elevated threshold
+    // 5.5 ft? — 4.5 ft is below elevated; 4.0 is normal-max). At 4.5 it
+    // crosses the global elevated band to caution, but should NOT trigger
+    // the close-this-location reason.
+    const justBelow = combinedLocationStatus({ gageFt: 4.5 }, noAdvisories, 'tredegar-rope-swing');
+    expect(justBelow.reason).not.toMatch(/closes this location/i);
+  });
+
+  it('closes Dock Street Park above 12 ft Westham (outside-floodwall conservative flag)', () => {
+    expect(
+      combinedLocationStatus({ gageFt: 12.5 }, noAdvisories, 'dock-street-park').reason,
+    ).toMatch(/12 ft closes this location/i);
+  });
+
+  it('closes Chapel Island above 12 ft Westham (outside-floodwall conservative flag)', () => {
+    expect(
+      combinedLocationStatus({ gageFt: 12.5 }, noAdvisories, 'chapel-island').reason,
+    ).toMatch(/12 ft closes this location/i);
+  });
+
   it('returns danger on active CSO advisory regardless of gage', () => {
     const result = combinedLocationStatus(
       { gageFt: 2.5 },

@@ -180,6 +180,38 @@ describe('computeLocationActivities', () => {
       expect(result[0].status).toBe('safe');
     });
 
+    it('marks kayak-flatwater safe at low gauge with PFD reminder (Huguenot, Chapel Island)', () => {
+      const result = computeLocationActivities({
+        locationActivities: [la('kayak-flatwater', 'Flatwater Kayaking', 6)],
+        ageBucket: 'none',
+        metroState: { gageFt: 3.0 },
+        riverwideVerdicts: [],
+      });
+      expect(result[0].status).toBe('safe');
+      expect(result[0].note).toMatch(/PFD required/i);
+    });
+
+    it('escalates kayak-flatwater to caution above 4 ft (rising current)', () => {
+      const result = computeLocationActivities({
+        locationActivities: [la('kayak-flatwater', 'Flatwater Kayaking', 6)],
+        ageBucket: 'none',
+        metroState: { gageFt: 5.0 },
+        riverwideVerdicts: [],
+      });
+      expect(result[0].status).toBe('caution');
+    });
+
+    it('denies kayak-flatwater above 5.5 ft (debris + current too unsafe for calm-water paddlers)', () => {
+      const result = computeLocationActivities({
+        locationActivities: [la('kayak-flatwater', 'Flatwater Kayaking', 6)],
+        ageBucket: 'none',
+        metroState: { gageFt: 6.0 },
+        riverwideVerdicts: [],
+      });
+      expect(result[0].status).toBe('deny');
+      expect(result[0].note).toMatch(/too high for calm-water/i);
+    });
+
     it('denies beach-access above the gage_deny_above_ft threshold (8 ft)', () => {
       const result = computeLocationActivities({
         locationActivities: [la('beach-access', 'Beach', 0)],

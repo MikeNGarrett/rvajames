@@ -233,7 +233,8 @@ export type NonRiverwideActivitySlug =
   | 'bird-watching'
   | 'bridge-crossing'
   | 'belle-isle-pedestrian'
-  | 'beach-access';
+  | 'beach-access'
+  | 'kayak-flatwater';
 
 export interface NonRiverwideInput {
   /** Current Westham gauge reading in ft, or null when unavailable. */
@@ -281,6 +282,33 @@ export function nonRiverwideActivityVerdict(
         };
       }
       return { status: 'safe', baseReason: '' };
+    }
+    case 'kayak-flatwater': {
+      // Calm-water paddling — Huguenot Flatwater (upstream of the falls) and
+      // Chapel Island (tidal launch). Distinct from kayak-rapids which models
+      // Westham gauge → rapids class for whitewater. For flatwater, the
+      // gauge still escalates conditions (debris, current speed near put-in)
+      // but the band is narrower: safe through ~4 ft, caution through 5.5,
+      // deny above 5.5 (where flatwater carries debris and current speeds
+      // become unsafe for beginners even in calm-water pools).
+      if (input.gageFt === null) return { status: 'safe', baseReason: '' };
+      const kf = thresholds.activities.kayak_flatwater;
+      if (input.gageFt > kf.gage_deny_above_ft) {
+        return {
+          status: 'deny',
+          baseReason: `Gage ${input.gageFt} ft — too high for calm-water paddling`,
+        };
+      }
+      if (input.gageFt > kf.gage_safe_max_ft) {
+        return {
+          status: 'caution',
+          baseReason: `Gage ${input.gageFt} ft — paddle with experience, PFD required`,
+        };
+      }
+      return {
+        status: 'safe',
+        baseReason: `Gage ${input.gageFt} ft — calm conditions, PFD required`,
+      };
     }
     case 'wade':
     case 'rock-climbing':

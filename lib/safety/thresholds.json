@@ -44,6 +44,12 @@
       "gage_beginner_max_ft": 5.5,
       "gage_expert_max_ft": 8.0
     },
+    "kayak_flatwater": {
+      "_comment": "Calm-water paddling on Huguenot Flatwater (upstream of falls) and Chapel Island (downstream/tidal). Westham gauge applies for Huguenot; Chapel Island reads conditions more from local tidal + outside-floodwall state, but Westham still proxies for upstream debris/flow into the tidal zone. Beginner-friendly window narrower than kayak-rapids — escalates to caution at 4.0 ft (where Huguenot starts pushing) and deny at 5.5 ft (where rapids paddlers take over downstream and even the flatwater carries debris).",
+      "gage_safe_max_ft":    4.0,
+      "gage_caution_max_ft": 5.5,
+      "gage_deny_above_ft":  5.5
+    },
     "bridge_crossing": {
       "_comment": "Potterfield Memorial Bridge — two relevant thresholds: (1) physical deck overtopping at ~25 ft Westham per USACE/NWS HEC-RAS model (elev_123_8); (2) operational closure precedent at ~13 ft Westham — Hurricane Florence (Sep 2018) is the ONLY documented flood-cause closure since the bridge opened Dec 2016, and per user recall the Westham crest at that event was ~13 ft. The dashboard's gage_deny_above_ft uses the OPERATIONAL precedent (13 ft) for safety messaging because the City has demonstrated they'll close the bridge below physical overtopping when conditions warrant (debris, rapid rise, flood watch). Not all 13 ft events will trigger closure — but at or above this stage families should expect possible closure and verify before crossing. 2019 reporting documented the bridge OPEN at a 16 ft moderate-flood crest, so the 13 ft figure should be read as 'closures have been observed at this level during severe events,' not 'always closed above this stage.'",
       "gage_deny_above_ft": 13.0,
@@ -136,6 +142,72 @@
     "pump-house": {
       "_comment": "Building access is via Friends of Pump House monthly guided tours (March–November). Full restoration is a $10M+ multi-year project. Park trails (Pump House Park + adjacent Dogwood Dell) are open year-round.",
       "notes": "Park trails + monthly tours Mar–Nov. Restoration ongoing."
+    },
+
+    "canal-walk": {
+      "_comment": "Above the floodwall — no Westham-keyed closure. Access controlled by City floodgate operations during flood events.",
+      "notes": "Paved canal walk from Brown's Island to 17th Street."
+    },
+    "manchester-floodwall-walk": {
+      "_comment": "Floodwall Park — pedestrian path atop the south-bank floodwall. Above floodplain. Length cited variously as 0.5 mi (Floodwall Walk proper) vs 2.0 mi (south-bank walk) vs 3.2 mi (entire floodwall system); 2.0 mi figure used here.",
+      "notes": "Floodwall path with downtown views, south bank."
+    },
+    "virginia-capital-trail": {
+      "_comment": "Richmond mile-zero terminus at Great Shiplock Park. 52-mile paved multi-use trail; tile flavor reflects the Richmond segment.",
+      "notes": "Richmond terminus of the 52-mile trail to Jamestown."
+    },
+    "dock-street-park": {
+      "_comment": "OUTSIDE the floodwall (downstream of the Great Shiplock floodgate). No published Westham threshold — conservative 12 ft flag based on Cluster A research recommendation. Will inundate at lower stages than protected downtown walks. Uses the standard flood_close_ft convention so the rules engine escalates to danger automatically.",
+      "outside_floodwall": true,
+      "flood_close_ft": 12.0,
+      "notes": "Small waterfront park east of Mayo Bridge."
+    },
+    "reedy-creek": {
+      "_comment": "JRPS Park HQ meadow node. The actual named hike accessed from here is Buttermilk Trail (already seeded). Meadow/lower portions inundate at Westham ~16 ft per NOAA gauge-impact statements.",
+      "meadow_inundate_ft": 16.0,
+      "notes": "JRPS park HQ meadow — gateway to Buttermilk Trail."
+    },
+    "the-wetlands": {
+      "_comment": "JRPS Explore-the-Park entity at 3395 Landria Dr. Parking for ~7. No site-specific flood threshold published; defer to global gage-band rules.",
+      "notes": "Quiet JRPS wetland trails off Landria Drive."
+    },
+    "tredegar-boat-ramp": {
+      "_comment": "Rebuilt ~2023. JRPS explicitly prohibits swimming at the ramp. Adjacent JRA-tested 'Tredegar Beach' is ~50 ft downstream and is NOT modeled as a swim activity here per Cluster B research. Westham gauge applies; defer to global rules (PFD at 5 ft, unsafe at 7.5 ft, expert-only at 9 ft).",
+      "notes": "Downtown paddle launch into Hollywood Rapids."
+    },
+    "ancarrows-landing": {
+      "_comment": "TIDAL/BRACKISH zone — Westham (02037500) does NOT describe local conditions. Primary gauge wiring: USGS 02037705 (City Locks); NOAA 8638495 (Richmond Locks tides) as supplement. No JRA-tested bacteria station here — surface 'no on-site bacteria data — tidal industrial corridor, not recommended for swim/wade.' Annual shad run March-April.",
+      "tidal": true,
+      "primary_gauge": "USGS-02037705",
+      "tidal_gauge": "NOAA-8638495",
+      "no_swim_recommended": true,
+      "no_jra_station": true,
+      "notes": "Tidal launch at Slave Trail terminus — shad fishing."
+    },
+    "huguenot-flatwater": {
+      "_comment": "Calm-water put-in UPSTREAM of the rapids. 2023 ADA ramp. Westham 13.5 ft = portions of the meadow begin to flood; 16 ft = parking lot floods, lot closes (WRIC 2025-02-17). Z-Dam and Bosher's Dam are DOWNSTREAM — drift-down hazard from this site; flavor + tile copy carries the warning.",
+      "partial_flood_ft": 13.5,
+      "parking_entry_ft_published": 16.0,
+      "downstream_dam_hazard": true,
+      "jra_tested": true,
+      "notes": "Calm-water launch upstream — kid-friendly paddling."
+    },
+    "tredegar-rope-swing": {
+      "_comment": "Informal site — no agency operates or inspects the rope. Documented drownings 2009 (two separate incidents), 2011 (Ashley Wallace, 24), April 2026 (Pramanik Rukunuzzaman, 21). Published with min_age_override 14 on the swim activity + an explicit flood_close_ft 5.0 rule (Westham). Five feet is the same threshold at which JRPS requires PFDs across the river — for this informal eddy with no lifeguards and adjacent Class II rapids, that's also the close-the-card threshold. Hiding doesn't stop access (kids find the eddy via Belle Isle / Brown's Island) — surfacing with truthful framing is the user-chosen defensible posture.",
+      "informal_site": true,
+      "flood_close_ft": 5.0,
+      "incident_dates": ["2009-05-31", "2009", "2011", "2026-04-19"],
+      "notes": "Informal rope swing — older kids only, real risks."
+    },
+    "manchester-climbing-wall": {
+      "_comment": "Sanctioned JRPS outdoor climbing wall — 60-ft granite remnant of the 1838 Richmond & Petersburg Railroad Bridge. Sunrise-to-sunset every day. Wall sits above floodplain at floodwall elevation; access via Floodwall Park parking. min_age_override 8 on the rock-climbing activity (default 10) reflects USA Climbing U11 norms.",
+      "notes": "60-ft outdoor climbing wall on the floodwall."
+    },
+    "chapel-island": {
+      "_comment": "OUTSIDE the floodwall (downstream of the Great Shiplock floodgate). 0.5-mi gravel trail loop, sandy beach, kayak launch. Freshwater-tidal boundary; no JRA-tested bacteria data — no swim activity surfaced. Uses the standard flood_close_ft convention at 12 ft Westham.",
+      "outside_floodwall": true,
+      "flood_close_ft": 12.0,
+      "notes": "Quiet island a footbridge from Great Shiplock."
     }
   },
   "richmondConditions": {
