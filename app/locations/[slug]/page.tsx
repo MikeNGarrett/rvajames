@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import type { Metadata } from 'next';
-import { getLocationDetail } from '@/lib/queries/location';
+import { getLocationDetail, getLocationNameBySlug } from '@/lib/queries/location';
 import { searchParamsCache, isValidAgeBucket, type AgeBucket } from '@/lib/url-state';
 import { formatRichmondDate } from '@/lib/utils/date-tz';
 import { isInWindow, resolveDateMode, formatForecastDate, getForecastWindow } from '@/lib/queries/date-range';
@@ -38,18 +38,11 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const titleMap: Record<string, string> = {
-    'belle-isle': 'Belle Isle',
-    'pony-pasture': 'Pony Pasture Rapids',
-    'texas-beach': 'Texas Beach',
-    'browns-island': 'Browns Island',
-    'mayo-island': 'Mayo Island',
-    'shiplock-trail': 'Shiplock Trail',
-    'north-bank-trail': 'North Bank Trail',
-    'buttermilk-trail': 'Buttermilk Trail',
-    'pump-house': 'Pump House',
-  };
-  const name = titleMap[slug] ?? slug;
+  // Fetch the canonical name from the DB so new locations (migration 0017+)
+  // get proper SEO titles + social preview text. Falls back to the raw slug
+  // when the DB lookup fails or the location is unpublished — same surface
+  // as the page itself notFound()ing later in the request.
+  const name = (await getLocationNameBySlug(slug)) ?? slug;
   return {
     title: `${name} — RVA James`,
     description: `Current James River conditions at ${name} for Richmond families.`,

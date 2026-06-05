@@ -1,4 +1,5 @@
 import { ImageResponse } from 'next/og';
+import { getLocationNameBySlug } from '@/lib/queries/location';
 
 export const alt = 'RVA James — James River conditions';
 export const size = { width: 1200, height: 630 };
@@ -8,21 +9,12 @@ interface Props {
   params: Promise<{ slug: string }>;
 }
 
-const SLUG_NAMES: Record<string, string> = {
-  'belle-isle': 'Belle Isle',
-  'pony-pasture': 'Pony Pasture Rapids',
-  'texas-beach': 'Texas Beach',
-  'browns-island': 'Browns Island',
-  'mayo-island': 'Mayo Island',
-  'shiplock-trail': 'Shiplock Trail',
-  'north-bank-trail': 'North Bank Trail',
-  'buttermilk-trail': 'Buttermilk Trail',
-  'pump-house': 'Pump House',
-};
-
 export default async function Image({ params }: Props) {
   const { slug } = await params;
-  const name = SLUG_NAMES[slug] ?? slug;
+  // Fetch from DB so new locations (migration 0017+) get proper OG titles.
+  // Falls back to the raw slug when unpublished or missing — same pattern
+  // as the page itself.
+  const name = (await getLocationNameBySlug(slug)) ?? slug;
 
   return new ImageResponse(
     (

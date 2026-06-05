@@ -349,3 +349,28 @@ export async function getAllLocationSlugs(): Promise<string[]> {
     .eq('published', true);
   return data?.map((l) => l.slug) ?? [];
 }
+
+/**
+ * Lightweight name-only lookup for the slug → display-name mapping.
+ *
+ * Used by app/locations/[slug]/page.tsx generateMetadata() so SEO + social
+ * preview titles don't fall back to the raw slug for new locations. The
+ * full getLocationDetail() is overkill for metadata generation (it
+ * resolves water quality, CSO state, advisories, etc.) — this version
+ * issues a single single-row query.
+ *
+ * Returns null when the slug doesn't exist OR the location is
+ * unpublished, matching getLocationDetail's visibility semantics. The
+ * caller falls back to the slug literal in either case.
+ */
+export async function getLocationNameBySlug(slug: string): Promise<string | null> {
+  const supabase = await createServerClient('anon');
+  const { data } = await supabase
+    .from('locations')
+    .select('name')
+    .eq('slug', slug)
+    .eq('kind', 'access_point')
+    .eq('published', true)
+    .maybeSingle();
+  return data?.name ?? null;
+}
