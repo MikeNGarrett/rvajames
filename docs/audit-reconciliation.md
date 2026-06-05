@@ -402,6 +402,69 @@ FOLLOW-UP  Skip-to-content link missing (WCAG 2.4.1 Level A)
            Fix: one <a href="#main" class="sr-only focus:not-sr-only ..."> in app/layout.tsx
            + matching id="main" on <main> elements.
 
+FOLLOW-UP  Codebase + dependency cleanup audit (queued 2026-06-05)
+           User asked 2026-06-05 to slot a cleanup pass into the queue. Goal:
+           identify and remove unused code, unused data, stale config, and
+           dependency cruft now that the codebase has accumulated several
+           rounds of feature work. Treat as a periodic maintenance pass —
+           not blocking any specific feature, but worth doing before the
+           next big round so future work starts from a clean baseline.
+
+           Scope to cover:
+             1. Unused / dead code
+                - tsc-strict / ts-unused-exports / knip pass to find unused
+                  exports, unreachable components, orphaned utility functions
+                - Components imported in only one place that could inline
+                - Old `_dev` routes still serving a purpose? (app/_dev/visuals)
+                - components/states/Empty + Stale — still actively used?
+                - Any leftover scaffolding from Goal 1-4 (brand showcase,
+                  supabase-check) that's not referenced from production paths
+             2. Unused database columns / tables
+                - location_resources rows for active vs orphaned locations
+                - conditions_snapshots payload shapes — any unread fields?
+                - ai_interpretations.prep_items — still consumed by PrepChecklist?
+                - Mayo Island (published=false) — still queryable as expected?
+                - Old advisory rows that pre-date the source_id migration
+             3. Stale config / docs
+                - .env.local.example, .env.read-prod, .dev.vars.example —
+                  in sync with what's actually read?
+                - wrangler.jsonc — any defunct env bindings or cron triggers?
+                - docs/ — which markdown files are still active references
+                  vs historical context that could move to a /docs/archive/
+                  subdirectory?
+                - CLAUDE.md / AGENT_NOTES — accurate?
+             4. package.json review
+                - Dependencies vs devDependencies sorting (any dev-only deps
+                  in dependencies that bloat the deploy?)
+                - Pinned vs ^/~ versions — drift since last audit
+                - Scripts that are no longer used (e.g. test:e2e if there
+                  are no e2e tests, build steps from earlier stacks)
+                - Any deprecated packages (Next.js / @opennextjs / supabase /
+                  Anthropic SDK) with security advisories
+                - depcheck or knip for unused deps
+             5. Test suite hygiene
+                - 549 tests today — any duplicates? Any that test mocked
+                  behavior of the same shape repeatedly?
+                - Flaky tests? (vitest --bail to find)
+                - Coverage gaps for critical paths (rules engine, advisories,
+                  AI dedup) vs cosmetic-only test surfaces
+                - Snapshot tests — any stale snapshots not pruned?
+                - Test fixtures co-located vs centralized — consistency?
+             6. Build output review
+                - `pnpm opennextjs-cloudflare build` — any warnings worth
+                  resolving? Bundle size of the worker.js?
+                - next.config.mjs experimental flags still needed?
+             7. CSS / Tailwind cleanup
+                - Tailwind v4 @theme block — any tokens defined but never
+                  referenced?
+                - globals.css custom rules — any that Tailwind could provide
+                  natively?
+
+           Methodology: read-only investigation first, batched findings,
+           one-PR-per-category cleanup commits so risk is contained.
+           Sized as its own round, not a single /goal session — likely 3-5
+           commits spread across the categories above.
+
 FOLLOW-UP  Tile redesign — location-state row + activity row + flavor row
            Design proposal captured in the 2026-06-02 thread; data layer
            shipped via migration 0016 + thresholds.json updates. Remaining
