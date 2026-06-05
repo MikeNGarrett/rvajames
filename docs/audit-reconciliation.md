@@ -402,13 +402,50 @@ FOLLOW-UP  Skip-to-content link missing (WCAG 2.4.1 Level A)
            Fix: one <a href="#main" class="sr-only focus:not-sr-only ..."> in app/layout.tsx
            + matching id="main" on <main> elements.
 
-FOLLOW-UP  Codebase + dependency cleanup audit (queued 2026-06-05)
-           User asked 2026-06-05 to slot a cleanup pass into the queue. Goal:
-           identify and remove unused code, unused data, stale config, and
-           dependency cruft now that the codebase has accumulated several
-           rounds of feature work. Treat as a periodic maintenance pass —
-           not blocking any specific feature, but worth doing before the
-           next big round so future work starts from a clean baseline.
+FIRST PASS COMPLETE — Codebase + dependency cleanup audit (2026-06-05)
+           First-pass audit shipped as commit 1a5e46f. Full findings in
+           docs/cleanup-audit-2026-06-05.md. Two surgical fixes landed:
+           dropped two duplicate env helpers from lib/env.ts, pinned vite
+           as an explicit devDep (silences UNRESOLVED_IMPORT warning).
+
+           7 follow-up items queued for future rounds — each is independently
+           shippable:
+
+             1. (SMALL) Migrate lib/ingest/run.ts to use getCronSecret() from
+                lib/env.ts instead of reading process.env.CRON_SECRET directly.
+                Latent Workers-env bug: env bindings live in request context,
+                not process.env. Works today via nodejs_compat polyfill but
+                fragile.
+
+             2. (SMALL) Investigate duplicate MetroSummaryReadSchema /
+                MetroSummarySchema in lib/ai/prompts/summarize-metro.ts. Likely
+                a legacy alias from a refactor. Confirm which name is consumed
+                externally, drop the other.
+
+             3. (SMALL) Add knip.json config with the vitest plugin + entry-point
+                declarations. Current default-config knip run produces ~40 false
+                positives because tests aren't entry points and same-file
+                internal references are missed. Cleaner config = lower noise =
+                future cleanup passes are 10× faster.
+
+             4. (SMALL) Migrate vitest.config.ts from transformWithEsbuild
+                (deprecated in vite@8+) to transformWithOxc. The current API
+                works but emits a deprecation warning on every test run.
+
+             5. (ROUND) Investigate DB-side cruft (unused columns, orphaned
+                tables, stale advisory rows pre-dating source_id migration).
+                Requires production query patterns + the read-only prod
+                connection. Sized as its own round.
+
+             6. (ROUND) Build-output review: run `pnpm build:cf` and inspect
+                the worker.js bundle for warnings + size regressions. Best
+                tied to a deploy + Lighthouse run.
+
+             7. (ROUND) Tailwind / globals.css review — identify @theme tokens
+                defined but never referenced; custom rules that Tailwind could
+                provide natively. Requires a Tailwind-aware scanner.
+
+           Original 7-category scope kept below for reference:
 
            Scope to cover:
              1. Unused / dead code
