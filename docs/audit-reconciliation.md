@@ -751,33 +751,19 @@ FOLLOW-UP  VDH Harmful Algal Bloom (HAB) advisories ingest (queued 2026-06-05)
                 Likely `'hab'` for distinct UI affordance.
              4. Surface on the relevant location tiles + headline.
 
-           Geographic scoping — user asked whether upstream/downstream
-           reporting is needed. Assessment:
+           Geographic scoping — user confirmed 2026-06-05 that
+           upstream/downstream modeling is out of scope, INCLUDING
+           tidal-downstream propagation for Ancarrow's Landing. Modeling
+           HAB plumes across river segments is too much engineering
+           overhead for one infrequently-visited location.
 
-           - User is mostly right: simple "is there an active HAB
-             advisory naming the James River near Richmond" is
-             sufficient for the freshwater Richmond reach (Belle Isle,
-             Pony Pasture, Browns Island, etc.). HABs form in
-             impoundments or slow-water stretches; the free-flowing
-             upstream James has historically had few HAB advisories,
-             and cyanotoxins dilute/decay quickly in fast water, so
-             upstream-of-Richmond modeling adds little.
-
-           - One caveat worth surfacing: Ancarrow's Landing is in the
-             TIDAL James. The tidal stretch from Richmond down to
-             Hopewell/Chesapeake has documented HAB issues, and tidal
-             mixing means an advisory on the tidal James DOES
-             potentially affect Ancarrow's even if not named there
-             specifically. So for the tidal-zone location we should
-             accept advisories naming "James River tidal," "lower
-             James," or specific points downstream of Ancarrow's that
-             share the tidal segment.
-
-           - Simplest first cut: subscribe to all VDH advisories where
-             the waterbody field contains "James River" AND the county
-             is one of {Richmond, Henrico, Chesterfield, Henrico,
-             Goochland, Hopewell, Prince George}. Refine per advisory's
-             actual geometry if VDH exposes lat/lng polygons.
+           Final filter: subscribe to VDH advisories where the
+           waterbody field contains "James River" AND the county is
+           one of {Richmond, Henrico, Chesterfield, Goochland}.
+           Treat all our locations as a single segment. If a tidal
+           advisory ever needs to flag Ancarrow's specifically,
+           revisit then — but the default is "if VDH doesn't tag the
+           Richmond area, we don't flag it."
 
            Implementation hints:
              - The VDH page itself doesn't link the FeatureServer URL,
@@ -800,16 +786,13 @@ FOLLOW-UP  VDH Harmful Algal Bloom (HAB) advisories ingest (queued 2026-06-05)
                than bacterial water quality.
 
            Open questions for execution time:
-             1. Is there ever a case where a James River HAB advisory
-                upstream of Richmond would warrant flagging our reach?
-                (User says probably no — agent agrees.)
-             2. Should HAB advisories override the "Best day to head
+             1. Should HAB advisories override the "Best day to head
                 out" headline copy? An active HAB is a stronger signal
                 than a normal water-quality caution.
-             3. Does VDH issue advisories for tributaries (Appomattox,
-                Chickahominy) that flow into the James? Those would
-                affect tidal-James water quality and may warrant
-                surfacing on Ancarrow's.
+             2. Does VDH issue advisories for tributaries (Appomattox,
+                Chickahominy) that join the James in the Richmond reach?
+                Lower priority — surface only if the discovery step shows
+                they're easy to filter to our reach.
 
            Not blocking any current feature work — sized as its own
            round once the user wants to ingest it.
