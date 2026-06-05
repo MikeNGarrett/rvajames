@@ -36,19 +36,10 @@ export async function getSupabaseServiceRoleKey(): Promise<string> {
   return val;
 }
 
-export async function getNextPublicSupabaseUrl(): Promise<string> {
-  const env = await getEnv();
-  const val = env['NEXT_PUBLIC_SUPABASE_URL'];
-  if (!val) throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set');
-  return val;
-}
-
-export async function getNextPublicSupabaseAnonKey(): Promise<string> {
-  const env = await getEnv();
-  const val = env['NEXT_PUBLIC_SUPABASE_ANON_KEY'];
-  if (!val) throw new Error('NEXT_PUBLIC_SUPABASE_ANON_KEY is not set');
-  return val;
-}
+// Removed 2026-06-05: getNextPublicSupabaseUrl + getNextPublicSupabaseAnonKey.
+// Both were duplicates — getSupabaseUrl + getSupabaseAnonKey above already
+// fall back to NEXT_PUBLIC_* when the unprefixed name is unset, and neither
+// was called from anywhere in the codebase. See docs/cleanup-audit-2026-06-05.md.
 
 export async function getAnthropicApiKey(): Promise<string> {
   const env = await getEnv();
