@@ -210,6 +210,161 @@ export default function SafetyPage() {
         </div>
       </section>
 
+      <section id="dams" className="mb-6">
+        <h2 className="text-lg font-semibold text-text mb-3">
+          Upstream dam hazards (Z-Dam, Williams Island, Bosher&rsquo;s)
+        </h2>
+        <div className="rounded-xl border border-status-danger bg-status-danger-subtle p-4 max-w-prose space-y-4 text-sm text-text leading-relaxed">
+          <p>
+            Three low-head dams sit on the James River upstream of downtown
+            Richmond. Each one has killed people. They look harmless from the
+            water above — the surface is glassy, the drop is small, the
+            current looks normal. That look is the hazard.
+          </p>
+          <p>
+            <strong>How they kill.</strong> Water flowing over a low-head dam
+            dives at the base, recirculates upstream along the riverbed, and
+            comes back up at the boil zone. Anything floating in that loop —
+            a boat, a swimmer, a paddler in a PFD — gets pulled back under
+            the falling water, resurfaces in the boil zone, and gets pulled
+            under again. The hydraulic is sometimes called a &ldquo;drowning
+            machine.&rdquo; PFDs do not break the cycle. Civil engineers
+            estimate around 50 deaths a year nationally across the country&rsquo;s
+            ~10,000 low-head dams.
+          </p>
+
+          <ul className="space-y-3 list-none p-0 m-0">
+            <li className="rounded-xl border border-border bg-surface-raised p-4">
+              <p className="font-semibold text-text mb-1">
+                Z-Dam (south channel, west of Pony Pasture)
+              </p>
+              <p className="text-text-secondary text-sm mb-0">
+                The deadliest single feature on the James in Richmond. JRPS
+                says it &ldquo;alone&rdquo; is responsible for many drownings.
+                Built 1932, modified 1993 for fish passage. The hazard
+                increases at higher water — at moderate flows the dam crest
+                becomes nearly invisible from upstream, which is the
+                drowning-machine pattern at its most dangerous.
+              </p>
+            </li>
+            <li className="rounded-xl border border-border bg-surface-raised p-4">
+              <p className="font-semibold text-text mb-1">
+                Williams Island Dam (north channel)
+              </p>
+              <p className="text-text-secondary text-sm mb-0">
+                7-foot gravity dam built 1905 to divert City drinking water.
+                Same hydraulic as Z-Dam. The north channel is often described
+                as &ldquo;more peaceful and calm&rdquo; than the south — that
+                calm appearance is exactly the deceptive surface the
+                drowning-machine warning describes. News coverage often
+                combines Williams Island Dam and Z-Dam death counts; the area
+                is treated as a single threat zone.
+              </p>
+            </li>
+            <li className="rounded-xl border border-border bg-surface-raised p-4">
+              <p className="font-semibold text-text mb-1">
+                Bosher&rsquo;s Dam (~1 mile upstream of Williams Island)
+              </p>
+              <p className="text-text-secondary text-sm mb-0">
+                12-foot stone low-head dam from the mid-1800s, between
+                Tuckahoe and west Richmond just upstream of the Edward E.
+                Willey Bridge. The 1999 fish ladder helps shad, herring, and
+                striped bass — it doesn&rsquo;t reduce the dam&rsquo;s
+                recreation hazard.
+              </p>
+            </li>
+          </ul>
+
+          <p className="text-text-secondary">
+            <strong className="text-text">If you paddle upstream of
+            downtown,</strong> know where these dams are before you put in.
+            Huguenot Flatwater is upstream of Z-Dam and Williams Island Dam,
+            so a drift-down failure mode is real if you lose your boat.
+            Riverside paths along Pony Pasture and Buttermilk Trail give a
+            shore view — the water below the dam often looks like a normal
+            riffle, which is part of the problem.
+          </p>
+
+          <div className="pt-2 space-y-1.5 border-t border-border">
+            <p className="font-medium text-text text-xs uppercase tracking-wide">
+              Sources
+            </p>
+            <ul className="space-y-1">
+              <li>
+                <a
+                  href="https://www.americanrivers.org/low-head-dam-safety/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-rva-blue underline"
+                >
+                  American Rivers — Low-Head Dam Safety
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://www.weather.gov/lmk/LowHeadDamPublicSafetyAwarenessMonth"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-rva-blue underline"
+                >
+                  NWS / NOAA — Low Head Dam Public Safety Awareness Month
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://www.asce.org/publications-and-news/civil-engineering-source/civil-engineering-magazine/article/2021/01/engineers-work-to-reduce-drowning-deaths-at-low-head-dams"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-rva-blue underline"
+                >
+                  ASCE — Engineers work to reduce drowning deaths at low-head dams
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://www.wric.com/news/virginia-news/why-low-head-dams-are-called-drowning-machines-and-how-many-are-in-virginia/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-rva-blue underline"
+                >
+                  WRIC — Why low-head dams are called drowning machines
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://jamesriverpark.org/use-caution-on-the-river/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-rva-blue underline"
+                >
+                  JRPS — Use Caution on the River
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://www.wtvr.com/2017/06/19/firefighter-points-out-deadliest-spot-on-the-james-river"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-rva-blue underline"
+                >
+                  WTVR — Firefighter points out the deadliest spot on the James
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://dwr.virginia.gov/fishing/fish-passage/boshers/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-rva-blue underline"
+                >
+                  VA DWR — Bosher&rsquo;s Dam fishway
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
       <section className="mb-6">
         <h2 className="text-lg font-semibold text-text mb-3">Trail safety</h2>
         <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 list-none p-0 m-0">
