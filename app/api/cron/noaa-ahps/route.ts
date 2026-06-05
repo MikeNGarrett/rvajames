@@ -8,7 +8,7 @@ import { runNoaaAhpsIngestion } from '@/lib/ingest/noaa-ahps';
  * Stores one forecast snapshot per run in conditions_snapshots (source='noaa-ahps').
  */
 export async function GET(request: Request) {
-  const denied = guardCronSecret(request);
+  const denied = await guardCronSecret(request);
   if (denied) return denied;
 
   const result = await withIngestionRun('noaa-ahps', runNoaaAhpsIngestion);

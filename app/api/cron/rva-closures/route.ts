@@ -18,7 +18,7 @@ import { runAllClosureSources } from '@/lib/ingest/closures/run-all';
  *        https://rvajames.org/api/cron/rva-closures
  */
 export async function GET(request: Request) {
-  const denied = guardCronSecret(request);
+  const denied = await guardCronSecret(request);
   if (denied) return denied;
 
   const result = await runAllClosureSources();

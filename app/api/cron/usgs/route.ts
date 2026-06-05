@@ -3,7 +3,7 @@ import { guardCronSecret, withIngestionRun } from '@/lib/ingest/run';
 import { runUsgsIngestion } from '@/lib/ingest/usgs';
 
 export async function GET(request: Request) {
-  const denied = guardCronSecret(request);
+  const denied = await guardCronSecret(request);
   if (denied) return denied;
 
   const result = await withIngestionRun('usgs', runUsgsIngestion);

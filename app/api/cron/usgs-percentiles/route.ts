@@ -19,7 +19,7 @@ import { runAllClosureSources } from '@/lib/ingest/closures/run-all';
  * triggering without re-running the USGS percentiles job.
  */
 export async function GET(request: Request) {
-  const denied = guardCronSecret(request);
+  const denied = await guardCronSecret(request);
   if (denied) return denied;
 
   // Run both ingestions concurrently — neither depends on the other

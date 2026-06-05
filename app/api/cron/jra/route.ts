@@ -4,7 +4,7 @@ import { runJraIngestion } from '@/lib/ingest/jra';
 import { deriveWaterQualityAdvisories } from '@/lib/ingest/derive-water-quality-advisories';
 
 export async function GET(request: Request) {
-  const denied = guardCronSecret(request);
+  const denied = await guardCronSecret(request);
   if (denied) return denied;
 
   // Step 1: ingest readings from ArcGIS FeatureServer

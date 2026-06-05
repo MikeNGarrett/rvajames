@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/supabase/server';
+import { getCronSecret } from '@/lib/env';
 
 export interface RunResult {
   ok: boolean;
@@ -47,9 +48,27 @@ export async function withIngestionRun(
   return result;
 }
 
-export function guardCronSecret(request: Request): Response | null {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return new Response('CRON_SECRET not configured', { status: 500 });
+/**
+ * Validate the cron secret header against the configured CRON_SECRET env.
+ *
+ * Async because env access on Cloudflare Workers goes through the OpenNext
+ * request context (`getCronSecret()` in lib/env.ts). Reading
+ * `process.env.CRON_SECRET` directly works today via the nodejs_compat
+ * polyfill but is fragile — the request-context API is the documented
+ * Workers pattern.
+ *
+ * Returns:
+ *   - 500 Response when CRON_SECRET isn't configured
+ *   - 401 Response when the provided secret doesn't match
+ *   - null when the request is authorized (caller proceeds)
+ */
+export async function guardCronSecret(request: Request): Promise<Response | null> {
+  let secret: string;
+  try {
+    secret = await getCronSecret();
+  } catch {
+    return new Response('CRON_SECRET not configured', { status: 500 });
+  }
   const header = request.headers.get('x-cron-secret') ?? request.headers.get('authorization');
   const provided = header?.replace(/^Bearer\s+/i, '');
   if (provided !== secret) return new Response('Unauthorized', { status: 401 });

@@ -14,7 +14,7 @@ import { runNoaaAhpsIngestion } from '@/lib/ingest/noaa-ahps';
  * triggering without re-running NWS.
  */
 export async function GET(request: Request) {
-  const denied = guardCronSecret(request);
+  const denied = await guardCronSecret(request);
   if (denied) return denied;
 
   // Run both ingestions in parallel
