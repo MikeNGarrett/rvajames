@@ -797,6 +797,122 @@ FOLLOW-UP  VDH Harmful Algal Bloom (HAB) advisories ingest (queued 2026-06-05)
            Not blocking any current feature work — sized as its own
            round once the user wants to ingest it.
 
+FOLLOW-UP  Major river-events alerts (queued 2026-06-05)
+           User request 2026-06-05. Surface alerts for high-traffic
+           events taking place on the river — events that have the
+           potential to close or crowd the river at specific access
+           points. Motivating example: a tall-ships event tied to the
+           America 250 celebration ~mid-June 2026 that will dock /
+           transit through downtown Richmond's stretch of the James.
+
+           SCOPE PHILOSOPHY (user-set):
+             Bar for inclusion is HIGH. Only events with concrete
+             impact on a river access point — closures, restricted
+             access, expected heavy crowding. Random concerts at
+             Brown's Island that don't change river access don't
+             qualify. The cost of a noisy "events" surface is people
+             tuning out the genuine closures.
+
+           ── V1 SCOPE (small round, sized for a single /goal) ──────
+
+           1. Schema. New table:
+                events (
+                  id, slug, title, description,
+                  start_at, end_at,                    -- single window
+                  affects_location_ids[] uuid[],       -- which tiles light up
+                  banner_severity enum('info','notice','warning'),
+                  official_url text,
+                  source enum('manual','...future...'),
+                  created_at, updated_at
+                )
+              Distinct from `advisories` (health/safety) and
+              `location_status` (closures), which both have different
+              semantics. An event IS NOT a closure — the location may
+              still be visit-able, just busy. If an event also closes
+              the site, the admin should ALSO create a location_status
+              closure for the same window.
+
+           2. Admin UI. Reuse the pattern from /admin/closures —
+              list, create, edit, expire. Required fields: title,
+              start_at, end_at, affects_location_ids. Optional:
+              description (markdown), official_url.
+
+           3. Homepage banner. A new <EventsBanner> in
+              components/banners/ that renders above the existing
+              CsoBanner when any event has start_at ≤ now() + 7 days
+              AND end_at ≥ now(). Shows event title, dates, link.
+              Stacks if multiple — typical case is 0 or 1, occasional 2.
+
+           4. Location detail banner. The same banner renders on
+              /locations/[slug] when the slug is in
+              affects_location_ids[]. Tile already has space below the
+              title.
+
+           5. Lead-time. Banners fire 7 days before start_at by
+              default. Tunable via env if needed.
+
+           ── V2 / DEFERRED — auto-discovery ────────────────────────
+
+           User explicitly flagged the high bar: "I would only focus
+           on high-traffic events that have the potential to
+           close/crowd the river at particular locations, if we're
+           building this out to generate these events automatically."
+
+           If auto-discovery ships:
+             - Scrape Venture Richmond events
+               (https://venturerichmond.com/events/) and the city
+               press-releases feed for events meeting thresholds:
+                 * Mentions a river access point by name OR
+                 * Multi-day OR
+                 * Expected attendance > 5k (per press release)
+             - Auto-discovered events should go into the events table
+               with source='auto' AND state='draft' — admin reviews
+               before they appear on the public site. Mirrors the
+               existing closure-source draft pattern from
+               /admin/closures.
+             - This is genuinely hard: false-positives are
+               immediately user-visible. Probably not worth doing
+               until v1 has shipped and the manual UX is tuned.
+
+           ── MOTIVATING EVENT (research notes) ─────────────────────
+
+           Tall ships America 250: in the user's own words "in a week
+           or so." If we want this on the dashboard for the actual
+           event, v1 needs to land in time. Manual entry would take
+           ~1 hour of admin work once the schema + UI exist.
+
+           Execution-time discovery: identify the canonical event
+           page (Venture Richmond, Richmond.com, City PR), grab the
+           dates, location list, and crowd-expectation framing. Then
+           the admin form is a one-shot entry.
+
+           ── NOT in v1 ─────────────────────────────────────────────
+
+           - Recurring events (weekly farmers market, etc.) — distract
+             from the "this matters today" framing
+           - Auto-discovery (see V2)
+           - Event-driven AI interpretation regeneration — the AI
+             system prompt would need an `active_events` block.
+             Defer until v1 is shipped and there's signal that the
+             interpretation copy is missing context users want.
+
+           ── Open questions for execution ──────────────────────────
+
+             1. Should events ever ALSO write a location_status closure
+                row automatically? Probably not — the admin should
+                consciously decide if a closure is warranted.
+             2. Multi-window events (e.g. a 4-day festival with
+                different active windows each day) — single start/end
+                or windowed schedule? V1: single window. If the user
+                hits a multi-window case, revisit.
+             3. End-state behavior: when end_at passes, does the
+                event silently disappear or get a "Last week:" pill?
+                V1: silently disappear; the past isn't actionable.
+
+           Not blocking any current feature work — sized as its own
+           round. If user wants v1 for the tall ships event, it's the
+           next slot.
+
 ```
 
 ---
