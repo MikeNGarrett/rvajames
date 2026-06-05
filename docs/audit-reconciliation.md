@@ -544,27 +544,47 @@ FOLLOW-UP  Chrome UI validation of FIM thresholds (queued 2026-06-03)
            Chrome MCP tools (navigate, javascript_tool, screenshot) since
            the Experience Builder app exposes a stage slider via the UI.
 
-FOLLOW-UP  Validate + seed 14 additional adjacent locations (queued 2026-06-02)
-           User surfaced these during the 2026-06-02 redesign thread. Each needs
-           its own deep-research pass (activity matrix, thresholds where
-           applicable, age guidance from authoritative sources), seed data, and a
-           ≤60-char flavor line. Group by river-access vs trail-only vs hybrid
-           when planning:
-             - RVA Free Climbing wall (Belle Isle + Manchester floodwall sites)
-             - Canal Walk (downtown)
-             - Tredegar rope swing
-             - Manchester floodwall walk
-             - 14th Street takeout
-             - Tredegar boat ramp
-             - Chapel Island (adjacent to Great Shiplock Park)
-             - Dock Street Park
-             - Ancarrow's Landing (Richmond Slave Trail terminus)
-             - Virginia Capital Trail
-             - Reedy Creek Trail
-             - The wetlands trails
-             - Williams Island (+ two dams nearby)
-             - Huguenot flatwater + boat ramp
-           Sized as a multi-session research + seed round, not a single /goal.
+RESEARCH COMPLETE — Validate + seed N additional adjacent locations (research 2026-06-04 / 2026-06-05)
+           Originally queued as "14 additional locations." Three parallel
+           research agents (Cluster A trails, Cluster B boat ramps, Cluster C
+           sensitive sites) produced a full evidence-cited tracker at
+           docs/locations-research-2026-06-04.md.
+
+           Final scope after research + user Q&A (2026-06-04 / 2026-06-05):
+
+           SEED (12 locations) — migration 0017_locations_2026_06_seed.sql:
+             - Cluster A trails: canal-walk, manchester-floodwall-walk,
+               virginia-capital-trail, dock-street-park, reedy-creek,
+               the-wetlands
+             - Cluster B ramps: tredegar-boat-ramp, ancarrows-landing,
+               huguenot-flatwater
+             - Cluster C sensitive: tredegar-rope-swing,
+               manchester-climbing-wall, chapel-island
+
+           DROPPED from this round:
+             - 14th Street Takeout — expert whitewater EXIT, not a family
+               destination. Skip entirely.
+             - Riverside Meadows / Williams Island Dam Park — user chose
+               not to publish a location card; instead document the dams
+               on /safety. (No Williams Island Dam Park entity exists in
+               JRPS or municipal records.)
+
+           NEW ACTIVITY SLUG: kayak-flatwater (calm-water paddling, min_age 6
+           with USCG PFD). Surfaces on Huguenot Flatwater and Chapel Island.
+           kayak-rapids remains for whitewater.
+
+           DAM HAZARDS → /safety (separate commit): Z-Dam, Williams Island
+           Dam, Bosher's Dam each documented as low-head-dam drowning
+           hazards. Citation set in the research doc.
+
+           Tredegar Rope Swing posture: published with min_age 14, hazard
+           banner naming 2009/2011/2026 incidents, automatic close at
+           Westham gauge ≥ 5 ft. No new rope-swing slug — surfaced via
+           flavor + warning copy with swim activity.
+
+           Migration not yet committed at the time of this audit-doc update.
+           See research doc for full per-location specs + cross-cluster
+           defaults applied where the user didn't explicitly answer.
 
 FOLLOW-UP  "Coming soon" UI section design (queued 2026-06-02)
            Migration 0016 added `locations.published BOOLEAN DEFAULT true` so
