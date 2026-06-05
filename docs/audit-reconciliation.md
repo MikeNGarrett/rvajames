@@ -727,6 +727,95 @@ RESOLVED   Water-quality icons on RiverLevelTile not visually distinct
            WaterQualityIcon at size 18 as part of its icon strip.
 ```
 
+FOLLOW-UP  VDH Harmful Algal Bloom (HAB) advisories ingest (queued 2026-06-05)
+           User request 2026-06-05. Source:
+           https://www.vdh.virginia.gov/waterborne-hazards-control/algal-bloom-surveillance-map/
+
+           VDH (Virginia Department of Health) publishes an HAB
+           surveillance dashboard as an ArcGIS-hosted interactive map.
+           No public REST API, JSON endpoint, or RSS feed documented on
+           the landing page — but the dashboard is ArcGIS, which means
+           the underlying FeatureServer is almost certainly queryable
+           via REST (same pattern as the JRPS Flood Inundation Map work
+           in docs/jrps-flood-inundation-thresholds-2026-06-03.md).
+
+           Round scope (sized as its own /goal):
+             1. Discover the ArcGIS service URL behind the dashboard
+                (Chrome devtools network panel, or the public ArcGIS
+                Experience Builder config JSON).
+             2. Write a /api/cron/vdh-habs route + lib/ingest/vdh-habs.ts
+                that queries the FeatureServer for advisories whose
+                waterbody or county matches our geographic area.
+             3. Decide schema: extend `advisories` with a new kind
+                `'hab'` or `'water_quality'` (already exists).
+                Likely `'hab'` for distinct UI affordance.
+             4. Surface on the relevant location tiles + headline.
+
+           Geographic scoping — user asked whether upstream/downstream
+           reporting is needed. Assessment:
+
+           - User is mostly right: simple "is there an active HAB
+             advisory naming the James River near Richmond" is
+             sufficient for the freshwater Richmond reach (Belle Isle,
+             Pony Pasture, Browns Island, etc.). HABs form in
+             impoundments or slow-water stretches; the free-flowing
+             upstream James has historically had few HAB advisories,
+             and cyanotoxins dilute/decay quickly in fast water, so
+             upstream-of-Richmond modeling adds little.
+
+           - One caveat worth surfacing: Ancarrow's Landing is in the
+             TIDAL James. The tidal stretch from Richmond down to
+             Hopewell/Chesapeake has documented HAB issues, and tidal
+             mixing means an advisory on the tidal James DOES
+             potentially affect Ancarrow's even if not named there
+             specifically. So for the tidal-zone location we should
+             accept advisories naming "James River tidal," "lower
+             James," or specific points downstream of Ancarrow's that
+             share the tidal segment.
+
+           - Simplest first cut: subscribe to all VDH advisories where
+             the waterbody field contains "James River" AND the county
+             is one of {Richmond, Henrico, Chesterfield, Henrico,
+             Goochland, Hopewell, Prince George}. Refine per advisory's
+             actual geometry if VDH exposes lat/lng polygons.
+
+           Implementation hints:
+             - The VDH page itself doesn't link the FeatureServer URL,
+               but `view source` on the dashboard frame should expose
+               it (or the embedded `appid` parameter resolves to a
+               public Experience config endpoint, like the JRPS FIM
+               investigation surfaced).
+             - Cron cadence: VDH updates as new sample results come in;
+               daily at most, plus on-demand during bloom season
+               (May–Oct). A `0 6 * * *` daily run is sufficient — HABs
+               don't appear and clear within a day.
+             - Freshness threshold: advisories are typically rescinded
+               via VDH press release; if a bloom advisory has been in
+               the dashboard for >30 days without an updated `status`
+               column, flag as stale.
+             - UI affordance: a new `<HABBadge>` in components/ui/ that
+               sits alongside WaterQualityIcon + CsoBadge in
+               LocationStatusRow. Distinct visual (red triangle? algae
+               leaf?) since this is a categorically different hazard
+               than bacterial water quality.
+
+           Open questions for execution time:
+             1. Is there ever a case where a James River HAB advisory
+                upstream of Richmond would warrant flagging our reach?
+                (User says probably no — agent agrees.)
+             2. Should HAB advisories override the "Best day to head
+                out" headline copy? An active HAB is a stronger signal
+                than a normal water-quality caution.
+             3. Does VDH issue advisories for tributaries (Appomattox,
+                Chickahominy) that flow into the James? Those would
+                affect tidal-James water quality and may warrant
+                surfacing on Ancarrow's.
+
+           Not blocking any current feature work — sized as its own
+           round once the user wants to ingest it.
+
+```
+
 ---
 
 ## How this doc gets out of sync (and how to keep it honest)
