@@ -43,24 +43,10 @@ const SCRAPE_PAGES: Array<{ url: string; label: string }> = [
   },
 ];
 
-/**
- * Maps text fragments to location slugs by keyword.
- * Ordered longest-match-first to prefer more specific patterns.
- */
-const LOCATION_KEYWORDS: Array<{ pattern: RegExp; slug: string }> = [
-  { pattern: /pipeline\s+trail/i,  slug: 'pipeline-trail'  },
-  { pattern: /pony\s+pasture/i,    slug: 'pony-pasture'    },
-  { pattern: /texas\s+beach/i,     slug: 'texas-beach'     },
-  { pattern: /belle\s+isle/i,      slug: 'belle-isle'      },
-  { pattern: /browns?\s+island/i,  slug: 'browns-island'   },
-  { pattern: /mayo\s+island/i,     slug: 'mayo-island'     },
-  { pattern: /shiplock/i,          slug: 'shiplock-trail'  },
-  { pattern: /north\s+bank/i,      slug: 'north-bank-trail'},
-  { pattern: /buttermilk/i,        slug: 'buttermilk-trail'},
-  { pattern: /pump\s+house/i,      slug: 'pump-house'      },
-  { pattern: /reedy\s+creek/i,     slug: 'reedy-creek'     },
-  { pattern: /tredegar/i,          slug: 'tredegar'        },
-];
+// Location keyword routing moved to ./keywords.ts (2026-06-05) so all three
+// closure scrapers share a single canonical table. See that file's header
+// for the disambiguation order.
+import { matchLocationKeyword } from './keywords';
 
 /** Keywords that indicate a paragraph is closure-relevant. */
 const CLOSURE_PATTERNS = [
@@ -77,11 +63,9 @@ function isClosure(text: string): boolean {
   return CLOSURE_PATTERNS.some((re) => re.test(text));
 }
 
+/** Thin local wrapper around the shared keyword matcher. */
 function matchLocationSlug(text: string): string | null {
-  for (const { pattern, slug } of LOCATION_KEYWORDS) {
-    if (pattern.test(text)) return slug;
-  }
-  return null;
+  return matchLocationKeyword(text);
 }
 
 export interface ScrapeHit {

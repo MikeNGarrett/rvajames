@@ -37,22 +37,9 @@ const SCRAPE_PAGES = [
   { url: 'https://venturerichmond.com/browns-island-improvement-plan/', label: "Brown's Island project" },
 ];
 
-/** Our 10 location slugs (pipeline-trail added in sub-goal 61) */
-const LOCATION_KEYWORDS: Array<{ pattern: RegExp; slug: string }> = [
-  { pattern: /pipeline\s+trail/i,  slug: 'pipeline-trail'   },
-  { pattern: /pony\s+pasture/i,    slug: 'pony-pasture'     },
-  { pattern: /texas\s+beach/i,     slug: 'texas-beach'      },
-  { pattern: /belle\s+isle/i,      slug: 'belle-isle'       },
-  { pattern: /browns?\s+island/i,  slug: 'browns-island'    },
-  { pattern: /mayo\s+island/i,     slug: 'mayo-island'      },
-  { pattern: /shiplock/i,          slug: 'shiplock-trail'   },
-  { pattern: /north\s+bank/i,      slug: 'north-bank-trail' },
-  { pattern: /buttermilk/i,        slug: 'buttermilk-trail' },
-  { pattern: /pump\s+house/i,      slug: 'pump-house'       },
-  { pattern: /reedy\s+creek/i,     slug: 'reedy-creek'      },
-  { pattern: /tredegar/i,          slug: 'tredegar'         },
-  { pattern: /james\s+river\s+park/i, slug: 'belle-isle'   }, // park-wide; fall back to belle-isle
-];
+// Location keyword routing moved to ./keywords.ts (2026-06-05) so all three
+// closure scrapers share a single canonical table.
+import { matchLocationKeyword } from './keywords';
 
 const CLOSURE_KEYWORDS = [
   /\bclosed\b/i,
@@ -67,11 +54,9 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/** Thin local wrapper around the shared keyword matcher. */
 function matchesLocationKeyword(text: string): string | null {
-  for (const { pattern, slug } of LOCATION_KEYWORDS) {
-    if (pattern.test(text)) return slug;
-  }
-  return null;
+  return matchLocationKeyword(text);
 }
 
 function hasClosureKeyword(text: string): boolean {

@@ -101,9 +101,16 @@ export async function getRichmondConditionsData(
     SEVERITY_ORDER.find((s) => advisories.some((a) => a.severity === s)) ?? 'none';
 
   // ── 3. Closures at top river locations ────────────────────────────────────
+  // Curated subset — these are the marquee family destinations whose status
+  // most affects the headline "great day to head out" framing. Not "all
+  // published locations" by design — a closure at, say, Dock Street Park
+  // shouldn't drag the metro-wide signal. Added huguenot-flatwater 2026-06-05
+  // (migration 0017+): JRA-tested swim + family-friendly calm-water put-in
+  // upstream of the rapids.
   const TOP_LOCATIONS = [
     'belle-isle', 'pony-pasture', 'texas-beach',
     'browns-island', 'mayo-island', 'pump-house',
+    'huguenot-flatwater',
   ];
   const { data: locationRows } = await supabase
     .from('locations')
