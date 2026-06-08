@@ -12,6 +12,7 @@
     "deploy:cf": "node scripts/patch-worker.mjs && opennextjs-cloudflare deploy",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv env.d.ts",
     "test": "vitest run",
+    "knip": "knip",
     "sync:prod-to-local": "./scripts/sync-prod-to-local.sh",
     "query:prod": "./scripts/query-prod.sh"
   },
@@ -49,6 +50,7 @@
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "^15",
+    "knip": "^6.16.1",
     "tsx": "^4.22.3",
     "typescript": "^5",
     "vite": "^8.0.14",

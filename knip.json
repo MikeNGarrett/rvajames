@@ -1,0 +1,27 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+
+  "entry": [
+    "open-next.config.ts",
+    "scripts/**/*.{ts,mjs}"
+  ],
+
+  "project": [
+    "{app,components,lib,scripts}/**/*.{ts,tsx}"
+  ],
+
+  "vitest": {
+    "entry": [
+      "**/*.test.{ts,tsx}",
+      "**/*.spec.{ts,tsx}"
+    ]
+  },
+
+  "ignoreDependencies": [
+    // Tailwind v4 is loaded via @import in CSS — not a JS import; knip can't detect it.
+    "tailwindcss",
+    // eslint + eslint-config-next are invoked through `next lint` (CLI), not imported.
+    "eslint",
+    "eslint-config-next"
+  ]
+}
