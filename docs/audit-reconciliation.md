@@ -913,6 +913,85 @@ FOLLOW-UP  Major river-events alerts (queued 2026-06-05)
            round. If user wants v1 for the tall ships event, it's the
            next slot.
 
+FOLLOW-UP  Homepage LCP regression 98 → 92 after tile-expansion deploy (2026-06-05)
+           First post-deploy Lighthouse run against https://rvajames.org/
+           after migrations 0016–0019 + the tile-redesign + 12 new
+           location seed all shipped together. Numbers:
+
+             Homepage (https://rvajames.org/)
+               Performance:    92  (was 98 — REGRESSION)
+               Accessibility:  93
+               Best Practices: 96
+               SEO:            91
+               LCP:            3.3s (score 70 — "needs improvement")
+               FCP:            1.3s (score 98)
+               TBT:            70ms (score 99)
+               CLS:            0    (score 100, perfect)
+               Speed Index:    2.5s (score 97)
+               TTI:            3.7s (score 90)
+
+             /locations/huguenot-flatwater (new tile detail page sample)
+               Performance:   85
+               Accessibility: 100  (perfect)
+               Best Practices: 96
+               SEO:            91
+               LCP:            3.8s (score 55)
+
+           ROOT-CAUSE HYPOTHESIS
+             Tile grid roughly doubled — 22 published tiles now (12 new
+             + 9 original + Pipeline Trail) vs ~10 at the prior
+             baseline. Likely effects:
+               - LCP element pushed further down the page by the extra
+                 tile rows above it
+               - More SSR work per request (each tile now resolves
+                 LocationStatusRow + ActivityChipRow + activity verdicts)
+               - Larger initial HTML payload → longer parse + paint
+
+             CLS = 0 is genuinely good — the cookie-driven FirstVisitBanner
+             SSR work from the earlier round held up under the new tile
+             count. TBT and FCP are both still excellent — this is
+             specifically an LCP problem.
+
+           CANDIDATE MITIGATIONS (one or more)
+             1. Identify the actual LCP element. The prior 98-baseline
+                LCP target was the "Conditions Summary" block; if it
+                still IS the LCP target, the fix is reducing the SSR
+                work between page top and that block. If it has shifted
+                (e.g., to a tile in the new grid), different fix.
+             2. Lazy-render tiles below the fold. First N tiles (3? 6?)
+                ship in initial HTML; the rest hydrate on intersection.
+                Adds complexity but the tile grid is naturally below
+                the fold on mobile.
+             3. Reduce per-tile SSR cost. ActivityChipRow currently
+                sorts + filters on every render; LocationStatusRow does
+                conditional logic. Memoize the per-location verdict
+                computation upstream so the resolver runs once per
+                page, not per tile.
+             4. Slim the initial payload: defer non-critical script
+                chunks, ensure no large blocking images.
+             5. Detail page (85 perf, 3.8s LCP) is a separate but
+                related concern — investigate after homepage fix and
+                see if root cause shares the same characteristics.
+
+           PRIORITY
+             Soft — not a regression below the 90 threshold the user
+             previously cared about. Page is still fully usable; the
+             "good" → "needs improvement" LCP bucket crossing is the
+             visible drop. Worth fixing before adding more tiles or
+             more per-tile content.
+
+           SIZED AS
+             One investigation pass + one focused fix. The investigation
+             reads the existing Lighthouse HTML report (.lighthouseci/
+             is gitignored but the file is local) to identify the LCP
+             element, then picks the smallest mitigation that recovers
+             the score.
+
+           ARTIFACTS
+             Local Lighthouse run 2026-06-05 — files in .lighthouseci/
+             (gitignored). Re-run with `lhci collect --url=... --numberOfRuns=1`
+             to regenerate.
+
 ```
 
 ---
