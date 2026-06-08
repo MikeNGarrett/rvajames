@@ -913,84 +913,116 @@ FOLLOW-UP  Major river-events alerts (queued 2026-06-05)
            round. If user wants v1 for the tall ships event, it's the
            next slot.
 
-FOLLOW-UP  Homepage LCP regression 98 → 92 after tile-expansion deploy (2026-06-05)
-           First post-deploy Lighthouse run against https://rvajames.org/
-           after migrations 0016–0019 + the tile-redesign + 12 new
-           location seed all shipped together. Numbers:
+FOLLOW-UP  Homepage LCP regression after tile-expansion deploy (2026-06-05, refreshed 2026-06-08)
+           Post-deploy Lighthouse against https://rvajames.org/ after
+           migrations 0016–0019 + tile-redesign + 12 new locations
+           shipped. Initial single-run pass 2026-06-05 showed perf
+           98 → 92. Refreshed with a 3-run median pass 2026-06-08 to
+           characterize variance — the variance is the headline finding.
+
+           THREE-RUN MEDIAN NUMBERS (2026-06-08)
 
              Homepage (https://rvajames.org/)
-               Performance:    92  (was 98 — REGRESSION)
-               Accessibility:  93
-               Best Practices: 96
-               SEO:            91
-               LCP:            3.3s (score 70 — "needs improvement")
-               FCP:            1.3s (score 98)
-               TBT:            70ms (score 99)
-               CLS:            0    (score 100, perfect)
-               Speed Index:    2.5s (score 97)
-               TTI:            3.7s (score 90)
+               Performance:    89   (median; runs 88 / 89 / 98)
+               LCP:            3.68s (median; LCP scores 56 / 58 / 92)
+               FCP:            1.33s (scores 98 / 99 / 98 — stable)
+               TBT:            74ms  (99 / 99 / 100 — stable)
+               CLS:            0     (perfect across all 3 runs)
+               Speed Index:    1.86s (98 / 100 / 100)
+               TTI:            3.73s (90 across all runs)
+               Accessibility:  93    (stable)
+               Best Practices: 96    (stable)
+               SEO:            91    (stable)
 
-             /locations/huguenot-flatwater (new tile detail page sample)
-               Performance:   85
-               Accessibility: 100  (perfect)
-               Best Practices: 96
-               SEO:            91
-               LCP:            3.8s (score 55)
+             /locations/huguenot-flatwater (representative new detail page)
+               Performance:    87   (median; 86 / 87 / 87 — tight)
+               LCP:            3.61s (scores 59 / 61 / 61 — tight)
+               Accessibility:  100   (perfect across all 3)
+               FCP:            1.69s (92 / 92 / 90)
+               TBT:            70ms  (excellent)
+               CLS:            0     (perfect)
 
-           ROOT-CAUSE HYPOTHESIS
-             Tile grid roughly doubled — 22 published tiles now (12 new
-             + 9 original + Pipeline Trail) vs ~10 at the prior
-             baseline. Likely effects:
-               - LCP element pushed further down the page by the extra
-                 tile rows above it
-               - More SSR work per request (each tile now resolves
-                 LocationStatusRow + ActivityChipRow + activity verdicts)
-               - Larger initial HTML payload → longer parse + paint
+           THE BIMODAL-VARIANCE INSIGHT — CRITICAL TO MITIGATION CHOICE
 
-             CLS = 0 is genuinely good — the cookie-driven FirstVisitBanner
-             SSR work from the earlier round held up under the new tile
-             count. TBT and FCP are both still excellent — this is
-             specifically an LCP problem.
+             The homepage is bimodal across runs: median perf 89 with
+             LCP ~3.7s, BUT one run in three hits **perf 98 with LCP
+             score 92** — the prior baseline, achieved on the new code.
 
-           CANDIDATE MITIGATIONS (one or more)
-             1. Identify the actual LCP element. The prior 98-baseline
-                LCP target was the "Conditions Summary" block; if it
-                still IS the LCP target, the fix is reducing the SSR
-                work between page top and that block. If it has shifted
-                (e.g., to a tile in the new grid), different fix.
-             2. Lazy-render tiles below the fold. First N tiles (3? 6?)
-                ship in initial HTML; the rest hydrate on intersection.
-                Adds complexity but the tile grid is naturally below
-                the fold on mobile.
-             3. Reduce per-tile SSR cost. ActivityChipRow currently
-                sorts + filters on every render; LocationStatusRow does
-                conditional logic. Memoize the per-location verdict
-                computation upstream so the resolver runs once per
-                page, not per tile.
-             4. Slim the initial payload: defer non-critical script
-                chunks, ensure no large blocking images.
-             5. Detail page (85 perf, 3.8s LCP) is a separate but
-                related concern — investigate after homepage fix and
-                see if root cause shares the same characteristics.
+             The render path is identical across runs. What's different
+             is the cold/warm state of:
+               - Cloudflare Worker (first request after idle = cold)
+               - Supabase round trip (KV cache vs DB)
+               - Open AI client / Anthropic round trip
+
+             This shifts the mitigation thinking significantly. If the
+             bottleneck were purely in-render compute (more tiles =
+             more SSR = slower LCP), variance would be tight and ALL
+             runs would degrade together. They don't. The 98-perf run
+             proves the new code CAN hit baseline. The 89-median says
+             upstream data-fetch latency dominates LCP on cold paths.
+
+             The detail page has lower variance (tight 86-87 perf)
+             because each request is always a fresh Worker invocation
+             from the user's perspective — it always pays the cold-
+             path cost. The homepage benefits from intermittent warmth
+             when traffic clusters.
+
+           REVISED CANDIDATE MITIGATIONS (priorities flipped)
+
+             HIGH-VALUE (likely to recover the bimodal):
+               1. Cache-warming cron. Hit the homepage every N minutes
+                  from a Cloudflare Cron Trigger to keep the Worker +
+                  KV warm. Cheap to ship. Trades a small egress cost
+                  for consistent LCP across user requests.
+               2. Move heavy data fetch off the LCP path. getTodayData
+                  does multiple parallel DB queries — if any of them
+                  block the LCP element's render, splitting "above-the-
+                  fold-render data" vs "below-the-fold data" would
+                  let the LCP element ship sooner. Requires reading
+                  the .lighthouseci/lhr-*.html report to identify the
+                  actual LCP element first.
+               3. Identify the LCP element explicitly. The prior
+                  98-baseline LCP target was the "Conditions Summary"
+                  block. Verify whether it's still the target on the
+                  89-median runs vs has shifted to a tile in the new
+                  grid. The fix depends on the answer.
+
+             LOWER-VALUE (probably won't help much given the variance pattern):
+               4. Lazy-render tiles below the fold. Would help if the
+                  bottleneck were in-render DOM cost, but with cold-
+                  path data-fetch dominating, this is secondary.
+               5. Reduce per-tile SSR cost (memoize ActivityChipRow
+                  sort, etc.). Same reason — render compute isn't
+                  what's varying between runs.
+               6. Slim script chunks / images. Same — would smooth
+                  performance generally but not the cold-path variance.
 
            PRIORITY
-             Soft — not a regression below the 90 threshold the user
-             previously cared about. Page is still fully usable; the
-             "good" → "needs improvement" LCP bucket crossing is the
-             visible drop. Worth fixing before adding more tiles or
-             more per-tile content.
+             Soft. Page is fully usable; the variance means real users
+             often hit a fine page and sometimes hit a slow one. CLS
+             is 0 across all runs (the most-likely-to-frustrate metric
+             stayed clean). Worth fixing before adding more upstream
+             data-fetch surface (e.g. event ingest, HAB ingest) since
+             each one extends the cold-path cost.
 
            SIZED AS
-             One investigation pass + one focused fix. The investigation
-             reads the existing Lighthouse HTML report (.lighthouseci/
-             is gitignored but the file is local) to identify the LCP
-             element, then picks the smallest mitigation that recovers
-             the score.
+             One investigation pass (read .lighthouseci/ HTML report
+             for an 89-run AND the 98-run, diff what's different) +
+             one or two focused fixes. The cache-warming cron is the
+             cheapest first move and would also exercise mitigation #2
+             without code changes — if it shifts the median up
+             meaningfully, the data-fetch path is confirmed as the
+             cause.
 
            ARTIFACTS
-             Local Lighthouse run 2026-06-05 — files in .lighthouseci/
-             (gitignored). Re-run with `lhci collect --url=... --numberOfRuns=1`
-             to regenerate.
+             Local Lighthouse runs 2026-06-05 (single-run baseline)
+             and 2026-06-08 (3-run median for variance) — files in
+             .lighthouseci/ (gitignored). Re-run with:
+               lhci collect --url=https://rvajames.org/ \
+                 --url=https://rvajames.org/locations/huguenot-flatwater \
+                 --numberOfRuns=3
+             A future regression-check pass can compare medians
+             directly.
 
 ```
 
