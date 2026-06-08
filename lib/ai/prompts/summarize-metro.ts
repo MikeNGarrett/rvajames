@@ -61,17 +61,14 @@ export const MetroSummaryWriteSchema = BaseMetroSummarySchema.extend({
 // ─── Read schema (lenient) — used when reading cached rows ───────────────────
 // Pre-b2/b3 rows have NULL for these columns; treat them as absent.
 
-export const MetroSummaryReadSchema = BaseMetroSummarySchema.extend({
+export const MetroSummarySchema = BaseMetroSummarySchema.extend({
   activities:         z.array(ActivityStatusSchema).length(4).optional(),
   rapids_class:       z.enum(RAPIDS_CLASSES).optional(),
   rapids_note:        z.string().max(150).optional(),
   richmond_microcopy: z.string().min(20).max(180).optional(),
 });
 
-// Backward-compat alias
-export const MetroSummarySchema = MetroSummaryReadSchema;
-
-export type MetroSummary = z.infer<typeof MetroSummaryReadSchema>;
+export type MetroSummary = z.infer<typeof MetroSummarySchema>;
 
 // ─── Prompt version ───────────────────────────────────────────────────────────
 // Bump this constant whenever Schema B changes. It enters the prompt_hash so that

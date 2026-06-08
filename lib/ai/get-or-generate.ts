@@ -321,7 +321,7 @@ export async function getOrGenerateMetro(
         top_concerns:    exact.top_concerns as string[],
         best_bets_today: exact.best_bets as MetroSummary['best_bets_today'],
         disclaimer_kind: 'standard',
-        // New b2/b3 fields — null for pre-version rows, treated as absent by MetroSummaryReadSchema
+        // New b2/b3 fields — null for pre-version rows, treated as absent by MetroSummarySchema
         ...(exact.activities         != null && { activities:         exact.activities         as MetroSummary['activities'] }),
         ...(exact.rapids_class       != null && { rapids_class:       exact.rapids_class       as MetroSummary['rapids_class'] }),
         ...(exact.rapids_note        != null && { rapids_note:        exact.rapids_note }),
