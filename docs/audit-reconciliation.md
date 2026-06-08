@@ -942,60 +942,110 @@ FOLLOW-UP  Homepage LCP regression after tile-expansion deploy (2026-06-05, refr
                TBT:            70ms  (excellent)
                CLS:            0     (perfect)
 
-           THE BIMODAL-VARIANCE INSIGHT — CRITICAL TO MITIGATION CHOICE
+           INVESTIGATION 2026-06-08 — corrects the bimodal/cold-path hypothesis
 
-             The homepage is bimodal across runs: median perf 89 with
-             LCP ~3.7s, BUT one run in three hits **perf 98 with LCP
-             score 92** — the prior baseline, achieved on the new code.
+             Read the three homepage Lighthouse JSON reports
+             (.lighthouseci/lhr-1780927{956439,978281,991474}.json,
+             corresponding to runs with perf 88 / 89 / 98). The earlier
+             cold-path data-fetch hypothesis turned out to be WRONG.
+             Three findings overturn it:
 
-             The render path is identical across runs. What's different
-             is the cold/warm state of:
-               - Cloudflare Worker (first request after idle = cold)
-               - Supabase round trip (KV cache vs DB)
-               - Open AI client / Anthropic round trip
+             A. LCP ELEMENT IS THE SAME ACROSS ALL 3 RUNS
 
-             This shifts the mitigation thinking significantly. If the
-             bottleneck were purely in-render compute (more tiles =
-             more SSR = slower LCP), variance would be tight and ALL
-             runs would degrade together. They don't. The 98-perf run
-             proves the new code CAN hit baseline. The 89-median says
-             upstream data-fetch latency dominates LCP on cold paths.
+                The LCP element is the FirstVisitBanner safety-disclosure
+                paragraph:
+                  selector: main > div.max-w-lg > aside.mb-4 > p.text-sm
+                  content:  "Real-time sensor data plus AI interpretation
+                             — conditions change fast. Always w…"
+                  position: top=167, bottom=233, 311×66 (above the fold)
 
-             The detail page has lower variance (tight 86-87 perf)
-             because each request is always a fresh Worker invocation
-             from the user's perspective — it always pays the cold-
-             path cost. The homepage benefits from intermittent warmth
-             when traffic clusters.
+                It has not shifted to a tile or the new content. The
+                banner — which we intentionally placed above the fold
+                for first-visit visibility — IS the LCP target on every
+                run. Being LCP is correct given its purpose.
 
-           REVISED CANDIDATE MITIGATIONS (priorities flipped)
+             B. REAL TTFB IS CONSTANT (~30–40ms) — NOT THE VARIABLE
 
-             HIGH-VALUE (likely to recover the bimodal):
-               1. Cache-warming cron. Hit the homepage every N minutes
-                  from a Cloudflare Cron Trigger to keep the Worker +
-                  KV warm. Cheap to ship. Trades a small egress cost
-                  for consistent LCP across user requests.
-               2. Move heavy data fetch off the LCP path. getTodayData
-                  does multiple parallel DB queries — if any of them
-                  block the LCP element's render, splitting "above-the-
-                  fold-render data" vs "below-the-fold data" would
-                  let the LCP element ship sooner. Requires reading
-                  the .lighthouseci/lhr-*.html report to identify the
-                  actual LCP element first.
-               3. Identify the LCP element explicitly. The prior
-                  98-baseline LCP target was the "Conditions Summary"
-                  block. Verify whether it's still the target on the
-                  89-median runs vs has shifted to a tile in the new
-                  grid. The fix depends on the answer.
+                curl -w '%{time_starttransfer}' against rvajames.org
+                returns ~30ms. The "TTFB" Lighthouse reports in the LCP
+                phase breakdown (683-831ms) is the Lantern-SIMULATED
+                value modelling a slow mobile network, not actual server
+                response. The simulated value is also consistent across
+                runs. Cold-path data-fetch / Worker warmup / KV miss
+                are NOT what's varying. Cache-warming cron would not
+                help.
 
-             LOWER-VALUE (probably won't help much given the variance pattern):
-               4. Lazy-render tiles below the fold. Would help if the
-                  bottleneck were in-render DOM cost, but with cold-
-                  path data-fetch dominating, this is secondary.
-               5. Reduce per-tile SSR cost (memoize ActivityChipRow
-                  sort, etc.). Same reason — render compute isn't
-                  what's varying between runs.
-               6. Slim script chunks / images. Same — would smooth
-                  performance generally but not the cold-path variance.
+             C. ALL LCP VARIANCE LIVES IN "RENDER DELAY", AND THAT
+                NUMBER LOOKS CAPPED
+
+                LCP phase breakdown:
+                                       run1      run2      run3
+                  TTFB (simulated)     767ms     683ms     831ms
+                  Load Delay           0         0         0
+                  Load Time            0         0         0
+                  Render Delay         3000ms    3000ms    1525ms
+
+                The 3000ms appearing identically on two runs is
+                suspicious — Lantern appears to be CAPPING the render-
+                delay simulation at that value when it models a
+                worst-case task graph (large DOM + bundled JS work).
+                Run 3 modelled a faster task graph and Lantern reported
+                an honest 1525ms.
+
+             D. OBSERVED (REAL, UNSIMULATED) LCP IS FAST ON EVERY RUN
+
+                The metrics audit's observedLargestContentfulPaint:
+                  run1: 1275ms  run2: 659ms  run3: 927ms
+
+                All three are well under the 2.5s "good" threshold.
+                The page is GENUINELY FAST in real browser conditions.
+                The reported 3.77s LCP is a Lantern simulation
+                projection for slow-3G mobile, NOT what users see.
+
+             TAKEAWAY
+
+             The "regression" is mostly a measurement artifact of the
+             Lighthouse mobile-simulation throttling colliding with a
+             larger DOM (684 elements with 22 tiles vs ~10 before).
+             Real-user LCP is fine. The Lighthouse score is dinged
+             because Lantern's worst-case render-delay projection grows
+             with DOM/JS surface, and 22 tiles puts us into the cap
+             scenario two runs out of three.
+
+           REVISED MITIGATIONS — ORDERED BY REAL-WORLD IMPACT, NOT SCORE-CHASING
+
+             HIGH-VALUE (real bytes saved, real perf improvement):
+               1. Reduce JS bundle weight. Lighthouse reports 245 KB
+                  of unused JavaScript across runs (consistent number).
+                  Tree-shake / code-split candidates: probably some
+                  Lucide icons imported wholesale, possibly some
+                  Tailwind v4 generated classes, possibly a stray
+                  framework chunk. Verify with `pnpm build:cf` output
+                  + `du -sh .open-next/server/chunks/*`. Each KB saved
+                  IS user-visible on slow networks.
+               2. Reduce DOM weight. 684 elements is real — 22 tiles
+                  × ~30 elements each. Below-fold lazy-rendering would
+                  not change the LCP element (still the banner) but
+                  WOULD drop the simulation's projected render delay
+                  AND save real parse/layout time on slow devices.
+                  Render first 6 tiles eagerly, lazy-hydrate the rest
+                  on intersection.
+
+             SCORE-HONEST ACCEPTANCE:
+               3. The 89-median Lighthouse score is partially a
+                  measurement artifact. Real observed LCP is 0.66-1.28s
+                  on every run — within "good" threshold. If the user
+                  test (open page, see content fast) is the actual
+                  goal, we're already there. Document this so a future
+                  agent doesn't chase a phantom regression with a
+                  cache-warming cron that wouldn't help.
+
+             NOT-WORTH-DOING (wrong root cause):
+               - Cache-warming cron — TTFB isn't the variable.
+               - Move heavy data fetch off LCP path — LCP is text in
+                 the initial HTML, no data dependency at all.
+               - Memoize per-tile verdict computation — render
+                 compute isn't where the variance lives.
 
            PRIORITY
              Soft. Page is fully usable; the variance means real users
