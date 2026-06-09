@@ -14,6 +14,34 @@ const nextConfig = {
   // this correctly without the external hint.
   serverExternalPackages: ['@cloudflare/puppeteer'],
 
+  // Workaround for Next.js issue #89844 — dev-overlay code leaking into
+  // production client bundles. Even after 15.5.19's partial fix to
+  // app-globals.js, multiple other client entry points
+  // (app-index.js, app-next-turbopack.js, client/index.js) still
+  // `require('../next-devtools/...')` inside `if (NODE_ENV !== 'production')`
+  // guards that webpack does NOT tree-shake. Result before this workaround:
+  // a ~217 KB shared chunk on every page, 100% unused at runtime.
+  //
+  // Alias the dev-overlay entry points to `false` (webpack 5 idiom for
+  // "resolve to empty module") in production builds. The `if` blocks
+  // that would call these requires never execute in prod, so swapping
+  // them for empty modules is safe.
+  //
+  // Revisit when Next.js ships a complete fix (#89844 is still open).
+  webpack: (config, { dev, isServer }) => {
+    if (!dev && !isServer) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        'next/dist/next-devtools/userspace/app/app-dev-overlay-setup': false,
+        'next/dist/next-devtools/userspace/app/client-entry':          false,
+        'next/dist/next-devtools/userspace/pages/pages-dev-overlay-setup': false,
+        'next/dist/next-devtools/userspace/app/errors/stitched-error': false,
+        'next/dist/compiled/next-devtools':                            false,
+      };
+    }
+    return config;
+  },
+
   async headers() {
     return [
       {
