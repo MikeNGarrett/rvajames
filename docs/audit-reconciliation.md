@@ -939,11 +939,16 @@ RESOLVED (2026-06-09) — root cause was an 820KB dev-overlay bundle leak, not t
            OPTIONAL polish, not fixes — DOM is 684 elements but that's
            not what was hurting the score.
 
-           NEXT VERIFICATION STEP (when convenient): re-run the 3-run
-           Lighthouse median against prod AFTER deploying c9d2dc0 to
-           confirm the score recovers. Local preview build verified
-           clean (all routes 200, dev-overlay purged) but the prod
-           number hasn't been re-measured post-fix.
+           VERIFIED 2026-06-09 POST-DEPLOY (version 2fed2f2f): the fix
+           landed and recovered the score AND killed the variance.
+           3-run Lighthouse medians against prod:
+             Homepage:  perf 89 → 98 (runs 95/98/98, no longer bimodal)
+                        LCP 3.68s → 2.24s; TBT 74ms → 41ms; CLS 0
+             Detail:    perf 87 → 93 (tight); LCP 3.61s → 2.57s; CLS 0
+           Removing the 820KB dead-code bundle eliminated the worst-case
+           Lantern render-delay projection that had been dragging the
+           score — confirming the dev-overlay leak was the true cause,
+           not the tile count. Thread fully closed.
 
            --- original investigation notes retained below for history ---
 
