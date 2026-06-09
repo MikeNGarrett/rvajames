@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'url';
-import { transformWithEsbuild } from 'vite';
+import { transformWithOxc } from 'vite';
 
 export default defineConfig({
   plugins: [
@@ -9,14 +9,22 @@ export default defineConfig({
       // vite:import-analysis to reject .tsx files. This pre-transform
       // converts JSX/TSX to JS before import analysis sees it, enabling
       // renderToStaticMarkup-based component tests without @vitejs/plugin-react.
+      //
+      // Migrated from transformWithEsbuild (deprecated in vite@8+) to
+      // transformWithOxc. API differences:
+      //   loader: 'tsx'        → lang: 'tsx'
+      //   jsx: 'automatic'     → jsx: { runtime: 'automatic' }
+      //   jsxImportSource: ... → jsx: { ..., importSource: ... }
       name: 'vitest-jsx-transform',
       enforce: 'pre',
       async transform(code, id) {
         if (!id.endsWith('.tsx') && !id.endsWith('.jsx')) return;
-        return transformWithEsbuild(code, id, {
-          loader: 'tsx',
-          jsx: 'automatic',
-          jsxImportSource: 'react',
+        return transformWithOxc(code, id, {
+          lang: 'tsx',
+          jsx: {
+            runtime: 'automatic',
+            importSource: 'react',
+          },
         });
       },
     },
