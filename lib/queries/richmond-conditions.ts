@@ -30,6 +30,7 @@ import {
 } from '@/lib/safety/rules';
 import { apparentTemperatureF } from '@/lib/utils/apparent-temp';
 import { wetBulbF, heatStressZone, type HeatStressZone } from '@/lib/utils/wet-bulb';
+import { etHourKeyFromDate, etHourKeyFromIso, pickHourByKey } from '@/lib/utils/et-hours';
 import type { RichmondConditionsData } from '@/components/richmond/RichmondConditionsSection';
 
 /** Shape of one Open-Meteo hour as persisted in the snapshot payload. */
@@ -131,8 +132,18 @@ export async function getRichmondConditionsData(
   }
 
   // ── 4. Compute apparent-temp + wet-bulb from current hour ─────────────────
+  // Open-Meteo hours are anchored to 00:00 TODAY ET (the ingest requests
+  // &timezone=America/New_York with no start_hour), so omHours[0] is ALWAYS
+  // today's midnight — NOT the current hour. Select by real wall-clock ET
+  // hour instead. See lib/utils/et-hours.ts for the full bug writeup
+  // (fixed 2026-06-09; previously surfaced "feels like 62°F / UV 0" on a
+  // summer afternoon because it was reading the overnight low).
   const upriver = metroState.upriver;
-  const currentHour: OpenMeteoHour | undefined = omHours[0];
+  const nowHourKey = etHourKeyFromDate(new Date());
+  const currentHour = pickHourByKey(omHours, nowHourKey);
+  // ambientF falls back to NWS periods[0] (correctly anchored to the current
+  // hour by the weather.gov hourly endpoint) when the Open-Meteo current
+  // hour is absent — e.g. a stale snapshot whose hours are all a prior day.
   const ambientF  = currentHour?.ambientF ?? periods[0]?.temperature ?? null;
   const humidity  = currentHour?.humidityPct ?? null;
   const windMph   = currentHour?.windMph ?? 0;
@@ -148,12 +159,14 @@ export async function getRichmondConditionsData(
   const heatZone: HeatStressZone = heatStressZone(wetBulbValueF);
 
   // ── 5. Build HourlyForecast[] for nextHoursOutlook (next 4h) ──────────────
-  // Join NWS periods + Open-Meteo by index. Both arrays are anchored to
-  // "next 24h from cron-fetch time" so position-i values represent the
-  // same calendar hour. NWS provides shortForecast + ambientF; Open-Meteo
-  // provides humidity + wind for apparent-temp computation.
-  const hourly: HourlyForecast[] = periods.slice(0, 4).map((p, i) => {
-    const om = omHours[i];
+  // Align NWS periods + Open-Meteo by ET calendar-hour KEY, not by array
+  // index. The two sources start at different hours (NWS at the current hour,
+  // Open-Meteo at today's midnight), so index-zipping mismatched humidity/wind
+  // against temperature. NWS provides shortForecast + temperature (and is the
+  // current-hour anchor); Open-Meteo provides humidity + wind for apparent-temp.
+  const omByHourKey = new Map(omHours.map((h) => [etHourKeyFromIso(h.time), h]));
+  const hourly: HourlyForecast[] = periods.slice(0, 4).map((p) => {
+    const om = omByHourKey.get(etHourKeyFromIso(p.startTime));
     const hH = om?.humidityPct ?? humidity ?? 50;
     const hW = om?.windMph ?? windMph ?? 0;
     return {
