@@ -913,6 +913,40 @@ FOLLOW-UP  Major river-events alerts (queued 2026-06-05)
            round. If user wants v1 for the tall ships event, it's the
            next slot.
 
+RESOLVED (2026-06-09) — root cause was an 820KB dev-overlay bundle leak, not the tiles.
+           Investigation on 2026-06-09 (see "Bundle analysis" below)
+           traced the perceived regression to Next.js issue #89844:
+           dev-overlay / next-devtools UI code was being shipped in an
+           820KB production chunk, 100% unused at runtime. Webpack
+           wasn't tree-shaking the NODE_ENV-guarded requires across
+           5 client entry points.
+
+           Fix shipped in two commits:
+             - d9aa076  bump next 15.5.18 → 15.5.19 (partial — guards
+                        app-globals.js only)
+             - c9d2dc0  next.config.mjs webpack() aliases all 5
+                        dev-overlay entry points to false in prod
+                        client builds → 820KB chunk eliminated,
+                        .next/static/chunks 1.9M → 1.1M
+
+           The tile expansion (22 tiles vs ~10) was NOT the cause. The
+           2026-06-08 investigation correctly found real-user LCP was
+           always fine (observed 0.66-1.28s); the oversized dead-code
+           bundle was inflating Lighthouse's Lantern simulation. With
+           820KB removed, the score and the slow-network real-user
+           experience both improve. The two below-fold-lazy-render /
+           DOM-weight mitigations from the 2026-06-08 notes are now
+           OPTIONAL polish, not fixes — DOM is 684 elements but that's
+           not what was hurting the score.
+
+           NEXT VERIFICATION STEP (when convenient): re-run the 3-run
+           Lighthouse median against prod AFTER deploying c9d2dc0 to
+           confirm the score recovers. Local preview build verified
+           clean (all routes 200, dev-overlay purged) but the prod
+           number hasn't been re-measured post-fix.
+
+           --- original investigation notes retained below for history ---
+
 FOLLOW-UP  Homepage LCP regression after tile-expansion deploy (2026-06-05, refreshed 2026-06-08)
            Post-deploy Lighthouse against https://rvajames.org/ after
            migrations 0016–0019 + tile-redesign + 12 new locations
