@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Trash2 } from 'lucide-react';
-import { requireAdminEmail } from '@/lib/admin/auth';
+import { requireAdminPage } from '@/lib/admin/auth';
 import { createServerClient } from '@/lib/supabase/server';
 import {
   duplicateClosure,
@@ -74,7 +74,7 @@ function fmt(iso: string | null): string {
 }
 
 export default async function ClosuresAdminPage() {
-  await requireAdminEmail();
+  await requireAdminPage();
   const supabase = await createServerClient('service');
 
   const { data: rows, error } = await supabase

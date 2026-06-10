@@ -19,6 +19,14 @@ vi.mock('next/headers', () => ({
   headers: vi.fn(),
 }));
 
+// forbidden() never returns — Next throws an internal interrupt error. The
+// mock mirrors that contract so requireAdminPage's control flow is realistic.
+vi.mock('next/navigation', () => ({
+  forbidden: vi.fn(() => {
+    throw new Error('NEXT_HTTP_ERROR_FALLBACK;403');
+  }),
+}));
+
 vi.mock('@/lib/env', () => ({
   getAllowedAdminEmails: vi.fn(),
   getCfAccessTeamDomain: vi.fn(),
@@ -26,6 +34,7 @@ vi.mock('@/lib/env', () => ({
 }));
 
 import { headers } from 'next/headers';
+import { forbidden } from 'next/navigation';
 import {
   getAllowedAdminEmails,
   getCfAccessAud,
@@ -34,6 +43,7 @@ import {
 import {
   getAdminEmail,
   requireAdminEmail,
+  requireAdminPage,
   verifyAccessJwt,
   __setJwksOverrideForTest,
 } from './auth';
@@ -76,6 +86,10 @@ beforeEach(() => {
   vi.mocked(getAllowedAdminEmails).mockResolvedValue([ADMIN]);
   vi.mocked(getCfAccessTeamDomain).mockResolvedValue(TEAM);
   vi.mocked(getCfAccessAud).mockResolvedValue(AUD);
+  // Re-arm per test: restoreAllMocks in afterEach strips factory impls.
+  vi.mocked(forbidden).mockReset().mockImplementation(() => {
+    throw new Error('NEXT_HTTP_ERROR_FALLBACK;403');
+  });
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -176,6 +190,40 @@ describe('getAdminEmail — JWT enforcement (CF_ACCESS_* set, production)', () =
       makeHeaders({ cookie: `theme=dark; CF_Authorization=${await signToken()}` }) as never,
     );
     expect(await getAdminEmail()).toBe(ADMIN);
+  });
+});
+
+// ─── requireAdminPage — forbidden() interrupt for page renders ────────────────
+
+describe('requireAdminPage — 403 via forbidden() (SEC-1 follow-up)', () => {
+  beforeEach(() => {
+    vi.stubEnv('NODE_ENV', 'production');
+  });
+
+  it('calls forbidden() for a spoofed header with no valid JWT', async () => {
+    vi.mocked(headers).mockResolvedValue(
+      makeHeaders({ 'cf-access-authenticated-user-email': ADMIN }) as never,
+    );
+    await expect(requireAdminPage()).rejects.toThrow('NEXT_HTTP_ERROR_FALLBACK;403');
+    expect(forbidden).toHaveBeenCalledOnce();
+  });
+
+  it('returns the email (no interrupt) for a valid allowlisted JWT', async () => {
+    vi.mocked(headers).mockResolvedValue(
+      makeHeaders({ 'cf-access-jwt-assertion': await signToken() }) as never,
+    );
+    expect(await requireAdminPage()).toBe(ADMIN);
+    expect(forbidden).not.toHaveBeenCalled();
+  });
+
+  it('calls forbidden() for a valid JWT with a non-allowlisted email', async () => {
+    vi.mocked(headers).mockResolvedValue(
+      makeHeaders({
+        'cf-access-jwt-assertion': await signToken({ email: 'intruder@example.com' }),
+      }) as never,
+    );
+    await expect(requireAdminPage()).rejects.toThrow();
+    expect(forbidden).toHaveBeenCalledOnce();
   });
 });
 

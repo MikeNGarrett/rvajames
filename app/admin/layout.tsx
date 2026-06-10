@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { requireAdminEmail } from '@/lib/admin/auth';
+import { requireAdminPage } from '@/lib/admin/auth';
 import { ToastProvider } from '@/components/admin/ToastProvider';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +16,7 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const email = await requireAdminEmail();
+  const email = await requireAdminPage();
 
   return (
     <div className="min-h-screen bg-surface">

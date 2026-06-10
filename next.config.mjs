@@ -7,6 +7,13 @@ if (process.env.NODE_ENV !== 'production') {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    // forbidden() support for the /admin auth guard (SEC-1 follow-up):
+    // throwing a Response from a Server Component render surfaces as a 500
+    // error boundary; forbidden() renders app/forbidden.tsx with a real 403.
+    authInterrupts: true,
+  },
+
   // @cloudflare/puppeteer is a Cloudflare Workers-only package. Marking it as
   // a server external prevents Next.js from bundling it during `next build`
   // (which runs in Node.js and can't execute the Workers-specific module).

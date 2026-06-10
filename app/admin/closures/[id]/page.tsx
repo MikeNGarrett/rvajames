@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { requireAdminEmail } from '@/lib/admin/auth';
+import { requireAdminPage } from '@/lib/admin/auth';
 import { createServerClient } from '@/lib/supabase/server';
 import { ClosureForm } from '@/components/admin/ClosureForm';
 import { ExpireButton } from '../ExpireButton';
@@ -25,7 +25,7 @@ function KindLabel(kind: string): string {
 }
 
 export default async function EditClosurePage({ params }: Props) {
-  await requireAdminEmail();
+  await requireAdminPage();
   const { id } = await params;
   const supabase = await createServerClient('service');
 
