@@ -23,29 +23,42 @@ authoritative source for the running configuration.
 
 ## Admin route
 
-`/admin/*` is protected by two layers:
+`/admin/*` is protected by three layers:
 
 1. **Cloudflare Access** (edge) — set up a Self-hosted Application in the Cloudflare Access
    dashboard (Zero Trust → Access → Applications → Add an application → Self-hosted).
    - Application name: `RVA James Admin`
    - Application domain: `rvajames.org/admin`
    - Policy: allow the email addresses you want to grant access to.
-   Cloudflare Access sets the `cf-access-authenticated-user-email` header on authenticated
-   requests.
+   Cloudflare Access attaches a signed `Cf-Access-Jwt-Assertion` token (and the
+   plaintext `cf-access-authenticated-user-email` header) to authenticated requests.
 
-2. **Allowlist check** (defence-in-depth, in code) — `lib/admin/auth.ts` reads that header
-   and verifies the email is in the `ALLOWED_ADMIN_EMAILS` env var (comma-separated list).
+2. **In-Worker JWT verification** (SEC-1, in code) — `lib/admin/auth.ts` verifies the
+   `Cf-Access-Jwt-Assertion` signature against the team JWKS
+   (`https://$CF_ACCESS_TEAM_DOMAIN/cdn-cgi/access/certs`) and enforces
+   `aud` (= the Access app's AUD tag), `iss`, `exp`, and `nbf`. The admin email comes
+   from the **verified token**, never the plaintext header — a spoofed header without a
+   valid JWT gets 403 even if a request somehow reaches the Worker without passing
+   through Access. Verification activates only when both `CF_ACCESS_*` vars are set and
+   `NODE_ENV === 'production'`; otherwise the pre-SEC-1 header fallback applies (local dev).
 
-### Required env var
+3. **Allowlist check** (defence-in-depth, in code) — the email (from the verified token,
+   or the header in local dev) must be in the `ALLOWED_ADMIN_EMAILS` env var.
+
+### Required env vars
 
 ```
 ALLOWED_ADMIN_EMAILS=you@example.com,colleague@example.com
+CF_ACCESS_TEAM_DOMAIN=<team>.cloudflareaccess.com   # host only, no scheme
+CF_ACCESS_AUD=<Access application Audience tag>      # Zero Trust → Access → Applications → RVA James Admin → Overview
 ```
 
-Set this as a Cloudflare Workers secret:
+Set these as Cloudflare Workers secrets:
 
 ```bash
 echo "you@example.com" | wrangler secret put ALLOWED_ADMIN_EMAILS
+echo "<team>.cloudflareaccess.com" | wrangler secret put CF_ACCESS_TEAM_DOMAIN
+echo "<aud-tag>" | wrangler secret put CF_ACCESS_AUD
 ```
 
 ### Local testing

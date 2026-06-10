@@ -73,6 +73,25 @@ export async function getAiDailyCostCeilingUsd(): Promise<number> {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 5;
 }
 
+/**
+ * Cloudflare Access team domain for /admin JWT verification (SEC-1) — host
+ * only, e.g. `myteam.cloudflareaccess.com`. A pasted scheme is tolerated and
+ * stripped. Null when unset: local dev without the Access edge, where JWT
+ * verification is skipped and the header fallback applies.
+ */
+export async function getCfAccessTeamDomain(): Promise<string | null> {
+  const env = await getEnv();
+  const raw = env['CF_ACCESS_TEAM_DOMAIN']?.trim();
+  return raw ? raw.replace(/^https?:\/\//, '').replace(/\/+$/, '') : null;
+}
+
+/** Cloudflare Access Application Audience (AUD) tag of the /admin app (SEC-1). */
+export async function getCfAccessAud(): Promise<string | null> {
+  const env = await getEnv();
+  const raw = env['CF_ACCESS_AUD']?.trim();
+  return raw || null;
+}
+
 export async function getCronSecret(): Promise<string> {
   const env = await getEnv();
   const val = env['CRON_SECRET'];
