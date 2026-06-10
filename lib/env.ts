@@ -61,6 +61,18 @@ export async function getAllowedAdminEmails(): Promise<string[]> {
     .filter(Boolean);
 }
 
+/**
+ * Daily Anthropic spend ceiling in USD (SEC-3 circuit breaker). Above this,
+ * public routes serve stale/deterministic content and skip generation until
+ * the next UTC day. Configured via the AI_DAILY_COST_CEILING_USD var in
+ * wrangler.jsonc; defaults to $5 when unset or unparsable.
+ */
+export async function getAiDailyCostCeilingUsd(): Promise<number> {
+  const env = await getEnv();
+  const parsed = Number(env['AI_DAILY_COST_CEILING_USD']);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 5;
+}
+
 export async function getCronSecret(): Promise<string> {
   const env = await getEnv();
   const val = env['CRON_SECRET'];

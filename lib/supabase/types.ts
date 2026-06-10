@@ -117,6 +117,21 @@ export type Database = {
           },
         ]
       }
+      ai_generation_locks: {
+        Row: {
+          claimed_at: string
+          prompt_hash: string
+        }
+        Insert: {
+          claimed_at?: string
+          prompt_hash: string
+        }
+        Update: {
+          claimed_at?: string
+          prompt_hash?: string
+        }
+        Relationships: []
+      }
       ai_interpretations: {
         Row: {
           age_bucket: Database["public"]["Enums"]["age_bucket"]
@@ -649,7 +664,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      daily_ai_spend_usd: { Args: { day_start: string }; Returns: number }
     }
     Enums: {
       advisory_kind:

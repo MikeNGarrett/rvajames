@@ -406,3 +406,52 @@ describe('computeLocationHashForTest — CSO hash stability', () => {
     expect(h1).not.toBe(h2);
   });
 });
+
+// ─── computeLocationHashForTest — SEC-3(b) sensor quantization ────────────────
+// Sensor scalars are quantized before hashing (gageFt 0.25 ft, discharge
+// 500 cfs, temps 2°F, precip 0.1 in) so a 15-min USGS tick — or an attacker
+// replaying one — no longer busts the cache.
+
+describe('computeLocationHashForTest — sensor quantization (SEC-3)', () => {
+  it('a gage tick below the 0.25 ft step does not change the hash', () => {
+    const h1 = computeLocationHashForTest({ ...baseInput, gageFt: 3.5 });
+    const h2 = computeLocationHashForTest({ ...baseInput, gageFt: 3.55 });
+    expect(h1).toBe(h2);
+  });
+
+  it('a gage move across the 0.25 ft step changes the hash', () => {
+    const h1 = computeLocationHashForTest({ ...baseInput, gageFt: 3.5 });
+    const h2 = computeLocationHashForTest({ ...baseInput, gageFt: 3.9 });
+    expect(h1).not.toBe(h2);
+  });
+
+  it('a discharge tick within the 500 cfs band does not change the hash', () => {
+    const h1 = computeLocationHashForTest({ ...baseInput, dischargeCfs: 1100 });
+    const h2 = computeLocationHashForTest({ ...baseInput, dischargeCfs: 1180 });
+    expect(h1).toBe(h2);
+  });
+
+  it('a discharge move across the 500 cfs band changes the hash', () => {
+    const h1 = computeLocationHashForTest({ ...baseInput, dischargeCfs: 1100 });
+    const h2 = computeLocationHashForTest({ ...baseInput, dischargeCfs: 1300 });
+    expect(h1).not.toBe(h2);
+  });
+
+  it('air temp ticks within the 2°F band do not change the hash', () => {
+    const h1 = computeLocationHashForTest({ ...baseInput, airTempF: 82 });
+    const h2 = computeLocationHashForTest({ ...baseInput, airTempF: 82.6 });
+    expect(h1).toBe(h2);
+  });
+
+  it('precip ticks below 0.05 in do not change the hash', () => {
+    const h1 = computeLocationHashForTest({ ...baseInput, precip24hIn: 0 });
+    const h2 = computeLocationHashForTest({ ...baseInput, precip24hIn: 0.04 });
+    expect(h1).toBe(h2);
+  });
+
+  it('null sensor values hash stably', () => {
+    const h1 = computeLocationHashForTest({ ...baseInput, gageFt: null, waterTempF: null });
+    const h2 = computeLocationHashForTest({ ...baseInput, gageFt: null, waterTempF: null });
+    expect(h1).toBe(h2);
+  });
+});

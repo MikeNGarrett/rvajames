@@ -237,3 +237,51 @@ describe('SYSTEM_PROMPT — CSO REASONING block (metro prompt)', () => {
     expect(SYSTEM_PROMPT).toContain('mode=observed');
   });
 });
+
+// ─── computeMetroHashForTest — SEC-3(b) sensor quantization ───────────────────
+// Sensor scalars are quantized before hashing (gageFt 0.25 ft, discharge
+// 500 cfs, temps 2°F, rain 0.1 in) so refresh-cycle ticks no longer bust the
+// cache. The raw values still reach the prompt — only the cache key coarsens.
+
+describe('computeMetroHashForTest — sensor quantization (SEC-3)', () => {
+  const withUpriver = (over: Record<string, number | null>): MetroSummaryInput => ({
+    ...baseMetroInput,
+    metroState: {
+      ...(metroState as unknown as Record<string, unknown>),
+      upriver: {
+        ...(metroState as unknown as { upriver: Record<string, unknown> }).upriver,
+        ...over,
+      },
+    } as unknown as MetroSummaryInput['metroState'],
+  });
+
+  it('an upriver gage tick below the 0.25 ft step does not change the hash', () => {
+    expect(computeMetroHashForTest(withUpriver({ gageFt: 3.52 })))
+      .toBe(computeMetroHashForTest(withUpriver({ gageFt: 3.55 })));
+  });
+
+  it('an upriver gage move across the 0.25 ft step changes the hash', () => {
+    expect(computeMetroHashForTest(withUpriver({ gageFt: 3.5 })))
+      .not.toBe(computeMetroHashForTest(withUpriver({ gageFt: 3.9 })));
+  });
+
+  it('a discharge tick within the 500 cfs band does not change the hash', () => {
+    expect(computeMetroHashForTest(withUpriver({ dischargeCfs: 1100 })))
+      .toBe(computeMetroHashForTest(withUpriver({ dischargeCfs: 1180 })));
+  });
+
+  it('air temp ticks within the 2°F band do not change the hash', () => {
+    expect(computeMetroHashForTest({ ...baseMetroInput, airTempF: 82 }))
+      .toBe(computeMetroHashForTest({ ...baseMetroInput, airTempF: 82.6 }));
+  });
+
+  it('rain48hIn ticks below 0.05 in do not change the hash', () => {
+    expect(computeMetroHashForTest({ ...baseMetroInput, rain48hIn: 0 }))
+      .toBe(computeMetroHashForTest({ ...baseMetroInput, rain48hIn: 0.04 }));
+  });
+
+  it('null sensor values hash stably', () => {
+    expect(computeMetroHashForTest(withUpriver({ waterTempF: null })))
+      .toBe(computeMetroHashForTest(withUpriver({ waterTempF: null })));
+  });
+});
