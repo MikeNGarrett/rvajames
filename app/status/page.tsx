@@ -35,11 +35,16 @@ function timeAgo(isoDate: string | null): string {
 
 export default async function StatusPage() {
   const supabase = await createServerClient('anon');
+  // SEC-5: ingestion_runs + ai_interpretations no longer have anon read
+  // policies (migration 0021) — the anon key could bulk-dump per-row
+  // cost/tokens and scrape-error history. This page still surfaces its
+  // curated aggregates, but reads them server-side with the service client.
+  const service = await createServerClient('service');
 
   // Last run per source
   const runResults = await Promise.all(
     SOURCES.map((source) =>
-      supabase
+      service
         .from('ingestion_runs')
         .select('started_at, finished_at, ok, error, rows_written')
         .eq('source', source)
@@ -52,7 +57,7 @@ export default async function StatusPage() {
 
   // Today's AI cost
   const today = new Date().toISOString().split('T')[0];
-  const { data: costData } = await supabase
+  const { data: costData } = await service
     .from('ai_interpretations')
     .select('cost_usd, tokens_in, tokens_out')
     .eq('date', today);
@@ -63,7 +68,7 @@ export default async function StatusPage() {
   const interpCount = costData?.length ?? 0;
 
   // Latest interpretation timestamp
-  const { data: latestInterp } = await supabase
+  const { data: latestInterp } = await service
     .from('ai_interpretations')
     .select('created_at')
     .order('created_at', { ascending: false })
