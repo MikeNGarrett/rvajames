@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { buildMetroUserMessage, type MetroSummaryInput } from './summarize-metro';
+import {
+  buildMetroUserMessage,
+  MetroSummarySchema,
+  MetroSummaryWriteSchema,
+  type MetroSummaryInput,
+} from './summarize-metro';
 import { computeMetroHashForTest } from '@/lib/ai/get-or-generate';
 import { SYSTEM_PROMPT } from '@/lib/ai/system-prompt';
 
@@ -283,5 +288,63 @@ describe('computeMetroHashForTest — sensor quantization (SEC-3)', () => {
   it('null sensor values hash stably', () => {
     expect(computeMetroHashForTest(withUpriver({ waterTempF: null })))
       .toBe(computeMetroHashForTest(withUpriver({ waterTempF: null })));
+  });
+});
+
+// ─── MetroSummaryWriteSchema — SEC-4 location_slug constraint ─────────────────
+// best_bets_today[].location_slug is serialized into an inline
+// speculation-rules <script>; the schema must reject anything that could
+// break out of that context (prompt-injection → stored XSS chain).
+
+describe('MetroSummaryWriteSchema — location_slug constraint (SEC-4)', () => {
+  const validSummary = {
+    headline: 'Calm river day.',
+    body_md: 'The river is calm and warm today.',
+    top_concerns: [],
+    best_bets_today: [{ location_slug: 'belle-isle', reason: 'Flat trails' }],
+    disclaimer_kind: 'standard',
+    activities: [
+      { slug: 'swimming', status: 'safe', note: 'ok' },
+      { slug: 'rock-hopping', status: 'safe', note: 'ok' },
+      { slug: 'kayaking-whitewater', status: 'caution', note: 'fast' },
+      { slug: 'hiking', status: 'safe', note: 'ok' },
+    ],
+    rapids_class: 'I-II',
+    rapids_note: 'Mild rapids today.',
+  };
+
+  it('accepts a valid kebab-case slug', () => {
+    expect(MetroSummaryWriteSchema.safeParse(validSummary).success).toBe(true);
+  });
+
+  it('rejects a script-breakout payload as a slug', () => {
+    const evil = {
+      ...validSummary,
+      best_bets_today: [
+        { location_slug: '</script><script>alert(1)</script>', reason: 'x' },
+      ],
+    };
+    expect(MetroSummaryWriteSchema.safeParse(evil).success).toBe(false);
+  });
+
+  it('rejects slugs with uppercase, slashes, dots, or spaces', () => {
+    for (const slug of ['Belle-Isle', '../etc', 'a b', 'pony.pasture', 'x']) {
+      const bad = {
+        ...validSummary,
+        best_bets_today: [{ location_slug: slug, reason: 'x' }],
+      };
+      expect(MetroSummaryWriteSchema.safeParse(bad).success).toBe(false);
+    }
+  });
+
+  it('read schema applies the same constraint', () => {
+    const evil = {
+      headline: 'h',
+      body_md: 'b',
+      top_concerns: [],
+      best_bets_today: [{ location_slug: '</script>', reason: 'x' }],
+      disclaimer_kind: 'standard',
+    };
+    expect(MetroSummarySchema.safeParse(evil).success).toBe(false);
   });
 });

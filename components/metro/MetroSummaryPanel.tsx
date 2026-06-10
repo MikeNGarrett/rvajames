@@ -31,6 +31,7 @@ import Link from 'next/link';
 import { useMemo } from 'react';
 import { LazyContent } from '@/components/ui/LazyContent';
 import {
+  LOCATION_SLUG_PATTERN,
   MetroSummarySchema,
   type MetroSummary,
 } from '@/lib/ai/prompts/summarize-metro';
@@ -139,6 +140,14 @@ function MetroSummaryContent({
   ageBucket: AgeBucket;
   mode: ReturnType<typeof resolveDateMode>['mode'];
 }) {
+  // SEC-4 defense-in-depth: the schema already regex-constrains
+  // location_slug, but anything rendered into the inline speculation-rules
+  // <script> below must be provably slug-shaped even if a row predates the
+  // schema constraint or arrives through another path.
+  const safeBets = summary.best_bets_today.filter((bet) =>
+    LOCATION_SLUG_PATTERN.test(bet.location_slug),
+  );
+
   return (
     <>
       <p className={`text-base font-semibold text-text mb-2${mode === 'forecast' ? ' mt-2' : ''}`}>
@@ -168,13 +177,13 @@ function MetroSummaryContent({
       )}
 
       {/* Best bets */}
-      {summary.best_bets_today.length > 0 && (
+      {safeBets.length > 0 && (
         <div className="border-t border-border pt-3">
           <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">
             Best bets today
           </p>
           <ul className="space-y-1.5">
-            {summary.best_bets_today.map((bet) => (
+            {safeBets.map((bet) => (
               <li key={bet.location_slug}>
                 <Link
                   href={`/locations/${bet.location_slug}?date=${date}&age=${encodeURIComponent(ageBucket)}`}
@@ -205,17 +214,17 @@ function MetroSummaryContent({
        * completes — the browser still honours them when added dynamically.
        * guide: improve-next-page-load-performance
        */}
-      {summary.best_bets_today.length > 0 && (
+      {safeBets.length > 0 && (
         <script
           type="speculationrules"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               prefetch: [{
-                urls: summary.best_bets_today.map((b) => `/locations/${b.location_slug}`),
+                urls: safeBets.map((b) => `/locations/${b.location_slug}`),
                 eagerness: 'eager',
               }],
               prerender: [{
-                urls: summary.best_bets_today.map((b) => `/locations/${b.location_slug}`),
+                urls: safeBets.map((b) => `/locations/${b.location_slug}`),
                 eagerness: 'moderate',
               }],
             }),

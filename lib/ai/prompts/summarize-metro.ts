@@ -27,12 +27,19 @@ export type RapidsClass = (typeof RAPIDS_CLASSES)[number];
 
 // ─── Shared fields (both schemas) ────────────────────────────────────────────
 
+// SEC-4: location_slug is AI output that gets serialized into an inline
+// speculation-rules <script> (MetroSummaryPanel). Constrain it to the same
+// kebab-case pattern the API routes enforce so a prompt-injected
+// "</script>…" value can never reach a script context. The character class
+// excludes everything needed to break out of (or escape within) the tag.
+export const LOCATION_SLUG_PATTERN = /^[a-z0-9-]{2,64}$/;
+
 const BaseMetroSummarySchema = z.object({
   headline:      z.string(),                    // 1 sentence, ≤ 90 chars
   body_md:       z.string(),                    // 2–3 paragraphs, brand voice, Markdown
   top_concerns:  z.array(z.string()).max(3),    // ≤ 3 brief concerns; empty if none
   best_bets_today: z.array(
-    z.object({ location_slug: z.string(), reason: z.string() }),
+    z.object({ location_slug: z.string().regex(LOCATION_SLUG_PATTERN), reason: z.string() }),
   ).max(3),
   disclaimer_kind: z.enum(['standard', 'children', 'general_audience']),
 });
