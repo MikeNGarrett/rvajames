@@ -196,12 +196,6 @@ export default async function StatusPage() {
             })}
           </div>
         )}
-        <p className="text-xs text-text-muted mt-2">
-          Drafts pending review at{' '}
-          <Link href="/admin/closures" className="text-rva-blue hover:underline">
-            /admin/closures
-          </Link>
-        </p>
       </section>
 
       <DisclaimerFooter />
