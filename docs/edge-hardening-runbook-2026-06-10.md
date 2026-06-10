@@ -5,6 +5,26 @@ SEC-2 option 1). All are Cloudflare **dashboard** config — no code, human
 executes. Everything code-actionable from the audit shipped and was verified
 live on 2026-06-10 (SEC-1..5 + the 403 follow-up + the workers_dev pin).
 
+Each step carries a verdict relative to what the audit originally suggested:
+
+- **✅ DO** — do as the audit suggested.
+- **⚠️ MODIFIED** — the audit's suggestion needed correction; do the revised
+  version here instead.
+- **❌ SKIP** — recommend not doing it; reason given inline.
+
+## Verdict summary
+
+| # | Step | Verdict |
+|---|---|---|
+| 1a | Access policy: explicit email allowlist | ✅ DO |
+| 1b | Access: pin to one identity provider | ✅ DO |
+| 1c | Access: "Authentication Method = MFA" require-rule | ❌ SKIP (enforce 2FA at the IdP instead) |
+| 1d | Access: session duration → 1 hour | ✅ DO |
+| 1e | Access: audit-log spot check | ✅ DO |
+| 2 | WAF rule blocking /admin without the Access JWT | ❌ SKIP (breaks login; header not visible at WAF phase) — ⚠️ MODIFIED variant available if an edge layer is wanted |
+| 3 | Edge rate-limiting rule on /api/* | ✅ DO |
+| 4 | Post-config verification | ✅ DO |
+
 State verified before writing this:
 - `*.workers.dev` and preview URLs: disabled, pinned in `wrangler.jsonc`.
 - `www.rvajames.org`: no DNS record (NXDOMAIN) — no Access-coverage gap.
@@ -16,14 +36,42 @@ State verified before writing this:
 
 ## 1. Access application review (Zero Trust → Access → Applications → RVA James Admin)
 
-| Setting | Recommendation |
-|---|---|
-| Policy action | One **Allow** policy with an explicit **Emails** include list that exactly matches `ALLOWED_ADMIN_EMAILS`. Remove any "any authenticated user" / "everyone on team domain" include. |
-| Identity provider | In the app's Authentication tab, untick every IdP except the one you actually use. If that's Google, enforce 2FA on the Google account itself — Google does not reliably pass the `amr` claim, so a Cloudflare "Authentication Method = MFA" require-rule can lock you out. Only add that require-rule if your IdP documents AMR support. **Do not** add it if you sign in with the email one-time-PIN (OTP is single-factor; the rule would block all logins). |
-| Session duration | App-level session: **1 hour** (drop-down on the app's Overview tab). Admin use here is occasional; re-auth cost is low, stolen-cookie window shrinks 24×. |
-| Audit logs | Zero Trust → Logs → Access. Nothing to enable — verify your own logins appear, then spot-check for unfamiliar identities/IPs occasionally. |
+### 1a. Policy: explicit email allowlist — ✅ DO
 
-## 2. WAF rule for /admin — audit suggestion REVISED, recommend skipping
+One **Allow** policy with an explicit **Emails** include list that exactly
+matches `ALLOWED_ADMIN_EMAILS`. Remove any "any authenticated user" /
+"everyone on team domain" include.
+
+### 1b. Pin the identity provider — ✅ DO
+
+In the app's Authentication tab, untick every IdP except the one you
+actually use.
+
+### 1c. "Authentication Method = MFA" require-rule — ❌ SKIP
+
+The audit's MFA item is better satisfied at the IdP. Do not add the
+Cloudflare require-rule:
+
+- If you sign in with the email one-time-PIN, OTP is single-factor — the
+  rule would block **all** logins.
+- If you sign in with Google, Google does not reliably pass the `amr` claim
+  the rule keys on — same lockout risk.
+
+Instead: enforce 2FA on the IdP account itself (e.g. Google 2-Step
+Verification). Revisit the require-rule only if you move to an IdP that
+documents AMR support.
+
+### 1d. Session duration → 1 hour — ✅ DO
+
+App-level session: **1 hour** (drop-down on the app's Overview tab). Admin
+use here is occasional; re-auth cost is low, stolen-cookie window shrinks 24×.
+
+### 1e. Audit logs — ✅ DO
+
+Zero Trust → Logs → Access. Nothing to enable — verify your own logins
+appear, then spot-check for unfamiliar identities/IPs occasionally.
+
+## 2. WAF rule for /admin — ❌ SKIP (audit suggestion is a lockout footgun)
 
 The audit suggested a custom rule blocking `/admin/*` requests lacking
 `Cf-Access-Jwt-Assertion`. **Do not implement it as written.** Verified
@@ -37,9 +85,13 @@ against the ruleset-engine phase list: `http_request_firewall_custom` runs
    the WAF phase — so even authenticated requests would look header-less to
    the rule and be blocked.
 
-The in-Worker JWT verification (SEC-1) already covers this threat strictly
-better. If you still want an edge layer, the only safe shape keys on the
-browser cookie and exempts the login flow's GETs:
+The in-Worker JWT verification (SEC-1, deployed) already covers this threat
+strictly better — skipping costs nothing.
+
+### ⚠️ MODIFIED variant (optional, only if you want an edge layer anyway)
+
+The only safe shape keys on the browser cookie and exempts the login flow's
+GETs:
 
 ```
 Expression: starts_with(http.request.uri.path, "/admin")
@@ -50,9 +102,10 @@ Action: Block
 
 (Authenticated server-action POSTs always carry the `CF_Authorization`
 cookie; unauthenticated POST floods die at the edge. GETs fall through to
-Access → login works.)
+Access → login works.) If you add this, the browser login check in step 4
+is mandatory.
 
-## 3. Edge rate limiting on /api/* (SEC-2 option 1 — pre-Worker layer)
+## 3. Edge rate limiting on /api/* — ✅ DO (SEC-2 option 1, pre-Worker layer)
 
 The in-Worker binding (SEC-2, live) returns 429s but still bills a Worker
 invocation per request. One zone-level rule kills floods before the Worker
@@ -71,7 +124,7 @@ Action:      Block (free plan: 10s mitigation timeout)
 - Cron triggers are unaffected: the `scheduled()` handler dispatches inside
   the Worker process and never traverses the zone edge.
 
-## 4. Verify after configuring
+## 4. Verify after configuring — ✅ DO
 
 ```bash
 # Login flow still works (the critical regression check for any /admin rule):
