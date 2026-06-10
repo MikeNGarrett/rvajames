@@ -396,6 +396,148 @@ FIXED      React #418 hydration mismatch (final root cause confirmed 2026-05-26 
                hour alone, etc.), format each piece separately and concatenate explicitly.
                ICU separator rules vary between V8 builds.
 
+════════════════════════════════════════════════════════════════════════════
+SECURITY AUDIT 2026-06-09 — HIGH PRIORITY ROUND (do before other follow-ups)
+════════════════════════════════════════════════════════════════════════════
+           Full report + acceptance criteria: docs/security-audit-2026-06-09.md.
+           Five findings (SEC-1..5) + one accepted risk. User flagged this round
+           as high importance 2026-06-09. Tasks #46–#50.
+
+           ✅ ALL FIVE FINDINGS IMPLEMENTED 2026-06-10 (code + tests committed;
+           654/654 tests, tsc, lint, build:cf green after each commit):
+             SEC-2 → 5d65129  in-Worker rate limiting (ratelimits bindings:
+                              PUBLIC 60/min/IP/route, CRON 10/min/IP on
+                              unauthorized hits only; 429 + Retry-After;
+                              fail-open without the binding)
+             SEC-3 → 43b4f77  single-flight lock (migration 0020:
+                              ai_generation_locks + daily_ai_spend_usd RPC),
+                              hash quantization (gage 0.25ft / discharge
+                              500cfs / temps 2°F / precip 0.1in; hashVersion
+                              'q1' orphans old rows — NOT a PROMPT_VERSION
+                              bump, see commit for why), daily ceiling via
+                              AI_DAILY_COST_CEILING_USD var (default $5)
+             SEC-1 → 76f666a  Access JWT verified (jose, team JWKS, aud/iss/
+                              exp/nbf); email from verified token only;
+                              header fallback only without CF_ACCESS_* vars
+                              or outside production
+             SEC-4 → fd93a9a  location_slug regex in both metro schemas +
+                              render-time filter before the speculation-
+                              rules <script>
+             SEC-5 → 9f250db  migration 0021 drops the three anon_read
+                              policies; /status switched to service client
+                              for those two tables (it was on anon —
+                              deviation from the audit's assumption, noted
+                              in the commit)
+
+           ⚠ HUMAN STEPS BEFORE/AT NEXT DEPLOY (agent-blocked actions):
+             1. Apply migrations 0020 + 0021 to prod via Supabase Studio,
+                IN THAT ORDER, BEFORE deploying — the SEC-3 code degrades
+                to stale-only AI content if ai_generation_locks is missing.
+             2. Set the two Access secrets (values from Zero Trust →
+                Access → Applications → RVA James Admin):
+                  CF_ACCESS_TEAM_DOMAIN  (host only, no scheme)
+                  CF_ACCESS_AUD          (Application Audience tag)
+                via the secrets CLI ×2. Until set, prod keeps the
+                pre-SEC-1 header+allowlist behavior (no regression).
+             3. Deploy the round (build verified; bindings ship with it).
+             4. Post-deploy: Lighthouse + smoke /status, /admin, chip
+                clicks, and `pnpm query:prod` the pg_policies to confirm
+                the anon policies are gone.
+             5. Optional (SEC-1B checklist, dashboard-only): Access policy
+                MFA + short session + audit logs; optional WAF rule
+                blocking /admin/* without Cf-Access-Jwt-Assertion; optional
+                edge Rate Limiting Rule on /api/* as a pre-Worker layer.
+
+           ALREADY SOLID (no action): RLS on all 13 tables (anon SELECT-only,
+           verified in prod); secret hygiene (.env*/.dev.vars gitignored;
+           committed anon key is public-by-design + RLS-protected); SSRF guard
+           (global_fetch_strictly_public); Zod+slug+window input validation;
+           HSTS/CSP/nosniff/frame-ancestors via middleware.ts; *.workers.dev
+           disabled 2026-06-09.
+
+           ACCEPTED RISK (documented, not actioning): cron-secret non-constant-
+           time compare in guardCronSecret. Owner accepts (secret stored
+           securely, timing attack impractical). Fix if revisited:
+           crypto.timingSafeEqual over equal-length buffers.
+
+           EXECUTION ORDER (per the audit's suggested order — fastest risk
+           reduction first; not strictly by severity):
+
+           1. SEC-2 [HIGH] Rate limiting — public API + cron routes      (task #46)
+              No rate limiting exists; every hit is a billable Worker invoke,
+              floodable DoS + cost. Prefer Cloudflare edge WAF Rate Limiting
+              Rules on /api/* by IP (config-only, Option 1) or Workers rate-
+              limit binding/DO (Option 2). Tight bucket on /api/cron/*. 429 +
+              Retry-After. Fastest win; mostly dashboard config. Pair with SEC-3
+              (rate limit caps volume; SEC-3 caps cost per allowed request).
+
+           2. SEC-3 [HIGH] Bound AI worst-case cost                      (task #47)
+              Three stackable controls in lib/ai/get-or-generate.ts + compute*Hash:
+                (a) single-flight lock — N concurrent misses for one key → 1
+                    Anthropic call (currently ~N; DB UNIQUE dedups the write,
+                    not the API call). Sharpest amplifier; do first.
+                (b) cache-key quantization — round sensor scalars before hashing
+                    (gageFt 0.25–0.5 ft, discharge to bands). Safe: AI only
+                    narrates, rules.ts unaffected. Bump PROMPT_VERSION to orphan
+                    old rows.
+                (c) daily cost_usd circuit breaker — above ceiling serve
+                    stale/deterministic, zero Anthropic until next UTC day.
+              Honors the lazy-AI-only / no-pre-generation-cron constraint.
+
+           3. SEC-1 [HIGH] Validate Cloudflare Access JWT                (task #48)
+              RESOLVED PARAMETERS (2026-06-09) — ready to implement in a
+              fresh (hook-guarded) session; no further user input needed to
+              write the code:
+                • Access app protects ONLY /admin (not apex/subdomains).
+                • Exactly ONE Access app in front of /admin.
+                • Local dev: SKIP JWT verification when the CF_ACCESS_* vars
+                  are absent (or NODE_ENV !== 'production') — fall through to
+                  the existing ALLOWED_ADMIN_EMAILS path so /admin works
+                  locally without the Access edge.
+                • Config via env (read through lib/env.ts getEnv()):
+                    CF_ACCESS_TEAM_DOMAIN  host only, no scheme
+                                           (issuer = https://$it ;
+                                            JWKS = https://$it/cdn-cgi/access/certs)
+                    CF_ACCESS_AUD          AUD tag of the /admin app
+                • Storage: Workers Secrets in prod (user runs
+                  `wrangler secret put CF_ACCESS_TEAM_DOMAIN` + `… CF_ACCESS_AUD`
+                  — blocked for the agent by the guardrail hook); local values
+                  already set in .dev.vars (= .env.development.local). The agent
+                  never needs the literal values — code reads them from env.
+                • New dep: jose. Keep ALLOWED_ADMIN_EMAILS as the 2nd gate.
+                • Post-code human steps: 2× wrangler secret put, then deploy.
+              ---
+              lib/admin/auth.ts trusts the spoofable cf-access-authenticated-
+              user-email header and never verifies Cf-Access-Jwt-Assertion;
+              past requireAdminEmail() runs service-role (RLS-exempt full r/w).
+              Fix: verifyAccessJwt() — verify signature vs team JWKS (jose works
+              on Workers; cache keys), enforce aud/iss/exp/nbf, derive email from
+              the verified token, keep ALLOWED_ADMIN_EMAILS as 2nd gate. Plus the
+              Access config checklist (apex+subdomain coverage, explicit allow
+              policy, MFA, short session, audit logs, optional WAF rule).
+              workers.dev already disabled (removes the common bypass); this is
+              the defense-in-depth core fix. New dep: jose.
+
+           4. SEC-4 [MEDIUM] Constrain location_slug before spec-rules <script> (task #49)
+              MetroSummaryPanel.tsx (~L208) JSON.stringifys AI-produced
+              best_bets_today[].location_slug into an inline speculationrules
+              <script>. Schema is bare z.string(); a </script> slug = stored XSS
+              via prompt-injection (Claude output ingests scraped headlines +
+              closure reasons); unsafe-inline CSP lets it execute. Fix:
+              z.string().regex(/^[a-z0-9-]{2,64}$/) (same as the API route) +
+              optional render-time filter to known slugs. Quick; can ride along
+              any AI-schema change.
+
+           5. SEC-5 [LOW] Tighten anon read on operational tables        (task #50)
+              ⚠ REQUIRES MIGRATION HANDOFF (human applies to prod per standing
+              no-prod-writes rule). ai_interpretations, metro_summaries,
+              ingestion_runs have anon_read USING(true); anon key can dump cached
+              AI text + per-row cost_usd/tokens (aids SEC-3 cost tuning) + scrape
+              errors. App reads them server-side with the service client, so anon
+              read isn't needed. Drop/scope the anon_read policies (or expose only
+              non-sensitive columns if a client read exists — confirm first).
+              RLS-policy migration only.
+
 FOLLOW-UP  Skip-to-content link missing (WCAG 2.4.1 Level A)
            No skip link anywhere in the codebase. Keyboard users must tab through header
            on every page. Level A — conformance-blocking for any formal a11y claim.
