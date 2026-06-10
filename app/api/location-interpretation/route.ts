@@ -25,6 +25,7 @@ import { getLocationDetail } from '@/lib/queries/location';
 import { OutOfWindowError } from '@/lib/queries/today';
 import { isValidAgeBucket, type AgeBucket } from '@/lib/url-state';
 import { isInWindow } from '@/lib/queries/date-range';
+import { enforceRateLimit } from '@/lib/rate-limit';
 
 const QuerySchema = z.object({
   // Slug pattern matches the seeded locations (kebab-case lowercase). Reject
@@ -35,6 +36,10 @@ const QuerySchema = z.object({
 });
 
 export async function GET(request: Request) {
+  // SEC-2: per-IP bucket, checked before any DB or AI work.
+  const limited = await enforceRateLimit(request, 'PUBLIC_RATE_LIMITER');
+  if (limited) return limited;
+
   const url    = new URL(request.url);
   const parsed = QuerySchema.safeParse({
     slug: url.searchParams.get('slug'),

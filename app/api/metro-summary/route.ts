@@ -27,6 +27,7 @@ import { z } from 'zod';
 import { getMetroSummary } from '@/lib/queries/metro-summary';
 import { isValidAgeBucket, type AgeBucket } from '@/lib/url-state';
 import { isInWindow } from '@/lib/queries/date-range';
+import { enforceRateLimit } from '@/lib/rate-limit';
 
 const QuerySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD'),
@@ -34,6 +35,10 @@ const QuerySchema = z.object({
 });
 
 export async function GET(request: Request) {
+  // SEC-2: per-IP bucket, checked before any DB or AI work.
+  const limited = await enforceRateLimit(request, 'PUBLIC_RATE_LIMITER');
+  if (limited) return limited;
+
   const url    = new URL(request.url);
   const parsed = QuerySchema.safeParse({
     date: url.searchParams.get('date'),

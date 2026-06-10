@@ -16,8 +16,18 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerClient: vi.fn(),
 }));
 
+vi.mock('@/lib/env', () => ({
+  getCronSecret: vi.fn(),
+}));
+
+vi.mock('@/lib/rate-limit', () => ({
+  enforceRateLimit: vi.fn(),
+}));
+
 import { createServerClient } from '@/lib/supabase/server';
-import { withIngestionRun, type RunResult } from './run';
+import { getCronSecret } from '@/lib/env';
+import { enforceRateLimit } from '@/lib/rate-limit';
+import { withIngestionRun, guardCronSecret, type RunResult } from './run';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -159,5 +169,47 @@ describe('withIngestionRun', () => {
     expect(result.error).toContain('USGS upstream timeout');
     // fn error should NOT be re-logged as an INSERT error
     expect(consoleErrorSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ─── guardCronSecret (SEC-2: rate-limited unauthorized path) ──────────────────
+
+describe('guardCronSecret', () => {
+  function cronReq(secret?: string): Request {
+    return new Request('https://rvajames.org/api/cron/usgs', {
+      headers: secret ? { 'x-cron-secret': secret } : {},
+    });
+  }
+
+  beforeEach(() => {
+    vi.mocked(getCronSecret).mockReset();
+    vi.mocked(getCronSecret).mockResolvedValue('the-secret');
+    vi.mocked(enforceRateLimit).mockReset();
+    vi.mocked(enforceRateLimit).mockResolvedValue(null);
+  });
+
+  it('returns null (authorized) for a valid secret without touching the limiter', async () => {
+    expect(await guardCronSecret(cronReq('the-secret'))).toBeNull();
+    expect(enforceRateLimit).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 for a wrong secret when under the limit', async () => {
+    const res = await guardCronSecret(cronReq('wrong'));
+    expect(res!.status).toBe(401);
+    expect(enforceRateLimit).toHaveBeenCalledWith(expect.any(Request), 'CRON_RATE_LIMITER');
+  });
+
+  it('returns 429 for a wrong secret when over the limit', async () => {
+    vi.mocked(enforceRateLimit).mockResolvedValue(
+      new Response('Too many requests', { status: 429, headers: { 'Retry-After': '60' } }),
+    );
+    const res = await guardCronSecret(cronReq('wrong'));
+    expect(res!.status).toBe(429);
+  });
+
+  it('returns 500 when CRON_SECRET is not configured', async () => {
+    vi.mocked(getCronSecret).mockRejectedValue(new Error('CRON_SECRET is not set'));
+    const res = await guardCronSecret(cronReq('anything'));
+    expect(res!.status).toBe(500);
   });
 });

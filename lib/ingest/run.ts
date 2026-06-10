@@ -1,5 +1,6 @@
 import { createServerClient } from '@/lib/supabase/server';
 import { getCronSecret } from '@/lib/env';
+import { enforceRateLimit } from '@/lib/rate-limit';
 
 export interface RunResult {
   ok: boolean;
@@ -71,6 +72,12 @@ export async function guardCronSecret(request: Request): Promise<Response | null
   }
   const header = request.headers.get('x-cron-secret') ?? request.headers.get('authorization');
   const provided = header?.replace(/^Bearer\s+/i, '');
-  if (provided !== secret) return new Response('Unauthorized', { status: 401 });
+  if (provided !== secret) {
+    // SEC-2: tight per-IP limit on unauthorized cron hits. The scheduled()
+    // dispatcher carries the valid secret and never reaches this branch, so
+    // real cron triggers are never throttled.
+    const limited = await enforceRateLimit(request, 'CRON_RATE_LIMITER');
+    return limited ?? new Response('Unauthorized', { status: 401 });
+  }
   return null;
 }

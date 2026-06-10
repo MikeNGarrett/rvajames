@@ -23,8 +23,13 @@ vi.mock('@/lib/queries/date-range', async (importOriginal) => {
   };
 });
 
+vi.mock('@/lib/rate-limit', () => ({
+  enforceRateLimit: vi.fn(),
+}));
+
 import { getMetroSummary } from '@/lib/queries/metro-summary';
 import { isInWindow } from '@/lib/queries/date-range';
+import { enforceRateLimit } from '@/lib/rate-limit';
 import { GET } from './route';
 
 const mockSummary = {
@@ -39,6 +44,8 @@ beforeEach(() => {
   vi.mocked(getMetroSummary).mockReset();
   vi.mocked(isInWindow).mockReset();
   vi.mocked(isInWindow).mockReturnValue(true);
+  vi.mocked(enforceRateLimit).mockReset();
+  vi.mocked(enforceRateLimit).mockResolvedValue(null);
 });
 
 describe('GET /api/metro-summary — param validation', () => {
@@ -84,6 +91,29 @@ describe('GET /api/metro-summary — param validation', () => {
       new Request('https://x/api/metro-summary?date=2026-05-30&age=14+'),
     );
     expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /api/metro-summary — rate limiting (SEC-2)', () => {
+  it('returns the 429 from the limiter before any query work', async () => {
+    const tooMany = new Response(JSON.stringify({ error: 'Too many requests' }), {
+      status: 429,
+      headers: { 'Retry-After': '60' },
+    });
+    vi.mocked(enforceRateLimit).mockResolvedValue(tooMany);
+
+    const res = await GET(
+      new Request('https://x/api/metro-summary?date=2026-05-30&age=6-9'),
+    );
+    expect(res.status).toBe(429);
+    expect(res.headers.get('Retry-After')).toBe('60');
+    expect(getMetroSummary).not.toHaveBeenCalled();
+  });
+
+  it('uses the PUBLIC_RATE_LIMITER bucket', async () => {
+    vi.mocked(getMetroSummary).mockResolvedValue({ summary: mockSummary as never, source: 'cache' });
+    await GET(new Request('https://x/api/metro-summary?date=2026-05-30&age=6-9'));
+    expect(enforceRateLimit).toHaveBeenCalledWith(expect.any(Request), 'PUBLIC_RATE_LIMITER');
   });
 });
 

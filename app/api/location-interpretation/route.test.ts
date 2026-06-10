@@ -20,8 +20,13 @@ vi.mock('@/lib/queries/date-range', async (importOriginal) => {
   };
 });
 
+vi.mock('@/lib/rate-limit', () => ({
+  enforceRateLimit: vi.fn(),
+}));
+
 import { getLocationDetail } from '@/lib/queries/location';
 import { isInWindow }        from '@/lib/queries/date-range';
+import { enforceRateLimit }  from '@/lib/rate-limit';
 import { GET }                from './route';
 
 const mockInterpretation = {
@@ -52,6 +57,33 @@ beforeEach(() => {
   vi.mocked(getLocationDetail).mockReset();
   vi.mocked(isInWindow).mockReset();
   vi.mocked(isInWindow).mockReturnValue(true);
+  vi.mocked(enforceRateLimit).mockReset();
+  vi.mocked(enforceRateLimit).mockResolvedValue(null);
+});
+
+describe('GET /api/location-interpretation — rate limiting (SEC-2)', () => {
+  it('returns the 429 from the limiter before any query work', async () => {
+    const tooMany = new Response(JSON.stringify({ error: 'Too many requests' }), {
+      status: 429,
+      headers: { 'Retry-After': '60' },
+    });
+    vi.mocked(enforceRateLimit).mockResolvedValue(tooMany);
+
+    const res = await GET(
+      new Request('https://x/api/location-interpretation?slug=belle-isle&date=2026-05-30&age=6-9'),
+    );
+    expect(res.status).toBe(429);
+    expect(res.headers.get('Retry-After')).toBe('60');
+    expect(getLocationDetail).not.toHaveBeenCalled();
+  });
+
+  it('uses the PUBLIC_RATE_LIMITER bucket', async () => {
+    vi.mocked(getLocationDetail).mockResolvedValue(mockLocation as never);
+    await GET(
+      new Request('https://x/api/location-interpretation?slug=belle-isle&date=2026-05-30&age=6-9'),
+    );
+    expect(enforceRateLimit).toHaveBeenCalledWith(expect.any(Request), 'PUBLIC_RATE_LIMITER');
+  });
 });
 
 describe('GET /api/location-interpretation — param validation', () => {

@@ -11,6 +11,21 @@
 	"browser": {
 		"binding": "BROWSER"
 	},
+	// SEC-2: in-Worker rate limiting (per-IP, per-route keys — see lib/rate-limit.ts).
+	// Counters are per-colo and eventually consistent; limits are abuse damping,
+	// not precise accounting. period must be 10 or 60.
+	"ratelimits": [
+		{
+			"name": "PUBLIC_RATE_LIMITER", // public AI routes — generous enough for fast chip-clicking
+			"namespace_id": "1001",
+			"simple": { "limit": 60, "period": 60 }
+		},
+		{
+			"name": "CRON_RATE_LIMITER", // unauthorized /api/cron/* hits only; scheduled() bypasses via valid secret
+			"namespace_id": "1002",
+			"simple": { "limit": 10, "period": 60 }
+		}
+	],
 	"vars": {
 		"NEXT_PUBLIC_SUPABASE_URL": "https://buokjdntsitjpqfjxano.supabase.co",
 		"NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1b2tqZG50c2l0anBxZmp4YW5vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NjQ5MjQsImV4cCI6MjA5NTE0MDkyNH0.4KXgpNc0bquaUhOu6mNba0H65r2WfKYt4c8wIups3jw"
