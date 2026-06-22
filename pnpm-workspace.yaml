@@ -12,3 +12,11 @@ allowBuilds:
 # 15.5.18 still pins 8.4.31; 15.6 is canary).
 overrides:
   postcss: ^8.5.10
+  # Security bumps for Dependabot alerts (2026-06), transitive → force the
+  # patched versions across the tree. undici (GHSA-vmh5-mc38-953g TLS bypass /
+  # GHSA-pr7r-676h-xcf6 cache disclosure): runtime-scoped but the vulnerable
+  # paths (SOCKS5 ProxyAgent, cache interceptor) are unused and undici doesn't
+  # run in the workerd isolate. form-data (GHSA-hmw2-7cc7-3qxx CRLF in multipart
+  # field names): dev-scoped, not on any multipart path we build.
+  undici: ^7.28.0
+  form-data: ^4.0.6
