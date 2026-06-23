@@ -471,7 +471,12 @@ SECURITY AUDIT 2026-06-09 — HIGH PRIORITY ROUND (do before other follow-ups)
               Retry-After. Fastest win; mostly dashboard config. Pair with SEC-3
               (rate limit caps volume; SEC-3 caps cost per allowed request).
 
-           2. SEC-3 [HIGH] Bound AI worst-case cost                      (task #47)
+           2. SEC-3 [HIGH] Bound AI worst-case cost — ✅ COMPLETE (43b4f77, task #47)
+              ⚠ Shipped WITHOUT fixing the cost_usd calculation — the (c) daily
+              ceiling sums cost_usd, which is currently negative/understated, so
+              the breaker is effectively non-functional until the cost-calc bug
+              is fixed. Tracked separately below ("AI cost_usd calculation is
+              wrong", task #52); re-validate (c) once that lands.
               Three stackable controls in lib/ai/get-or-generate.ts + compute*Hash:
                 (a) single-flight lock — N concurrent misses for one key → 1
                     Anthropic call (currently ~N; DB UNIQUE dedups the write,
@@ -537,6 +542,101 @@ SECURITY AUDIT 2026-06-09 — HIGH PRIORITY ROUND (do before other follow-ups)
               read isn't needed. Drop/scope the anon_read policies (or expose only
               non-sensitive columns if a client read exists — confirm first).
               RLS-policy migration only.
+
+FOLLOW-UP  AI cost_usd calculation is wrong — negative + uncounted cache writes (task #52, 2026-06-09)
+           User-reported 2026-06-09: /status "AI usage today" shows "Cost today
+           $-0.0102" (NEGATIVE) vs ~$0.37 on the real Anthropic dashboard;
+           "Tokens in 3,179" also understates reality. Separate from SEC-3
+           (which shipped as 43b4f77 but never touched the cost calc). Because
+           SEC-3(c)'s daily-ceiling breaker sums cost_usd, it's currently
+           non-functional until this is fixed.
+
+           Root causes in lib/ai/get-or-generate.ts estimateCost() (L162):
+             1. NEGATIVE — formula does `(tokensIn - cacheRead) * price`, but
+                Anthropic's usage.input_tokens is ALREADY cache-exclusive:
+                cache_read_input_tokens and cache_creation_input_tokens are
+                SEPARATE counts, not included in input_tokens. cacheRead (cached
+                system prompt, thousands of tokens) >> input_tokens (~245/call),
+                so the subtraction goes negative → negative cost. Remove it.
+             2. UNDERCOUNT — cache_creation_input_tokens is captured (L433) and
+                returned (L459) but NEVER costed; estimateCost doesn't take it as
+                a param. Cache writes bill ~1.25× input and the whole system
+                prompt is (re)written on each cache miss → the bulk of real spend,
+                omitted. Add a cacheCreated param + term.
+           Correct (per model):
+             tokensIn*in + cacheRead*read + cacheCreated*create + tokensOut*out
+             (NO subtraction).
+             3. tokens_in is persisted as just usage.input_tokens (the uncached
+                delta → 245×13≈3,179 in the screenshot), excluding thousands of
+                cache read+creation tokens/call. Persist total input
+                (input+cacheRead+cacheCreated) or a breakdown so /status
+                reconciles with the bill.
+
+           ALSO:
+             - VERIFY per-MTok rates for Haiku 4.5 + Sonnet 4.6 (input / output /
+               cache-read / cache-WRITE) via the claude-api skill — the current
+               literals (0.8/0.08/4.0 ; 3.0/0.3/15.0) are unverified and the
+               cache-write rate is absent entirely.
+             - BACKFILL: existing ai_interpretations + metro_summaries rows hold
+               wrong cost_usd; decide one-off recompute vs forward-only (until
+               then /status "today" stays wrong for already-stored rows).
+             - RE-VALIDATE SEC-3(c): confirm the daily circuit breaker trips
+               correctly once cost_usd is positive/accurate.
+             - Add a unit test for estimateCost: a cache-read-heavy call (small
+               input_tokens, large cache_read) must return a POSITIVE cost.
+
+FOLLOW-UP  AI summary ignores incoming thunderstorm / precip risk — SAFETY-RELEVANT (task #51, 2026-06-09)
+           User-reported 2026-06-09. The deterministic "Next 4h" tile surfaces
+           storm risk ("Thunderstorms possible", 43% chance of precipitation,
+           "Warming"), but NEITHER AI-generated narrative mentions it:
+             - richmond_microcopy said only "Sticky afternoon ahead — mornings
+               are your best bet… bring water, reapply sunscreen, shade breaks."
+             - metro-summary body_md talked heat/rapids/closures, no storms.
+           This is a SAFETY gap (lightning on exposed rocks / open water is the
+           single most acute short-term hazard a family summary should flag) and
+           a TRUST gap (the tile visibly contradicts the prose).
+
+           CONFIRMED ROOT CAUSE (grep, 2026-06-09): the AI never sees the storm.
+           lib/ai/prompts/summarize-metro.ts buildMetroUserMessage has NO
+           forward-looking weather input — no precip, no thunderstorm, no
+           next-hours field. lib/queries/metro-summary.ts:114 even hardcodes
+           `rain48hIn: 0  // TODO: wire actual precip when NWS provides it`, so
+           even PAST rain isn't fed in. The deterministic nextHoursOutlook
+           computed in richmond-conditions.ts (which powers the Next-4h tile) is
+           never threaded into the AI generation call.
+
+           FIX DIRECTION:
+             1. Thread an "Incoming weather (next 4h)" section into
+                buildMetroUserMessage: max precipChance over the window + any
+                shortForecast matching /thunder|storm/i (and the warming/cooling
+                trend already in the outlook).
+             2. Prompt instruction: when a thunderstorm / high precip is imminent,
+                the summary MUST surface it with lightning / get-off-the-water-
+                and-rocks guidance — ranked above the heat/sunscreen advice.
+             3. SAFETY-FIRST (do not rely on the LLM): add a deterministic rule —
+                precipChance ≥ threshold AND shortForecast ~ /thunder|storm/i →
+                inject a caution into happinessIndex / headlineForRichmondConditions
+                independent of the AI, so the hazard shows even if the model omits
+                it or the AI call fails. (Mirrors the project's "deterministic
+                safety, AI only narrates" principle in lib/safety/rules.ts.)
+             4. Bump PROMPT_VERSION (prompt-input change orphans cached rows).
+                Wire the rain48hIn TODO at metro-summary.ts:114 while here.
+
+           ACCEPTANCE: when the next-4h outlook shows storms/high precip, BOTH the
+           microcopy and the body mention the storm risk + safety guidance; the
+           deterministic caution applies regardless of AI output; deterministic
+           swim/activity status from rules.ts stays correct.
+
+           SECONDARY OBSERVATION (separate investigation, related screenshots):
+           the body_md "Great day on land — skip the water" (water 78.6 °F, air
+           "upper 70s") contradicted the live tile "Solid day for the river /
+           Swim Recommended / feels-like 85 °F." This looks like a cached-AI-vs-
+           live-deterministic mismatch — same class as the 2026-06-09
+           feels-like/midnight bug (RESOLVED) but on the AI body copy rather than
+           a tile. Worth a look at whether body_md can go stale against the live
+           tiles and whether a freshness/consistency guard (or a "generated at
+           HH:MM" stamp) is warranted. Not the primary fix; flagged so it isn't
+           lost.
 
 FOLLOW-UP  Skip-to-content link missing (WCAG 2.4.1 Level A)
            No skip link anywhere in the codebase. Keyboard users must tab through header
