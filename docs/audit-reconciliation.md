@@ -586,6 +586,17 @@ FOLLOW-UP  AI cost_usd calculation is wrong — negative + uncounted cache write
                input_tokens, large cache_read) must return a POSITIVE cost.
 
 FOLLOW-UP  AI summary ignores incoming thunderstorm / precip risk — SAFETY-RELEVANT (task #51, 2026-06-09)
+           PARTIALLY ADDRESSED 2026-06-23 (commit 7c827d5): when NWS issues a
+           severe-weather WATCH/WARNING (flood / severe thunderstorm / tornado),
+           it now threads into the metro + location AI prompts AND a deterministic
+           severeWeatherStatus gate (banner + headline override), so the AI no
+           longer recommends activities under an active alert. STILL OPEN — the
+           original scope below: the forward-looking "Next 4h" precip/thunderstorm
+           OUTLOOK with NO active alert (forecast says "Thunderstorms possible
+           80%" but NWS hasn't issued a watch) is still not threaded into the AI,
+           and rain48hIn at metro-summary.ts:114 is still hardcoded 0. Do FIX
+           DIRECTION #1 + #4 below; #2/#3 are effectively done via the alert gate.
+
            User-reported 2026-06-09. The deterministic "Next 4h" tile surfaces
            storm risk ("Thunderstorms possible", 43% chance of precipitation,
            "Warming"), but NEITHER AI-generated narrative mentions it:
@@ -643,6 +654,38 @@ FOLLOW-UP  Skip-to-content link missing (WCAG 2.4.1 Level A)
            on every page. Level A — conformance-blocking for any formal a11y claim.
            Fix: one <a href="#main" class="sr-only focus:not-sr-only ..."> in app/layout.tsx
            + matching id="main" on <main> elements.
+
+DEPENDENCY UPDATE 2026-06-23 — held-back follow-ups from the Next 16 / TS 6 bump
+           Dep catch-up landed exact-pinned (next 16.2.9, typescript 6.0.3,
+           @types/node 24, react 19.2.7, supabase-js 2.108, wrangler 4.103, etc.;
+           ESLint migrated to flat CLI config; #89844 webpack workaround dropped).
+           Two pieces were deliberately deferred:
+
+FOLLOW-UP  ESLint 10 upgrade — blocked on Next 16 lint-stack compat (task #65, 2026-06-23)
+           Held ESLint at 9.39.4 during the dep update. ESLint 10 crashes against
+           the Next 16 lint plugin chain — "TypeError: scopeManager.addGlobals is
+           not a function" — because the typescript-eslint / eslint-scope bundled
+           by eslint-config-next 16 don't implement ESLint 10's scope-manager API
+           yet. eslint-config-next 16 only requires `eslint >=9`, so 9.39.4 is
+           fully supported and `pnpm lint` is green.
+           FIX DIRECTION: re-attempt once eslint-config-next / typescript-eslint
+           ship ESLint 10 support. eslint.config.mjs is already flat/CLI-based
+           (migrated in the same bump), so it's `eslint` → 10.x in package.json +
+           reinstall + re-run lint. Low effort when unblocked.
+           ACCEPTANCE: eslint 10 pinned, `pnpm lint` runs clean, no scope-manager crash.
+
+FOLLOW-UP  react-hooks 6 warnings — 10 findings demoted to warn (task #66, 2026-06-23)
+           eslint-config-next 16 bundles react-hooks 6 with React-Compiler-era
+           rules. 10 pre-existing, working patterns now flag; demoted to `warn` in
+           eslint.config.mjs so the upgrade landed clean. Rules: set-state-in-effect
+           (×6), refs (×2), purity (×1), immutability (×1).
+           FILES: components/legal/FirstVisitBanner.tsx, components/admin/ConfirmDialog.tsx,
+           components/location/LocationInterpretationProvider.tsx, components/metro/RelativeTime.tsx,
+           components/trip/PrepChecklist.tsx, components/ui/LazyContent.tsx, app/_dev/visuals/page.tsx.
+           FIX DIRECTION: rework the flagged effects/refs (most are setState in an
+           effect body — move to an event handler, derive during render, or guard),
+           then re-raise these four rules from 'warn' to 'error' in eslint.config.mjs.
+           ACCEPTANCE: the 10 warnings resolved at the source; rules back to 'error'; lint clean.
 
 FIRST PASS COMPLETE — Codebase + dependency cleanup audit (2026-06-05)
            First-pass audit shipped as commit 1a5e46f. Full findings in
