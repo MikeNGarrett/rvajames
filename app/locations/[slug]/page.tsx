@@ -26,7 +26,7 @@ import { StaleState } from '@/components/states/Stale';
 import { DisclaimerFooter } from '@/components/legal/DisclaimerFooter';
 import { isStale } from '@/lib/freshness';
 import { severeWeatherStatus } from '@/lib/safety/rules';
-import { SevereWeatherBanner } from '@/components/banners/SevereWeatherBanner';
+import { AlertStack } from '@/components/banners/AlertStack';
 
 // Always render dynamically — live gauge data and lazy AI generation make static
 // pre-rendering pointless, and generateStaticParams returning [] at build time
@@ -111,7 +111,7 @@ export default async function LocationPage({ params, searchParams }: Props) {
 
   return (
     <NuqsAdapter>
-      <SevereWeatherBanner result={severeWeather} />
+      <AlertStack severeWeather={severeWeather} />
       <DateUnavailableBanner notice={notice} />
       <main className="max-w-lg mx-auto px-4 py-5">
         {/* Back nav */}

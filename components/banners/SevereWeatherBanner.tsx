@@ -1,46 +1,43 @@
 import type { SevereWeatherResult } from '@/lib/safety/rules';
 
 /**
- * Top-of-page severe-weather alert. Driven by the deterministic
- * `severeWeatherStatus` gate (NWS watches/warnings), NOT by the AI — so the
- * "not safe today" signal shows even when the lazy AI summary fails to load.
+ * Severe-weather alert (NWS watches/warnings), driven by the deterministic
+ * severeWeatherStatus gate — NOT the AI — so it shows even when the lazy
+ * summary fails to load.
  *
- * Sticky positioning, z-index, and color tokens match CsoBanner/the former
- * FloodBanner. A `warning` (imminent) renders in the strongest flood styling;
- * a `watch` (conditions favorable) renders in caution styling.
+ * Layout is identical to CsoBanner (page-width container matching
+ * PageContainer, left-aligned copy, justify-between microcopy row) so the
+ * alert area reads as one system. NOT sticky itself — <AlertStack> owns
+ * stacking + ordering so multiple banners never overlap.
+ *
+ * Colors match CsoBanner's severity tokens:
+ *   warning → danger (red),  role="alert"
+ *   watch   → caution (amber), role="status"
  */
 export function SevereWeatherBanner({ result }: { result: SevereWeatherResult }) {
   if (result.tier === 'none') return null;
 
   const isWarning = result.tier === 'warning';
-  const colorClass = isWarning
-    ? 'bg-status-flood text-status-flood-fg'
+  const colorClasses = isWarning
+    ? 'bg-status-danger text-status-danger-fg'
     : 'bg-status-caution text-status-caution-fg';
 
   return (
-    <div
-      className={`sticky top-0 z-40 ${colorClass} text-sm text-center py-3 px-4`}
-      role="alert"
-    >
-      <div className="inline-block max-w-prose">
-        <p className="font-semibold">{result.message}</p>
-        {result.headlines.length > 0 && (
-          <p className="mt-1 text-xs font-medium opacity-90">
-            {result.headlines.slice(0, 3).join(' · ')}
-          </p>
-        )}
-        <p className="mt-1 text-xs">
-          Check{' '}
+    <div className={`${colorClasses} text-sm`} role={isWarning ? 'alert' : 'status'}>
+      <div className="max-w-lg sm:max-w-xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto px-4 py-3">
+        <p className="font-semibold leading-snug">{result.message}</p>
+
+        <div className="flex items-center justify-between gap-3 mt-1.5 flex-wrap">
+          <span className="text-xs">{result.headlines.slice(0, 2).join(' · ')}</span>
           <a
             href="https://www.weather.gov/akq/"
             target="_blank"
             rel="noopener noreferrer"
-            className="underline"
+            className="text-xs underline underline-offset-2 touch-target inline-flex items-center flex-shrink-0"
           >
-            NWS Wakefield
-          </a>{' '}
-          for current conditions.
-        </p>
+            Check NWS Wakefield &rarr;
+          </a>
+        </div>
       </div>
     </div>
   );

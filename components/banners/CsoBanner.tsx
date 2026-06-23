@@ -123,6 +123,19 @@ function buildMainCopy(
     : 'Recent sewer overflow within the past 48 hours. Bacterial levels remain elevated.';
 }
 
+/**
+ * Banner tone for ordering inside <AlertStack> — 'danger' (active discharge),
+ * 'caution' (residual advisory window), or null (renders nothing). Mirrors the
+ * state precedence used in the render below.
+ */
+export function csoBannerTone(
+  cso: TodayData['cso'],
+  mode: 'observed' | 'forecast',
+): 'danger' | 'caution' | null {
+  const state = resolveState(cso, mode);
+  return state === 'active' ? 'danger' : state === 'residual' ? 'caution' : null;
+}
+
 export function CsoBanner({ cso, ageBucket, mode }: Props) {
   const state = resolveState(cso, mode);
   if (!state) return null;
@@ -143,12 +156,12 @@ export function CsoBanner({ cso, ageBucket, mode }: Props) {
   // COPY: tied to cron schedule in wrangler.jsonc — update if cron
   // cadence changes (currently 0 6,18 * * * = twice daily).
   const staleLabel = hoursStale !== null
-    ? `Data as of ${hoursStale}h ago.`
+    ? (hoursStale <= 0 ? 'Updated just now.' : `Data as of ${hoursStale}h ago.`)
     : 'Updated twice daily.';
 
   return (
     <div
-      className={`sticky top-0 z-40 ${colorClasses} text-sm`}
+      className={`${colorClasses} text-sm`}
       role={isActive ? 'alert' : 'status'}
     >
       <div className="max-w-lg sm:max-w-xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto px-4 py-3">

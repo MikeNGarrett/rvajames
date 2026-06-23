@@ -10,8 +10,7 @@ import { getForecastWindow, isInWindow } from '@/lib/queries/date-range';
 import { buildRedirectUrl } from '@/lib/utils/redirect-to-today';
 import { RiverLevelTile } from '@/components/tiles/RiverLevelTile';
 import { AdvisoriesBanner } from '@/components/tiles/AdvisoriesBanner';
-import { SevereWeatherBanner } from '@/components/banners/SevereWeatherBanner';
-import { CsoBanner } from '@/components/banners/CsoBanner';
+import { AlertStack } from '@/components/banners/AlertStack';
 import { DateUnavailableBanner } from '@/components/banners/DateUnavailableBanner';
 import { DisclaimerFooter } from '@/components/legal/DisclaimerFooter';
 import { FirstVisitBanner } from '@/components/legal/FirstVisitBanner';
@@ -108,8 +107,12 @@ export default async function Home({ searchParams }: Props) {
        * mode shows the active state only if there are real-time discharges;
        * the date-specific advisory appears in the in-content block below.
        */}
-      <SevereWeatherBanner result={severeWeather} />
-      <CsoBanner cso={data.cso} ageBucket={ageBucket} mode={data.mode} />
+      <AlertStack
+        severeWeather={severeWeather}
+        cso={data.cso}
+        ageBucket={ageBucket}
+        mode={data.mode}
+      />
       <DateUnavailableBanner notice={notice} />
 
       <main>

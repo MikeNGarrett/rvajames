@@ -13,28 +13,16 @@ type Advisory = {
 
 function makeAdvisory(overrides: Partial<Advisory> & { id: string }): Advisory {
   return {
-    kind: 'flood_warning',
+    kind: 'water_quality',
     severity: 'high',
-    headline: 'Flood warning in effect',
+    headline: 'Bacterial water-quality advisory',
     body: '',
     ...overrides,
   };
 }
 
-function makeCsoAdvisory(id: string, outfallName: string): Advisory {
-  return {
-    id,
-    kind: 'cso_overflow',
-    severity: 'high',
-    headline: `CSO discharge at ${outfallName}`,
-    body: `Combined sewer overflow event recorded at ${outfallName}.`,
-  };
-}
-
 function render(advisories: Advisory[]): string {
-  return renderToStaticMarkup(
-    React.createElement(AdvisoriesBanner, { advisories }),
-  );
+  return renderToStaticMarkup(React.createElement(AdvisoriesBanner, { advisories }));
 }
 
 describe('AdvisoriesBanner', () => {
@@ -42,76 +30,60 @@ describe('AdvisoriesBanner', () => {
     expect(render([])).toBe('');
   });
 
-  // ── CSO aggregation ────────────────────────────────────────────────────────
+  // ── Dedup: kinds with a dedicated top-of-page banner are NOT shown here ─────
+  // CSO → CsoBanner; flood + severe-grade general → SevereWeatherBanner (both
+  // in AlertStack). Showing them here too would duplicate the same alert.
 
-  it('aggregates a single CSO advisory into one row without outfall name', () => {
-    const html = render([makeCsoAdvisory('a1', 'CSO 34')]);
-    expect(html).toContain('1 recent sewer overflow in Richmond');
-    // Must NOT expose the outfall ID in the rendered HTML
-    expect(html).not.toContain('CSO 34');
+  it('does not render CSO advisories (covered by the dedicated CSO banner)', () => {
+    expect(render([
+      makeAdvisory({ id: 'c1', kind: 'cso_overflow', headline: 'CSO discharge at CSO 34' }),
+      makeAdvisory({ id: 'c2', kind: 'cso_overflow', headline: 'CSO discharge at CSO 12' }),
+    ])).toBe('');
   });
 
-  it('aggregates multiple CSO advisories into a single row (count-based copy)', () => {
-    const html = render([
-      makeCsoAdvisory('a1', 'CSO 34'),
-      makeCsoAdvisory('a2', 'CSO 12'),
-      makeCsoAdvisory('a3', 'CSO 07'),
-    ]);
-    // Only ONE aggregated block — not three separate rows
-    expect(html).toContain('3 recent sewer overflows in Richmond');
-    // Singular match must not appear when count is 3
-    expect(html).not.toContain('1 recent sewer overflow');
-    // No individual outfall IDs must appear in the default render
-    expect(html).not.toContain('CSO 34');
-    expect(html).not.toContain('CSO 12');
-    expect(html).not.toContain('CSO 07');
+  it('does not render flood alerts (covered by the severe-weather banner)', () => {
+    expect(render([makeAdvisory({ id: 'f1', kind: 'flood_warning', headline: 'Flood Warning' })])).toBe('');
+    expect(render([makeAdvisory({ id: 'f2', kind: 'flood_watch', headline: 'Flood Watch' })])).toBe('');
   });
 
-  it('includes the 48h bacterial contamination message', () => {
-    const html = render([makeCsoAdvisory('a1', 'CSO 34')]);
-    expect(html).toContain('bacterial contamination elevated for at least 48h');
+  it('does not render a high-severity general alert (severe thunderstorm — covered)', () => {
+    expect(render([
+      makeAdvisory({ id: 'g1', kind: 'general', severity: 'high', headline: 'Severe Thunderstorm Watch' }),
+    ])).toBe('');
   });
 
-  // ── Non-CSO advisories render individually ────────────────────────────────
+  // ── Catch-all: advisory types WITHOUT a dedicated banner do render ──────────
 
-  it('renders non-CSO advisories one-per-row with their headline', () => {
-    const html = render([
-      makeAdvisory({ id: 'f1', kind: 'flood_warning', headline: 'Flood advisory' }),
-    ]);
-    expect(html).toContain('Flood advisory');
-  });
-
-  // ── Mixed advisory sources ────────────────────────────────────────────────
-
-  it('aggregates CSO advisories while rendering other types one-per-row', () => {
-    const html = render([
-      makeCsoAdvisory('c1', 'CSO 34'),
-      makeCsoAdvisory('c2', 'CSO 12'),
-      makeAdvisory({ id: 'f1', kind: 'flood_warning', headline: 'Flood warning in effect' }),
-    ]);
-
-    // CSO block aggregated to count
-    expect(html).toContain('2 recent sewer overflows in Richmond');
-    expect(html).not.toContain('CSO 34');
-    expect(html).not.toContain('CSO 12');
-
-    // Flood advisory rendered normally
-    expect(html).toContain('Flood warning in effect');
-
-    // Row count header shows 2 (CSO block + flood)
-    expect(html).toContain('2 Active Advisories');
-  });
-
-  it('row count header says "Active Advisory" (singular) for one CSO + zero other', () => {
-    const html = render([makeCsoAdvisory('c1', 'CSO 34')]);
+  it('renders a water-quality advisory with its headline', () => {
+    const html = render([makeAdvisory({ id: 'w1', headline: 'Bacterial levels elevated' })]);
+    expect(html).toContain('Bacterial levels elevated');
     expect(html).toContain('Active Advisory');
-    expect(html).not.toContain('Active Advisories');
   });
 
-  it('row count header says "2 Active Advisories" for one CSO + one other', () => {
+  it('renders a low-severity general advisory (no dedicated banner for it)', () => {
     const html = render([
-      makeCsoAdvisory('c1', 'CSO 34'),
-      makeAdvisory({ id: 'f1', kind: 'flood_warning', headline: 'Flood warning' }),
+      makeAdvisory({ id: 'g2', kind: 'general', severity: 'moderate', headline: 'Special Weather Statement' }),
+    ]);
+    expect(html).toContain('Special Weather Statement');
+  });
+
+  it('filters dedicated-banner kinds out of a mixed list, showing only the rest', () => {
+    const html = render([
+      makeAdvisory({ id: 'c1', kind: 'cso_overflow', headline: 'CSO discharge at CSO 34' }),
+      makeAdvisory({ id: 'f1', kind: 'flood_warning', headline: 'Flood Warning in effect' }),
+      makeAdvisory({ id: 'w1', headline: 'Bacterial levels elevated' }),
+    ]);
+    expect(html).toContain('Bacterial levels elevated');
+    expect(html).not.toContain('CSO 34');
+    expect(html).not.toContain('Flood Warning');
+    expect(html).toContain('Active Advisory');
+    expect(html).not.toContain('Active Advisories'); // exactly one shown → singular
+  });
+
+  it('pluralizes the header for multiple non-dedicated advisories', () => {
+    const html = render([
+      makeAdvisory({ id: 'w1', headline: 'Bacterial levels elevated' }),
+      makeAdvisory({ id: 'w2', kind: 'swim_closure', headline: 'Swim area closed for testing' }),
     ]);
     expect(html).toContain('2 Active Advisories');
   });

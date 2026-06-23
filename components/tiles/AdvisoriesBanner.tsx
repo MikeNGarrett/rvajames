@@ -6,57 +6,41 @@ interface Advisory {
   body: string;
 }
 
+/**
+ * Advisory kinds that have a DEDICATED top-of-page banner (AlertStack):
+ * CSO overflows (CsoBanner) and severe weather — any flood alert, or a
+ * high/extreme-severity NWS "general" alert (severe thunderstorm / tornado),
+ * which severeWeatherStatus surfaces in SevereWeatherBanner. Excluding these
+ * here prevents showing the same alert twice. This banner is the catch-all for
+ * advisory types WITHOUT a dedicated banner (e.g. bacterial water quality).
+ */
+function coveredByDedicatedBanner(a: Advisory): boolean {
+  return (
+    a.kind === 'cso_overflow' ||
+    a.kind === 'flood_watch' ||
+    a.kind === 'flood_warning' ||
+    a.kind === 'flood_advisory' ||
+    (a.kind === 'general' && (a.severity === 'high' || a.severity === 'extreme'))
+  );
+}
+
 export function AdvisoriesBanner({ advisories }: { advisories: Advisory[] }) {
-  if (!advisories.length) return null;
+  const shown = advisories.filter((a) => !coveredByDedicatedBanner(a));
+  if (!shown.length) return null;
 
-  // Partition: aggregate all CSO-overflow advisories into a single row;
-  // render every other advisory type one-per-row as before.
-  const csoAdvisories    = advisories.filter((a) => a.kind === 'cso_overflow');
-  const otherAdvisories  = advisories.filter((a) => a.kind !== 'cso_overflow');
-
-  const hasHigh  = advisories.some((a) => a.severity === 'high' || a.severity === 'extreme');
-  const hasFlood = advisories.some((a) => a.kind === 'flood_warning');
-
-  const bannerClass = hasFlood
-    ? 'bg-status-flood text-status-flood-fg'
-    : hasHigh
+  const hasHigh = shown.some((a) => a.severity === 'high' || a.severity === 'extreme');
+  const bannerClass = hasHigh
     ? 'bg-status-danger text-status-danger-fg'
     : 'bg-status-caution text-status-caution-fg';
-
-  // Total visible rows = aggregated CSO block (if any) + each non-CSO advisory
-  const rowCount = (csoAdvisories.length > 0 ? 1 : 0) + otherAdvisories.length;
 
   return (
     <div className={`rounded-xl p-4 mb-4 ${bannerClass}`} role="alert">
       <p className="font-semibold text-base mb-1">
-        {rowCount === 1 ? 'Active Advisory' : `${rowCount} Active Advisories`}
+        {shown.length === 1 ? 'Active Advisory' : `${shown.length} Active Advisories`}
       </p>
       <ul className="space-y-1">
-        {/*
-         * ── Aggregated CSO block ─────────────────────────────────────────
-         * Never show individual outfall IDs ("CSO 34") by default.
-         * Count + river-wide impact is the signal; names are noise.
-         *
-         * The word "active" was removed 2026-05-31 because it falsely implied
-         * current discharge for advisories that had moved into their residual
-         * 48h window. The count here is `effective_to > now()` advisories —
-         * truly-active discharge state is the CsoBanner's job (top of page,
-         * gated on `current_overflow=true` + freshness). This row is the
-         * in-content context: "these many recent events; bacterial impact
-         * persists for 48h after each."
-         */}
-        {csoAdvisories.length > 0 && (
-          <li className="text-sm px-1 py-1">
-            {csoAdvisories.length === 1
-              ? '1 recent sewer overflow in Richmond — bacterial contamination elevated for at least 48h after each event.'
-              : `${csoAdvisories.length} recent sewer overflows in Richmond — bacterial contamination elevated for at least 48h after each event.`}
-          </li>
-        )}
-
-        {/*
-         * ── All other advisory types — render one row each ───────────────
-         */}
-        {otherAdvisories.map((a) => (
+        {/* One row per advisory type without a dedicated banner. */}
+        {shown.map((a) => (
           <li key={a.id} className="text-sm">
             {a.body ? (
               /*
