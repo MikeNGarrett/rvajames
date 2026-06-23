@@ -8,8 +8,19 @@ const NWS_HEADERS = { 'User-Agent': USER_AGENT, Accept: 'application/json' };
 
 // Richmond, VA grid: AKQ office, grid 36,78 (Belle Isle area)
 const NWS_HOURLY_URL = 'https://api.weather.gov/gridpoints/AKQ/36,78/forecast/hourly';
-// Active alerts for Virginia — we'll filter to James River / Richmond
-const NWS_ALERTS_URL = 'https://api.weather.gov/alerts/active?area=VA&status=actual';
+// Active alerts — queried PER POINT across the park footprint and unioned.
+// Why not ?area=VA + an areaDesc keyword match: NWS scopes alerts by zone/
+// county UGC codes, and the areaDesc text frequently omits the City of
+// Richmond by name even when the alert covers it — so a substring filter
+// drops real Richmond watches (and false-matches "Richmond County" on the
+// Northern Neck, ~50 mi away). A ?point= query returns every alert whose zone
+// covers that point. Two anchors span the park: central city + western reach.
+const NWS_ALERT_POINTS: ReadonlyArray<readonly [number, number]> = [
+  [37.5407, -77.4360], // Belle Isle — central city / downtown reach
+  [37.5402, -77.5247], // Pony Pasture — western park (Chesterfield/Goochland)
+];
+const nwsAlertsUrl = (lat: number, lon: number) =>
+  `https://api.weather.gov/alerts/active?point=${lat},${lon}&status=actual`;
 
 /**
  * Open-Meteo hourly forecast — sub-goals 86 + 90.
@@ -164,13 +175,6 @@ function alertKind(event: string): 'flood_watch' | 'flood_warning' | 'flood_advi
   return 'general';
 }
 
-const RICHMOND_KEYWORDS = ['richmond', 'james river', 'chesterfield', 'henrico'];
-
-function isRichmondRelevant(areaDesc: string): boolean {
-  const lower = areaDesc.toLowerCase();
-  return RICHMOND_KEYWORDS.some((kw) => lower.includes(kw));
-}
-
 export async function runNwsIngestion(): Promise<RunResult> {
   const supabase = await createServerClient('service');
   let rowsWritten = 0;
@@ -219,44 +223,78 @@ export async function runNwsIngestion(): Promise<RunResult> {
     }
   }
 
-  // --- Active alerts ---
-  const alertsResp = await fetch(NWS_ALERTS_URL, {
-    headers: NWS_HEADERS,
-    signal: AbortSignal.timeout(15_000),
-  });
+  // --- Active alerts (point-based, unioned across the park footprint) ---
+  // Best-effort but NOT silent: per-point fetch/parse failures are logged and
+  // skipped, and the unique-alert count is logged so a broken alert path is
+  // visible in the cron logs rather than masquerading as a healthy run.
+  const seenAlertIds = new Set<string>();
+  let alertsWritten = 0;
+  for (const [lat, lon] of NWS_ALERT_POINTS) {
+    let alertsResp: Response;
+    try {
+      alertsResp = await fetch(nwsAlertsUrl(lat, lon), {
+        headers: NWS_HEADERS,
+        signal:  AbortSignal.timeout(15_000),
+      });
+    } catch (err) {
+      console.warn(`[nws] alerts fetch threw for ${lat},${lon}: ${String(err)}`);
+      continue;
+    }
+    if (!alertsResp.ok) {
+      console.warn(`[nws] alerts fetch returned ${alertsResp.status} for ${lat},${lon}`);
+      continue;
+    }
+    const parsed = AlertsResponseSchema.safeParse(await alertsResp.json());
+    if (!parsed.success) {
+      console.warn(`[nws] alerts response failed schema parse for ${lat},${lon}`);
+      continue;
+    }
 
-  if (alertsResp.ok) {
-    const json = await alertsResp.json();
-    const parsed = AlertsResponseSchema.safeParse(json);
-    if (parsed.success) {
-      const richmondAlerts = parsed.data.features.filter((f) =>
-        isRichmondRelevant(f.properties.areaDesc),
-      );
+    for (const alert of parsed.data.features) {
+      const p = alert.properties;
+      if (seenAlertIds.has(p.id)) continue; // dedup the same alert across points
+      seenAlertIds.add(p.id);
 
-      for (const alert of richmondAlerts) {
-        const p = alert.properties;
-        const kind = alertKind(p.event);
-        const headline = p.headline ?? p.event;
+      const row = {
+        source:         'nws',
+        source_id:      p.id,
+        kind:           alertKind(p.event),
+        severity:       nwsSeverityToLocal(p.severity),
+        headline:       p.headline ?? p.event,
+        body:           p.description ?? '',
+        effective_from: p.effective,
+        effective_to:   p.expires ?? null,
+        location_ids:   [] as string[],
+      };
 
-        // Upsert on (source, source_id) — p.id is the NWS-supplied URN that
-        // remains stable across re-broadcasts of the same active alert.
-        // DO UPDATE means an alert body change is captured on re-broadcast.
-        const { error } = await supabase.from('advisories').upsert({
-          source:         'nws',
-          source_id:      p.id,
-          kind,
-          severity:       nwsSeverityToLocal(p.severity),
-          headline,
-          body:           p.description ?? '',
-          effective_from: p.effective,
-          effective_to:   p.expires ?? null,
-          location_ids:   [],
-        }, { onConflict: 'source,source_id' });
+      // Manual upsert keyed on (source, source_id). A plain
+      // .upsert({ onConflict: 'source,source_id' }) can't target the table's
+      // PARTIAL unique index (… WHERE source_id IS NOT NULL) — Postgres rejects
+      // it with "no unique or exclusion constraint matching the ON CONFLICT
+      // specification" — so mirror the CSO ingest's select-then-update/insert.
+      // p.id is NWS's stable URN, so a re-broadcast updates the row in place.
+      const { data: existing } = await supabase
+        .from('advisories')
+        .select('id')
+        .eq('source', 'nws')
+        .eq('source_id', p.id)
+        .maybeSingle();
 
-        if (!error) rowsWritten++;
+      const { error } = existing
+        ? await supabase.from('advisories').update(row).eq('id', existing.id)
+        : await supabase.from('advisories').insert(row);
+
+      if (error) {
+        console.warn(`[nws] advisory write failed for ${p.id}: ${error.message}`);
+      } else {
+        rowsWritten++;
+        alertsWritten++;
       }
     }
   }
+  console.info(
+    `[nws] active alerts: ${seenAlertIds.size} unique across ${NWS_ALERT_POINTS.length} points, ${alertsWritten} upserted`,
+  );
 
   return { ok: true, rowsWritten };
 }
