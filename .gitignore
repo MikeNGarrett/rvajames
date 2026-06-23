@@ -52,3 +52,6 @@ tsconfig.tsbuildinfo
 # session. Personal overrides go in .claude/settings.local.json (still ignored).
 !.claude/settings.json
 .history/
+
+# Website-audit tool run state / output (profiles, run artifacts)
+.audit/
