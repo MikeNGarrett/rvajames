@@ -24,7 +24,7 @@
  * Copy varies by age bucket so younger-child households hear stronger urgency;
  * 14+ gets softer "consider postponing" framing.
  *
- * Sticky positioning, z-index, and color tokens match FloodBanner exactly.
+ * Sticky positioning, z-index, and color tokens match SevereWeatherBanner exactly.
  * Fully server-rendered — no JS required, no CLS.
  */
 

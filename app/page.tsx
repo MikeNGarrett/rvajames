@@ -10,7 +10,7 @@ import { getForecastWindow, isInWindow } from '@/lib/queries/date-range';
 import { buildRedirectUrl } from '@/lib/utils/redirect-to-today';
 import { RiverLevelTile } from '@/components/tiles/RiverLevelTile';
 import { AdvisoriesBanner } from '@/components/tiles/AdvisoriesBanner';
-import { FloodBanner } from '@/components/banners/FloodBanner';
+import { SevereWeatherBanner } from '@/components/banners/SevereWeatherBanner';
 import { CsoBanner } from '@/components/banners/CsoBanner';
 import { DateUnavailableBanner } from '@/components/banners/DateUnavailableBanner';
 import { DisclaimerFooter } from '@/components/legal/DisclaimerFooter';
@@ -24,6 +24,7 @@ import { RichmondConditionsSection } from '@/components/richmond/RichmondConditi
 import { getRichmondConditionsData } from '@/lib/queries/richmond-conditions';
 import { PageContainer } from '@/components/ui/PageContainer';
 import { isStale } from '@/lib/freshness';
+import { severeWeatherStatus } from '@/lib/safety/rules';
 
 interface Props {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -80,7 +81,10 @@ export default async function Home({ searchParams }: Props) {
   const cookieStore = await cookies();
   const showFirstVisitBanner = !cookieStore.get('rva-james-safety-acknowledged');
 
-  const hasFlood = data.activeAdvisories.some((a) => a.kind === 'flood_warning');
+  // Deterministic severe-weather gate (NWS watches/warnings). Drives the
+  // top-of-page banner regardless of date mode — like the CSO banner, it's a
+  // current real-time hazard. Source of truth even if the lazy AI never loads.
+  const severeWeather = severeWeatherStatus(data.activeAdvisories);
 
   const staleSnapshotAge = data.locations[0]?.snapshotAge ?? null;
   const showStaleWarning = staleSnapshotAge !== null && isStale('usgs', staleSnapshotAge);
@@ -104,8 +108,8 @@ export default async function Home({ searchParams }: Props) {
        * mode shows the active state only if there are real-time discharges;
        * the date-specific advisory appears in the in-content block below.
        */}
+      <SevereWeatherBanner result={severeWeather} />
       <CsoBanner cso={data.cso} ageBucket={ageBucket} mode={data.mode} />
-      {hasFlood && <FloodBanner />}
       <DateUnavailableBanner notice={notice} />
 
       <main>

@@ -837,6 +837,78 @@ export function happinessIndex(input: HappinessIndexInput): HappinessIndexResult
 
 // ── Headline (deterministic, paired with AI microcopy) ────────────────────────
 
+// ── Severe weather (NWS watches / warnings) ─────────────────────────────────
+
+export type SevereWeatherTier = 'none' | 'watch' | 'warning';
+
+export interface SevereWeatherAdvisoryInput {
+  kind: string;
+  severity: string;
+  headline: string;
+}
+
+export interface SevereWeatherResult {
+  tier: SevereWeatherTier;
+  /** Headlines of the alerts that drove the tier (warnings first). */
+  headlines: string[];
+  /** Family-facing single line for the banner. Empty when tier === 'none'. */
+  message: string;
+}
+
+const FLOOD_ALERT_KINDS = new Set(['flood_warning', 'flood_watch', 'flood_advisory']);
+
+/**
+ * Deterministic severe-weather gate from active NWS alerts. Like every other
+ * verdict here, the AI never decides this — it only narrates around it (and is
+ * now told about it so it stops recommending activities under a watch).
+ *
+ *   'warning' — imminent danger: a *warning* product (flood / severe
+ *               thunderstorm / tornado warning) or any extreme-severity alert.
+ *   'watch'   — conditions favorable: a flood watch/advisory or severe
+ *               thunderstorm watch (high-severity weather alert).
+ *
+ * Floods are keyed by `kind`. Thunderstorm/tornado alerts arrive as kind
+ * 'general' (no enum value for them), so they're keyed by severity
+ * (Severe/Extreme → high/extreme) plus the headline text to separate a Watch
+ * from a Warning — both map to 'high'. Non-weather advisories (cso_overflow,
+ * water_quality) never trigger this.
+ */
+export function severeWeatherStatus(
+  advisories: SevereWeatherAdvisoryInput[],
+): SevereWeatherResult {
+  const warnings: string[] = [];
+  const watches: string[] = [];
+
+  for (const a of advisories) {
+    const isFlood = FLOOD_ALERT_KINDS.has(a.kind);
+    const isSevereGeneral =
+      a.kind === 'general' && (a.severity === 'high' || a.severity === 'extreme');
+    if (!isFlood && !isSevereGeneral) continue; // not a severe-weather alert
+
+    const headline = a.headline.toLowerCase();
+    const isWarning =
+      a.kind === 'flood_warning' || a.severity === 'extreme' || /\bwarning\b/.test(headline);
+    (isWarning ? warnings : watches).push(a.headline);
+  }
+
+  if (warnings.length > 0) {
+    return {
+      tier: 'warning',
+      headlines: [...warnings, ...watches],
+      message: 'Severe weather warning in effect — seek shelter, stay off the river.',
+    };
+  }
+  if (watches.length > 0) {
+    return {
+      tier: 'watch',
+      headlines: watches,
+      message:
+        'Severe weather watch in effect — conditions can turn dangerous fast. Not a good day for the river.',
+    };
+  }
+  return { tier: 'none', headlines: [], message: '' };
+}
+
 /**
  * Returns a 3–7 word headline for the section. The full table is too large
  * to enumerate (5 bands × 3 swim × 5 zones = 75 combos) — we cover the
@@ -859,7 +931,14 @@ export function headlineForRichmondConditions(
   band: HappinessBand,
   swim: SwimStatus,
   heatZone: HeatStressZone,
+  severeWeather: SevereWeatherTier = 'none',
 ): string {
+  // ── Severe weather overrides everything ──────────────────────────────────
+  // An active NWS watch/warning is a physical-safety signal that trumps any
+  // happiness/heat/swim framing — never show a cheerful headline under it.
+  if (severeWeather === 'warning') return 'Severe weather — seek shelter now';
+  if (severeWeather === 'watch')   return 'Severe weather watch — skip the river';
+
   // ── Highest-severity gates ──────────────────────────────────────────────
   if (band === 'avoid')                                  return 'Stay home today';
   if (heatZone === 'avoid' || heatZone === 'danger')     return 'Heat alert — water and shade today';

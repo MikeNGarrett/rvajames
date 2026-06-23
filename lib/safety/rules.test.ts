@@ -13,6 +13,7 @@ import {
   swimToday,
   happinessIndex,
   headlineForRichmondConditions,
+  severeWeatherStatus,
   nextHoursOutlook,
   type HourlyForecast,
 } from './rules';
@@ -952,10 +953,65 @@ describe('happinessIndex', () => {
   });
 });
 
+describe('severeWeatherStatus', () => {
+  const cso = { kind: 'cso_overflow', severity: 'high', headline: 'CSO discharge at CSO 7' };
+  const wq  = { kind: 'water_quality', severity: 'high', headline: 'Bacteria elevated' };
+
+  it('returns none for non-weather advisories (CSO / water quality never count)', () => {
+    expect(severeWeatherStatus([cso, wq]).tier).toBe('none');
+    expect(severeWeatherStatus([]).tier).toBe('none');
+  });
+
+  it('flood watch → watch tier with a watch message', () => {
+    const r = severeWeatherStatus([{ kind: 'flood_watch', severity: 'high', headline: 'Flood Watch in effect until 4 PM' }]);
+    expect(r.tier).toBe('watch');
+    expect(r.message.toLowerCase()).toContain('watch');
+  });
+
+  it('flood warning → warning tier', () => {
+    expect(severeWeatherStatus([{ kind: 'flood_warning', severity: 'high', headline: 'Flood Warning' }]).tier).toBe('warning');
+  });
+
+  it('severe thunderstorm watch (general/high) → watch tier', () => {
+    expect(severeWeatherStatus([{ kind: 'general', severity: 'high', headline: 'Severe Thunderstorm Watch until 8 PM EDT' }]).tier).toBe('watch');
+  });
+
+  it('severe thunderstorm warning (general/high, "Warning" in headline) → warning tier', () => {
+    expect(severeWeatherStatus([{ kind: 'general', severity: 'high', headline: 'Severe Thunderstorm Warning issued' }]).tier).toBe('warning');
+  });
+
+  it('extreme severity (e.g. tornado warning) → warning tier', () => {
+    expect(severeWeatherStatus([{ kind: 'general', severity: 'extreme', headline: 'Tornado Warning' }]).tier).toBe('warning');
+  });
+
+  it('warning outranks watch when both are active', () => {
+    const r = severeWeatherStatus([
+      { kind: 'flood_watch',   severity: 'high', headline: 'Flood Watch' },
+      { kind: 'flood_warning', severity: 'high', headline: 'Flood Warning' },
+    ]);
+    expect(r.tier).toBe('warning');
+    expect(r.headlines).toContain('Flood Warning');
+  });
+
+  it('moderate-severity general statement does NOT trigger', () => {
+    expect(severeWeatherStatus([{ kind: 'general', severity: 'moderate', headline: 'Special Weather Statement' }]).tier).toBe('none');
+  });
+});
+
 describe('headlineForRichmondConditions', () => {
   // ── Highest-severity gates ─────────────────────────────────────────────
   it('avoid band → "Stay home today"', () => {
     expect(headlineForRichmondConditions('avoid', 'avoid', 'avoid')).toBe('Stay home today');
+  });
+
+  it('severe-weather warning overrides even an excellent day', () => {
+    expect(headlineForRichmondConditions('excellent', 'recommended', 'normal', 'warning'))
+      .toBe('Severe weather — seek shelter now');
+  });
+
+  it('severe-weather watch overrides a good day', () => {
+    expect(headlineForRichmondConditions('good', 'recommended', 'normal', 'watch'))
+      .toBe('Severe weather watch — skip the river');
   });
 
   it('danger/avoid heat zone → "Heat alert — water and shade today"', () => {

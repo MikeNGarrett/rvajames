@@ -26,6 +26,7 @@ import {
   happinessIndex,
   nextHoursOutlook,
   headlineForRichmondConditions,
+  severeWeatherStatus,
   type HourlyForecast,
 } from '@/lib/safety/rules';
 import { apparentTemperatureF } from '@/lib/utils/apparent-temp';
@@ -89,9 +90,13 @@ export async function getRichmondConditionsData(
 
   const { data: advisoriesRows } = await supabase
     .from('advisories')
-    .select('kind, severity')
+    .select('kind, severity, headline')
     .or(`effective_to.is.null,effective_to.gte.${new Date().toISOString()}`);
   const advisories = advisoriesRows ?? [];
+
+  // Deterministic severe-weather gate (NWS watches/warnings) — drives the
+  // headline override below so a cheerful headline never shows under a watch.
+  const severeWeather = severeWeatherStatus(advisories);
 
   const bacterialAdvisoryActive = advisories.some(
     (a) => a.kind === 'water_quality',
@@ -208,7 +213,7 @@ export async function getRichmondConditionsData(
     closuresAtTopLocations,
   });
 
-  const headline = headlineForRichmondConditions(happiness.band, swim.status, heatZone);
+  const headline = headlineForRichmondConditions(happiness.band, swim.status, heatZone, severeWeather.tier);
 
   // ── 7. Water quality status — quick read from existing helper data ────────
   // For sub-goal 90 we surface only the deterministic "safe / caution / null"
