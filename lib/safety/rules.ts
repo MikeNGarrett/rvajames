@@ -848,7 +848,7 @@ export function happinessIndex(input: HappinessIndexInput): HappinessIndexResult
  *   2. Heat warnings always include "water" + "shade" guidance.
  *   3. Swim status surfaced when meaningful:
  *        - wade  → "good for wading"
- *        - avoid → explicit "skip the water" / "stay out of the water"
+ *        - avoid → "swimming not recommended" (informative, not alarming)
  *        - recommended → no special mention (the day's headline carries it)
  *
  * Why pair this with AI microcopy: the headline is the LCP-eligible
@@ -872,7 +872,7 @@ export function headlineForRichmondConditions(
 
   // ── Good band (modulated by swim status) ────────────────────────────────
   if (band === 'good' && swim === 'wade')                return 'Decent day — good for wading';
-  if (band === 'good' && swim === 'avoid')               return 'Decent day — stay out of the water';
+  if (band === 'good' && swim === 'avoid')               return 'Decent day, but swimming not recommended';
   if (band === 'good')                                   return 'Solid day for the river'; // swim recommended
 
   // ── Excellent band (heat caution still gets water+shade) ────────────────
@@ -880,7 +880,7 @@ export function headlineForRichmondConditions(
     return 'Good day — pack water, take shade breaks';
   }
   if (band === 'excellent' && swim === 'wade')           return 'Great day — good for wading';
-  if (band === 'excellent' && swim === 'avoid')          return 'Great day on land — skip the water';
+  if (band === 'excellent' && swim === 'avoid')          return 'Great day, but swimming not recommended';
   if (band === 'excellent')                              return 'Great day to head out';
 
   // Fallback (should be unreachable)

@@ -991,9 +991,9 @@ describe('headlineForRichmondConditions', () => {
       .toBe('Decent day — good for wading');
   });
 
-  it('good + swim avoid → "Decent day — stay out of the water"', () => {
+  it('good + swim avoid → "Decent day, but swimming not recommended"', () => {
     expect(headlineForRichmondConditions('good', 'avoid', 'normal'))
-      .toBe('Decent day — stay out of the water');
+      .toBe('Decent day, but swimming not recommended');
   });
 
   it('good + swim recommended → "Solid day for the river"', () => {
@@ -1012,9 +1012,9 @@ describe('headlineForRichmondConditions', () => {
       .toBe('Great day — good for wading');
   });
 
-  it('excellent + swim avoid → "Great day on land — skip the water"', () => {
+  it('excellent + swim avoid → "Great day, but swimming not recommended"', () => {
     expect(headlineForRichmondConditions('excellent', 'avoid', 'normal'))
-      .toBe('Great day on land — skip the water');
+      .toBe('Great day, but swimming not recommended');
   });
 
   it('excellent + swim recommended + normal heat → "Great day to head out"', () => {
