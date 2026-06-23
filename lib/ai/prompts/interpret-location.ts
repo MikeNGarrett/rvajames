@@ -88,6 +88,12 @@ export interface InterpretLocationInput {
   precip24hIn: number | null;
   dataAgeMinutes: number | null;
   activeAdvisoryHeadlines: string[];
+  /**
+   * Deterministic severe-weather gate (NWS watches/warnings). When tier is
+   * 'watch'/'warning' the model must suppress activity recommendations — the
+   * shared system prompt enforces the override.
+   */
+  severeWeather?: { tier: 'none' | 'watch' | 'warning'; message: string };
   availableActivitySlugs: string[];
   /**
    * James River Watch bacterial data for this location's mapped station(s).
@@ -129,6 +135,14 @@ export function buildUserMessage(input: InterpretLocationInput): string {
     `Location: ${input.locationName} (${input.locationSlug})`,
     `Age context: ${input.ageBucket === 'none' ? 'General audience — no children (adult visitors only)' : `Youngest family member: ${input.ageBucket}`}`,
     '',
+    ...(input.severeWeather && input.severeWeather.tier !== 'none'
+      ? [
+          `--- SEVERE WEATHER (deterministic safety gate, tier: ${input.severeWeather.tier}) ---`,
+          input.severeWeather.message,
+          'DIRECTIVE: This overrides everything below. Do NOT recommend any activities at this location. Lead with this safety message; today is unsafe to be out near the river regardless of gage or temperature.',
+          '',
+        ]
+      : []),
     conditionsHeader,
     `Gage height: ${input.gageFt !== null ? `${input.gageFt} ft` : 'unavailable'}`,
     `Discharge: ${input.dischargeCfs !== null ? `${input.dischargeCfs} cfs` : 'unavailable'}`,

@@ -176,6 +176,34 @@ describe('buildUserMessage — water quality section', () => {
   });
 });
 
+// ─── buildUserMessage — severe weather directive ─────────────────────────────
+
+describe('buildUserMessage — severe weather directive', () => {
+  it('omits the directive when severeWeather is absent', () => {
+    const msg = buildUserMessage(baseInput);
+    expect(msg).not.toContain('SEVERE WEATHER');
+    expect(msg).not.toContain('Do NOT recommend any activities');
+  });
+
+  it('omits the directive for tier "none"', () => {
+    const msg = buildUserMessage({ ...baseInput, severeWeather: { tier: 'none', message: '' } });
+    expect(msg).not.toContain('SEVERE WEATHER');
+  });
+
+  it('emits the directive and the safety message under a watch', () => {
+    const msg = buildUserMessage({
+      ...baseInput,
+      severeWeather: {
+        tier: 'watch',
+        message: 'Severe weather watch in effect — not a good day for the river.',
+      },
+    });
+    expect(msg).toContain('SEVERE WEATHER');
+    expect(msg).toContain('Do NOT recommend any activities');
+    expect(msg).toContain('Severe weather watch in effect');
+  });
+});
+
 // ─── buildUserMessage — mode rendering ───────────────────────────────────────
 
 describe('buildUserMessage — mode rendering', () => {

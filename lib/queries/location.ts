@@ -3,7 +3,7 @@ import type { AgeBucket } from '@/lib/url-state';
 import { getOrGenerate } from '@/lib/ai/get-or-generate';
 import type { InterpretLocationInput, WaterQualityInput } from '@/lib/ai/prompts/interpret-location';
 import { computeWqFreshness } from '@/lib/ai/prompts/interpret-location';
-import { combinedLocationStatus } from '@/lib/safety/rules';
+import { combinedLocationStatus, severeWeatherStatus } from '@/lib/safety/rules';
 import { getLatestWaterQualityReading, getLatestReadingByStationCode, type WaterQualityReading } from './water-quality';
 import { getStationConfig } from '@/lib/data/station-mapping';
 import { resolveDateMode } from './date-range';
@@ -291,6 +291,9 @@ export async function getLocationDetail(
       precip24hIn: null, // NWS stores probability not measured inches; TODO: wire actual precip
       dataAgeMinutes: mode === 'forecast' ? null : (latestSnapshot?.ageMinutes ?? null),
       activeAdvisoryHeadlines: activeAdvisories.map((a) => a.headline),
+      // Deterministic severe-weather gate — directs the AI to suppress activity
+      // recommendations under an active NWS watch/warning.
+      severeWeather: severeWeatherStatus(activeAdvisories),
       availableActivitySlugs: activitySlugs,
       waterQuality: waterQualityInput,
       // Project to count-only shape for the AI prompt (sub-goal 96).
