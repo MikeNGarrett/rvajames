@@ -56,6 +56,7 @@ To return to a clean realistic state, re-run `load.sh baseline`, or
 | `danger-river`    | Upriver Westham gage at 9.5 ft (danger), no CSO noise                        | #3                    |
 | `stale-data`      | Backdates the latest USGS snapshot ~3 h (past the 30-min freshness window)    | #1                    |
 | `closed-location` | Marks a swim spot (Texas Beach) `closed` / `active`                          | closed-mode tile      |
+| `severe-weather`  | Active flood watch + severe thunderstorm watch (NWS), calm gage              | severe-weather banner + headline gate |
 
 ### Mapping to the triaged UI issues
 
