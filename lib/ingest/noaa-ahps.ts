@@ -113,7 +113,7 @@ export async function runNoaaAhpsIngestion(): Promise<RunResult> {
     .insert({
       location_id: gaugeLoc.id,
       source:      'noaa-ahps',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       payload:     payload as any,
     });
 

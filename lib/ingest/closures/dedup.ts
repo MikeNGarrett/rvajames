@@ -31,7 +31,7 @@ export function naturalKey(sourceUrl: string, locationId: string): string {
  * be treated as always-insert (legacy edge case).
  */
 export async function loadExistingKeys(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   supabase: SupabaseClient<any>,
   sourceName: string,
 ): Promise<Set<string>> {

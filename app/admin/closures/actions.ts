@@ -126,7 +126,6 @@ export async function duplicateClosure(id: string) {
 
   if (fetchError || !original) throw new Error('Closure not found');
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { id: _id, created_at: _ca, updated_at: _ua, ...rest } = original;
 
   const { error } = await supabase.from('location_status').insert({

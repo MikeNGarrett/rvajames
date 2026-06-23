@@ -24,7 +24,7 @@ import { getUpstreamCsoForLocation } from './upstream-cso';
  * chain (lt → gt → lt → eq → order).
  */
 function makeMockClient(rows: object[], queryError: { message: string } | null = null) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const chain: Record<string, any> = {};
   const terminal = vi.fn().mockResolvedValue({ data: rows, error: queryError });
   for (const m of ['select', 'eq', 'gt', 'lt', 'limit', 'maybeSingle', 'update', 'match']) {
