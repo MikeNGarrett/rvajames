@@ -25,6 +25,8 @@ import { StatusBadge } from '@/components/tiles/StatusBadge';
 import { StaleState } from '@/components/states/Stale';
 import { DisclaimerFooter } from '@/components/legal/DisclaimerFooter';
 import { isStale } from '@/lib/freshness';
+import { severeWeatherStatus } from '@/lib/safety/rules';
+import { SevereWeatherBanner } from '@/components/banners/SevereWeatherBanner';
 
 // Always render dynamically — live gauge data and lazy AI generation make static
 // pre-rendering pointless, and generateStaticParams returning [] at build time
@@ -103,8 +105,13 @@ export default async function LocationPage({ params, searchParams }: Props) {
   const { mode, forecastConfidence } = resolveDateMode(dateStr);
   const dateLabel = mode === 'forecast' ? formatForecastDate(dateStr) : null;
 
+  // Metro-wide severe weather applies here too — surface it at the top so a
+  // family checking one spot during a watch isn't left to the homepage alone.
+  const severeWeather = severeWeatherStatus(location.activeAdvisories);
+
   return (
     <NuqsAdapter>
+      <SevereWeatherBanner result={severeWeather} />
       <DateUnavailableBanner notice={notice} />
       <main className="max-w-lg mx-auto px-4 py-5">
         {/* Back nav */}
