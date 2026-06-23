@@ -781,6 +781,7 @@ describe('swimToday', () => {
     bacterialAdvisoryActive: false,
     csoActive48h:            false,
     floodStage:              false,
+    gageFt:                  3.0,
   } as const;
 
   it('returns recommended when water is warm and no advisories', () => {
@@ -825,14 +826,32 @@ describe('swimToday', () => {
     expect(r.primaryReason.toLowerCase()).toContain('flood');
   });
 
-  it('priority order: flood > bacterial > CSO > cold water', () => {
+  it('returns avoid when gage is above the swim-deny threshold (high water, below flood)', () => {
+    // 9.5 ft: below FLOOD_STAGE_FT (10) so floodStage is false, but well above
+    // the 5.5 ft swim-deny gage — must still be avoid, not recommended, so the
+    // headline agrees with the per-location swim chips and the river panel.
+    const r = swimToday({ ...baseSafe, waterTempF: 80, gageFt: 9.5 });
+    expect(r.status).toBe('avoid');
+    expect(r.primaryReason.toLowerCase()).toContain('high');
+    expect(r.primaryReason).toContain('9.5');
+  });
+
+  it('still recommends swimming at a safe gage with warm water', () => {
+    const r = swimToday({ ...baseSafe, waterTempF: 78, gageFt: 3.2 });
+    expect(r.status).toBe('recommended');
+  });
+
+  it('priority order: flood > high water > bacterial > CSO > cold water', () => {
     const r = swimToday({
       waterTempF: 50,
       bacterialAdvisoryActive: true,
       csoActive48h:            true,
       floodStage:              true,
+      gageFt:                  12.0,
     });
     expect(r.status).toBe('avoid');
+    // Flood stage wins the primary slot; the high-water reason is suppressed
+    // (else-if) so the contributing set stays flood + bacterial + CSO + cold.
     expect(r.primaryReason.toLowerCase()).toContain('flood');
     expect(r.contributingReasons).toHaveLength(4);
   });

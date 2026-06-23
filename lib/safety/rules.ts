@@ -653,6 +653,13 @@ export interface SwimTodayInput {
   csoActive48h: boolean;
   /** River is at or above flood stage. */
   floodStage: boolean;
+  /**
+   * Latest Westham gage height (ft). Null when no fresh reading. Used to deny
+   * swimming once the river is above the swim-deny threshold — the same
+   * threshold the per-location swim chips use, so the headline swim verdict and
+   * the location cards can't disagree.
+   */
+  gageFt: number | null;
 }
 
 export interface SwimTodayResult {
@@ -669,9 +676,10 @@ export interface SwimTodayResult {
  * Avoid reasons are tried in priority order so the most actionable signal is
  * the primary one shown under the badge:
  *   1. flood stage    (physical hazard, overrides everything)
- *   2. bacterial      (health hazard, water quality already failed)
- *   3. CSO 48h        (health hazard, contamination probable)
- *   4. cold water     (hypothermia / shock risk under 60°F)
+ *   2. high water     (gage above the swim-deny threshold — strong current)
+ *   3. bacterial      (health hazard, water quality already failed)
+ *   4. CSO 48h        (health hazard, contamination probable)
+ *   5. cold water     (hypothermia / shock risk under 60°F)
  * Then:
  *   60 ≤ T < 70 → wade-only (too cold for swim, ok for ankle play)
  *   T ≥ 70     → recommended
@@ -680,8 +688,15 @@ export interface SwimTodayResult {
 export function swimToday(input: SwimTodayInput): SwimTodayResult {
   const reasons: string[] = [];
 
+  const swimDenyGageFt = thresholds.riverWideActivities.swimming.denyMinGageFt;
   if (input.floodStage) {
     reasons.push('River at flood stage — strong currents and submerged hazards.');
+  } else if (input.gageFt !== null && input.gageFt > swimDenyGageFt) {
+    // Below flood stage but above the swim-deny gage — matches the per-location
+    // swim chips so the headline verdict and the cards stay consistent.
+    reasons.push(
+      `River is high at ${input.gageFt.toFixed(1)} ft — strong current, swimming unsafe above ${swimDenyGageFt} ft.`,
+    );
   }
   if (input.bacterialAdvisoryActive) {
     reasons.push('Bacterial water-quality advisory in effect.');

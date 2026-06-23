@@ -195,6 +195,7 @@ export async function getRichmondConditionsData(
     bacterialAdvisoryActive,
     csoActive48h,
     floodStage,
+    gageFt: upriver.gageFt,
   });
 
   const happiness = happinessIndex({
