@@ -84,7 +84,7 @@ export type MetroSummary = z.infer<typeof MetroSummarySchema>;
 // b2 → b3 (2026-06-02): added richmond_microcopy field for the new
 // Richmond Conditions section. Migration 0015 adds the nullable column.
 
-export const PROMPT_VERSION = 'b3' as const;
+export const PROMPT_VERSION = 'b4' as const;
 
 // ─── Input / user message builder ────────────────────────────────────────────
 
@@ -99,6 +99,12 @@ export interface MetroSummaryInput {
   ageBucket:               AgeBucket;
   metroState:              MetroRiverState;
   activeAdvisoryHeadlines: string[];
+  /**
+   * Deterministic severe-weather gate (NWS watches/warnings) from
+   * severeWeatherStatus(). When tier is 'watch'/'warning' the model is directed
+   * to suppress activity recommendations and lead with the safety message.
+   */
+  severeWeather?:          { tier: 'none' | 'watch' | 'warning'; message: string };
   airTempF:                number | null;
   /** 'observed' for today (live gauge data); 'forecast' for days +1..+3. */
   mode:                    'observed' | 'forecast';
@@ -161,6 +167,14 @@ export function buildMetroUserMessage(input: MetroSummaryInput): string {
         : `Youngest family member: ${input.ageBucket}`
     }`,
     '',
+    ...(input.severeWeather && input.severeWeather.tier !== 'none'
+      ? [
+          `--- SEVERE WEATHER (deterministic safety gate, tier: ${input.severeWeather.tier}) ---`,
+          input.severeWeather.message,
+          'DIRECTIVE: This overrides everything below. Do NOT recommend any outdoor or water activities or best-bet locations. Lead with this safety message and frame today as unsafe to be at the river regardless of gage or temperature.',
+          '',
+        ]
+      : []),
     '--- Metro river state ---',
     `Westham upriver gauge (02037500) — gage height (arbitrary datum): ${
       upriver.gageFt !== null ? `${upriver.gageFt} ft` : 'unavailable'

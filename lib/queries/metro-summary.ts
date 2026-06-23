@@ -11,7 +11,7 @@ import { resolveDateMode } from './date-range';
 import { computeCsoState } from './today';
 import type { AgeBucket } from '@/lib/url-state';
 import type { MetroSummary } from '@/lib/ai/prompts/summarize-metro';
-import { csoAdvisoryStatus } from '@/lib/safety/rules';
+import { csoAdvisoryStatus, severeWeatherStatus } from '@/lib/safety/rules';
 
 export type { MetroSummary };
 
@@ -52,6 +52,11 @@ export async function getMetroSummary(
   const advisories = advisoriesResult.data ?? [];
   const metroAdvisories = advisories.filter((a) => a.location_ids.length === 0);
   const activeHeadlines = metroAdvisories.map((a) => a.headline);
+
+  // Deterministic severe-weather gate (NWS watches/warnings). Passed to the AI
+  // so it suppresses activity recommendations and leads with the safety
+  // message instead of contradicting the banner.
+  const severeWeather = severeWeatherStatus(advisories);
 
   const hasHighSeverity = advisories.some(
     (a) => a.severity === 'high' || a.severity === 'extreme',
@@ -107,6 +112,7 @@ export async function getMetroSummary(
       ageBucket,
       metroState,
       activeAdvisoryHeadlines: activeHeadlines,
+      severeWeather:         { tier: severeWeather.tier, message: severeWeather.message },
       airTempF:              nwsSnap.data?.air_temp_f ?? null,
       mode,
       forecastConfidence,
