@@ -297,7 +297,7 @@ SWIMMING
     ${activities.swim.gage_caution_max_ft + 0.1}–${activities.swim.gage_deny_above_ft} ft: High. Swimming not recommended for children under 13; adults with strong river experience only
     > ${activities.swim.gage_deny_above_ft} ft: Do not enter the water at any location.
   Post-rain rule: No swimming for ${swim.post_rain_hold_hours} h after any rainfall > ${swim.post_rain_trigger_in_24h} in within 24 h (bacterial contamination risk).
-  CSO rule: No swimming within 48 h of active CSO overflow advisory.
+  CSO rule: No swimming within ${swim.post_rain_hold_hours} h of active CSO overflow advisory.
   JRA E. coli threshold: Swimming not recommended when E. coli > ${swim.ecoli_max_cfu_per_100ml} CFU/100 mL (Virginia DEQ standard).
 
 KAYAKING / WHITEWATER
@@ -400,7 +400,7 @@ USGS gage height (ft) → condition level [station ${gage.station}]:
 
 Rainfall / bacterial risk:
   Any rain > ${swim.post_rain_trigger_in_24h} in in 24 h: ${swim.post_rain_hold_hours} h swim hold at all locations
-  Active CSO advisory: 48 h swim hold at all locations
+  Active CSO advisory: ${swim.post_rain_hold_hours} h swim hold at all locations
   E. coli > ${swim.ecoli_max_cfu_per_100ml} CFU/100 mL: swimming not recommended (Virginia DEQ standard)
   E. coli > ${swim.ecoli_unsafe_cfu_per_100ml} CFU/100 mL: avoid all water contact
 
@@ -789,7 +789,7 @@ CSO TENSE RULES BY MODE — NON-NEGOTIABLE:
 
   mode=observed AND activelyDischarging.count = 0 AND advisoriesOnSelectedDate.count > 0 (residual):
     → Past tense with forward-looking window context.
-    ✓ "A sewer overflow occurred upstream within the past 48 hours."
+    ✓ "A sewer overflow occurred upstream within the past 72 hours."
     ✓ "A recent overflow event means bacteria may remain elevated through [clear time]."
     ✓ "Though the discharge appears to have stopped, the advisory window extends to [clear time]."
     ✗ Never imply an active overflow when none is discharging.
@@ -808,7 +808,7 @@ PER-CALL INPUT FIELDS:
 
   upstream_cso — per-location upstream CSO signal
     null (or count = 0):
-      No upstream CSO events in the past 48 h (observed) or no advisory window covering
+      No upstream CSO events in the past 72 h (observed) or no advisory window covering
       the selected date (forecast).
       → Do NOT mention CSO. Treat bacterial risk as normal-baseline.
     count > 0:

@@ -103,7 +103,7 @@ export interface InterpretLocationInput {
   waterQuality: WaterQualityInput | null;
   /**
    * Upstream CSO signal for this location — count-only (sub-goal 96).
-   * null = no active CSO events upstream in the past 48 h (count === 0).
+   * null = no active CSO events upstream in the past 72 h (count === 0).
    * Non-null = one or more outfalls discharged upstream within the window.
    * Outfall names/IDs are intentionally omitted — the AI must use counts and
    * geographic context, never outfall IDs like "CSO 34".
@@ -193,7 +193,7 @@ export function buildUserMessage(input: InterpretLocationInput): string {
   }
 
   // ── Upstream CSO block ─────────────────────────────────────────────────────
-  // For observed mode: report events upstream in the past 48h + approximate timing.
+  // For observed mode: report events upstream in the past 72h + approximate timing.
   // For forecast mode: the signal reflects advisory windows covering the selected date
   // (not "events right now"), so the tense and framing differ accordingly.
   lines.push('');
@@ -201,13 +201,13 @@ export function buildUserMessage(input: InterpretLocationInput): string {
 
   const cso = input.upstreamCso;
   if (!cso || cso.count === 0) {
-    lines.push('Upstream CSO: no active events in past 48h.');
+    lines.push('Upstream CSO: no active events in past 72h.');
   } else if (isForecast) {
     const advisoryWord = cso.count !== 1 ? 'advisories' : 'advisory';
     lines.push(`Upstream CSO: ${cso.count} overflow ${advisoryWord} from upstream will cover the selected date.`);
     lines.push('Advisory window extends through the forecast date; caution for swim/wade on that day.');
   } else {
-    lines.push(`Upstream CSO: ${cso.count} event${cso.count !== 1 ? 's' : ''} upstream in past 48h.`);
+    lines.push(`Upstream CSO: ${cso.count} event${cso.count !== 1 ? 's' : ''} upstream in past 72h.`);
     if (cso.mostRecentAt) {
       const hoursAgo = Math.round(
         (Date.now() - new Date(cso.mostRecentAt).getTime()) / 3_600_000,

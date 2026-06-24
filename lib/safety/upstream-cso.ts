@@ -9,6 +9,7 @@
 
 import { createServerClient } from '@/lib/supabase/server';
 import { richmondUtcOffset } from '@/lib/utils/date-tz';
+import thresholds from './thresholds.json';
 
 export interface UpstreamCsoOutfall {
   name: string;
@@ -47,7 +48,7 @@ export function addOneDayISO(dateStr: string): string {
  */
 export async function getUpstreamCsoForLocation(
   locationLng: number,
-  windowHours = 48,
+  windowHours = thresholds.cso.swim_hold_hours,
   forSelectedDate?: string,
 ): Promise<UpstreamCsoSignal> {
   const supabase = await createServerClient('anon');

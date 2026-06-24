@@ -49,6 +49,7 @@
  */
 
 import puppeteer, { type BrowserWorker } from '@cloudflare/puppeteer';
+import thresholds from '@/lib/safety/thresholds.json';
 
 export const EMNET_URL =
   'https://apps.emnet.net/richmond-pub-map-app/?city=47&config=5c0cacee-7e95-4eea-922d-c736c83eb4b9';
@@ -94,7 +95,7 @@ export function selectAdvisoryBranch(
   // overflow is now false OR null (EmNet didn't report a live current-state
   // flag). A confirmed csoLastOccurrence within the window is itself evidence
   // of a real recent discharge — surface it regardless of the flag (bacterial
-  // impact persists 48h). Previously this required overflow===false, which
+  // impact persists for the CSO window). Previously this required overflow===false, which
   // dropped real events whenever the flag was null: in prod 2026-06-23, CSO
   // 11/15/20 near Belle Isle had recent events but null overflow, so they were
   // skipped, never became advisories, and Belle Isle wrongly read "No overflows
@@ -132,7 +133,7 @@ export function buildSourceId(emnetId: string, csoLastOccurrence: string): strin
  */
 export function isWithinWindow(
   csoLastOccurrence: string,
-  windowHours: number = 48,
+  windowHours: number = thresholds.cso.swim_hold_hours,
 ): boolean {
   const ts = new Date(csoLastOccurrence).getTime();
   if (isNaN(ts)) return false;
@@ -162,7 +163,7 @@ export function buildAdvisoryBody(
   return (
     `Combined sewer overflow event recorded ${when} at ${outfallName}. ` +
     `Bacterial levels (E. coli, Enterococci) are likely elevated at downstream ` +
-    `access points for approximately 48 hours after a discharge.`
+    `access points for approximately ${thresholds.cso.swim_hold_hours} hours after a discharge.`
   );
 }
 
@@ -224,7 +225,7 @@ function isValidRichmondCoord(lat: number, lng: number): boolean {
 /**
  * EmNet timestamps lack a timezone marker (e.g. "2026-05-27T18:40:00"). They
  * are reported in Richmond local time (America/New_York). `new Date()` would
- * interpret them as UTC, which throws off the 48h window calculation by 4-5
+ * interpret them as UTC, which throws off the CSO window calculation by 4-5
  * hours depending on DST. Normalize by appending an explicit ET offset.
  *
  * DST handling: Richmond observes EDT (UTC-04:00) roughly Mar 14 - Nov 7 and

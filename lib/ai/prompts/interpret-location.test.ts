@@ -257,7 +257,7 @@ describe('buildUserMessage — mode rendering', () => {
 describe('buildUserMessage — CSO section (observed mode)', () => {
   it('emits "no active events" when upstreamCso is null', () => {
     const msg = buildUserMessage({ ...baseInput, upstreamCso: null });
-    expect(msg).toContain('Upstream CSO: no active events in past 48h.');
+    expect(msg).toContain('Upstream CSO: no active events in past 72h.');
   });
 
   it('emits "no active events" when upstreamCso.count === 0', () => {
@@ -265,7 +265,7 @@ describe('buildUserMessage — CSO section (observed mode)', () => {
       ...baseInput,
       upstreamCso: { count: 0, mostRecentAt: null },
     });
-    expect(msg).toContain('Upstream CSO: no active events in past 48h.');
+    expect(msg).toContain('Upstream CSO: no active events in past 72h.');
   });
 
   it('reports count, approximate timing, and caution when count > 0', () => {
@@ -274,7 +274,7 @@ describe('buildUserMessage — CSO section (observed mode)', () => {
       ...baseInput,
       upstreamCso: { count: 2, mostRecentAt },
     });
-    expect(msg).toContain('2 events upstream in past 48h');
+    expect(msg).toContain('2 events upstream in past 72h');
     expect(msg).toContain('~6h ago');
     expect(msg).toContain('caution for swim/wade');
   });
@@ -284,7 +284,7 @@ describe('buildUserMessage — CSO section (observed mode)', () => {
       ...baseInput,
       upstreamCso: { count: 1, mostRecentAt: new Date(Date.now() - 12 * 3_600_000).toISOString() },
     });
-    expect(msg).toContain('1 event upstream in past 48h');
+    expect(msg).toContain('1 event upstream in past 72h');
     expect(msg).not.toContain('1 events upstream');
   });
 
@@ -304,7 +304,7 @@ describe('buildUserMessage — CSO section (observed mode)', () => {
       upstreamCso: { count: 1, mostRecentAt: new Date(Date.now() - 6 * 3_600_000).toISOString() },
     });
     expect(msg).not.toContain('will cover the selected date');
-    expect(msg).toContain('in past 48h');
+    expect(msg).toContain('in past 72h');
   });
 });
 
@@ -322,7 +322,7 @@ describe('buildUserMessage — CSO section (forecast mode)', () => {
 
   it('emits "no active events" when upstreamCso is null in forecast mode', () => {
     const msg = buildUserMessage({ ...forecastBase, upstreamCso: null });
-    expect(msg).toContain('Upstream CSO: no active events in past 48h.');
+    expect(msg).toContain('Upstream CSO: no active events in past 72h.');
   });
 
   it('emits advisory-window language for forecast mode with active CSO', () => {
@@ -331,7 +331,7 @@ describe('buildUserMessage — CSO section (forecast mode)', () => {
       upstreamCso: { count: 2, mostRecentAt: new Date(Date.now() - 6 * 3_600_000).toISOString() },
     });
     expect(msg).toContain('will cover the selected date');
-    expect(msg).not.toContain('in past 48h');
+    expect(msg).not.toContain('in past 72h');
     expect(msg).not.toContain('~6h ago');
   });
 

@@ -8,6 +8,7 @@ import { getLatestWaterQualityReading, getLatestReadingByStationCode, type Water
 import { getStationConfig } from '@/lib/data/station-mapping';
 import { resolveDateMode } from './date-range';
 import { getUpstreamCsoForLocation, type UpstreamCsoSignal } from '@/lib/safety/upstream-cso';
+import thresholds from '@/lib/safety/thresholds.json';
 
 export interface LocationDetail {
   id: string;
@@ -132,7 +133,7 @@ export async function getLocationDetail(
   const upstreamCsoPromise = loc.lng != null
     ? getUpstreamCsoForLocation(
         Number(loc.lng),
-        48,
+        thresholds.cso.swim_hold_hours,
         mode === 'forecast' ? date : undefined,
       )
     : Promise.resolve({ count: 0, mostRecentAt: null, outfalls: [] } as UpstreamCsoSignal);

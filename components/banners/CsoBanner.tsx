@@ -54,7 +54,7 @@ type BannerState = 'active' | 'residual';
  *
  * 2 hours matches the typical ingest cadence headroom — well under one
  * cron cycle, so a fresh active signal still gets the urgent treatment;
- * stale ones get the more honest "recent past 48 hours" framing.
+ * stale ones get the more honest "recent past 72 hours" framing.
  */
 const ACTIVE_STALENESS_HOURS = 2;
 
@@ -110,17 +110,17 @@ function buildMainCopy(
   // residual state
   if (isYoung) {
     return endLabel
-      ? `Recent sewer overflow within the past 48 hours. Bacterial levels remain elevated through ${endLabel}. Avoid water contact with your kids until then.`
-      : 'Recent sewer overflow within the past 48 hours. Bacterial levels remain elevated. Avoid water contact with your kids until the advisory clears.';
+      ? `Recent sewer overflow within the past 72 hours. Bacterial levels remain elevated through ${endLabel}. Avoid water contact with your kids until then.`
+      : 'Recent sewer overflow within the past 72 hours. Bacterial levels remain elevated. Avoid water contact with your kids until the advisory clears.';
   }
   if (isOlder) {
     return endLabel
-      ? `Recent sewer overflow in the past 48 hours. Bacterial levels may be elevated through ${endLabel}.`
-      : 'Recent sewer overflow in the past 48 hours. Bacterial levels may be elevated.';
+      ? `Recent sewer overflow in the past 72 hours. Bacterial levels may be elevated through ${endLabel}.`
+      : 'Recent sewer overflow in the past 72 hours. Bacterial levels may be elevated.';
   }
   return endLabel
-    ? `Recent sewer overflow within the past 48 hours. Bacterial levels remain elevated through ${endLabel}.`
-    : 'Recent sewer overflow within the past 48 hours. Bacterial levels remain elevated.';
+    ? `Recent sewer overflow within the past 72 hours. Bacterial levels remain elevated through ${endLabel}.`
+    : 'Recent sewer overflow within the past 72 hours. Bacterial levels remain elevated.';
 }
 
 /**

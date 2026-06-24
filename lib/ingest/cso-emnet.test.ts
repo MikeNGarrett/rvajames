@@ -148,9 +148,9 @@ describe('buildAdvisoryBody', () => {
     expect(body).toMatch(/E\. coli|Enterococci|bacterial/i);
   });
 
-  it('mentions the 48-hour window', () => {
+  it('mentions the 72-hour window', () => {
     const body = buildAdvisoryBody(outfallName, occurrence);
-    expect(body).toMatch(/48 hour/i);
+    expect(body).toMatch(/72 hour/i);
   });
 
   it('includes a formatted timestamp from the occurrence', () => {

@@ -15,7 +15,7 @@
  * 3. Upserts each site into the `cso_outfalls` catalog table.
  * 4. For any site that:
  *      a) affects the James River mainstem, AND
- *      b) had a discharge (cso_last_occurrence) within the last 48 hours,
+ *      b) had a discharge (cso_last_occurrence) within the last 72 hours,
  *    upserts an advisory into the `advisories` table with source='emnet_cso'.
  *
  * ── Advisory shape ────────────────────────────────────────────────────────────
@@ -27,7 +27,7 @@
  *   outfall_id     = FK to cso_outfalls.id
  *   location_ids   = []  — per-location upstream check happens at query time
  *   effective_from = cso_last_occurrence
- *   effective_to   = cso_last_occurrence + 48h
+ *   effective_to   = cso_last_occurrence + 72h
  *
  * ── Schedule ─────────────────────────────────────────────────────────────────
  *
@@ -38,6 +38,7 @@
 
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { createServerClient } from '@/lib/supabase/server';
+import thresholds from '@/lib/safety/thresholds.json';
 import type { RunResult } from './run';
 import type { BrowserWorker } from '@cloudflare/puppeteer';
 import {
@@ -48,11 +49,16 @@ import {
   selectAdvisoryBranch,
 } from './cso-emnet';
 
-/** CSO advisory window: 48h from last discharge event */
-const CSO_WINDOW_HOURS = 48;
+/**
+ * CSO advisory window — how long after a discharge bacterial levels stay
+ * elevated. Single source of truth: thresholds.cso.swim_hold_hours, which the
+ * upstream-CSO query also reads, so ingest and query can never drift apart.
+ * VDH advises avoiding river water contact for 3 days (72h) after a discharge.
+ */
+const CSO_WINDOW_HOURS = thresholds.cso.swim_hold_hours;
 
-/** Returns an ISO timestamp 48 hours from now — used as advisory effective_to. */
-function ts48hFromNow(): string {
+/** Returns an ISO timestamp CSO_WINDOW_HOURS from now — used as advisory effective_to. */
+function windowEndFromNow(): string {
   return new Date(Date.now() + CSO_WINDOW_HOURS * 60 * 60 * 1000).toISOString();
 }
 
@@ -136,7 +142,7 @@ export async function runCsoIngestion(): Promise<RunResult> {
           affects_james_mainstem: site.affectsJamesMainstem,
           last_seen_at: now,
           // Sub-goal 93: persist EmNet's cso_active_overflow flag so sub-goals
-          // 94/95 can distinguish "actively discharging" from "past 48h advisory."
+          // 94/95 can distinguish "actively discharging" from "past 72h advisory."
           current_overflow: site.overflow,
           current_overflow_observed_at: now,
         },
@@ -175,7 +181,7 @@ export async function runCsoIngestion(): Promise<RunResult> {
       // advisories from past events are never extended again.
       const effectiveFrom = site.csoLastOccurrence ?? now;
       const sourceId      = buildSourceId(site.emnetId, effectiveFrom);
-      const newEffectiveTo = ts48hFromNow();
+      const newEffectiveTo = windowEndFromNow();
 
       const { data: existingAdvisory } = await supabase
         .from('advisories')
@@ -185,7 +191,7 @@ export async function runCsoIngestion(): Promise<RunResult> {
         .maybeSingle();
 
       if (existingAdvisory) {
-        // Same event continuing — bump its effective_to to now+48h.
+        // Same event continuing — bump its effective_to to now+72h.
         const { error: updateError } = await supabase
           .from('advisories')
           .update({ effective_to: newEffectiveTo })
@@ -226,7 +232,7 @@ export async function runCsoIngestion(): Promise<RunResult> {
     }
 
     if (branch === 'inactive-window') {
-      // ── Branch 2: not actively discharging but recent event within 48h ────
+      // ── Branch 2: not actively discharging but recent event within 72h ────
       // Existing dedup-by-source_id logic (unchanged from original ingest).
       const source_id = buildSourceId(site.emnetId, site.csoLastOccurrence!);
       if (existingSourceIds.has(source_id)) continue;

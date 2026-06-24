@@ -786,7 +786,7 @@ describe('riverConditionSummary', () => {
 describe('swimToday', () => {
   const baseSafe = {
     bacterialAdvisoryActive: false,
-    csoActive48h:            false,
+    csoActiveRecent:            false,
     floodStage:              false,
     gageFt:                  3.0,
   } as const;
@@ -821,8 +821,8 @@ describe('swimToday', () => {
     expect(r.primaryReason.toLowerCase()).toContain('bacterial');
   });
 
-  it('returns avoid for CSO 48h regardless of temp', () => {
-    const r = swimToday({ ...baseSafe, waterTempF: 80, csoActive48h: true });
+  it('returns avoid for CSO window regardless of temp', () => {
+    const r = swimToday({ ...baseSafe, waterTempF: 80, csoActiveRecent: true });
     expect(r.status).toBe('avoid');
     expect(r.primaryReason.toLowerCase()).toContain('sewer');
   });
@@ -852,7 +852,7 @@ describe('swimToday', () => {
     const r = swimToday({
       waterTempF: 50,
       bacterialAdvisoryActive: true,
-      csoActive48h:            true,
+      csoActiveRecent:            true,
       floodStage:              true,
       gageFt:                  12.0,
     });

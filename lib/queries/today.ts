@@ -14,6 +14,7 @@ import {
 import { formatRichmondDate, richmondUtcOffset } from '@/lib/utils/date-tz';
 import { isInWindow } from '@/lib/queries/date-range';
 import { getUpstreamCsoForLocation, addOneDayISO, type UpstreamCsoSignal } from '@/lib/safety/upstream-cso';
+import thresholds from '@/lib/safety/thresholds.json';
 
 export interface DeterministicStatus {
   status: SafetyStatus;
@@ -235,7 +236,7 @@ const EMPTY_CSO_STATE: CsoState = {
  * use the same query rather than reimplementing — sub-goal 96's first cut
  * derived activelyDischarging.count from the advisory list, which diverges
  * from the true live-overflow count any time an outfall stops discharging
- * while its 48h advisory window remains open. Both paths must use this
+ * while its 72h advisory window remains open. Both paths must use this
  * function.
  */
 export async function computeCsoState(dateStr: string): Promise<CsoState> {
@@ -567,7 +568,7 @@ async function getForecastTodayData(
     Promise.all(
       locations.map(async (loc) => {
         if (loc.lng == null) return [loc.id, null] as const;
-        const signal = await getUpstreamCsoForLocation(loc.lng, 48, date);
+        const signal = await getUpstreamCsoForLocation(loc.lng, thresholds.cso.swim_hold_hours, date);
         return [loc.id, signal.count > 0 ? signal : null] as const;
       }),
     ),

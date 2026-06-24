@@ -44,7 +44,7 @@ export function gageHeightStatus(gageFt: number | null): SafetyStatus | 'unknown
 
 /**
  * Status based on rainfall in the last 24–48h.
- * Any rain above the trigger threshold → swim hold for 48h.
+ * Any rain above the trigger threshold → swim hold for 72h.
  */
 export function postRainSwimStatus(rain48hIn: number | null | undefined): SafetyStatus {
   if (rain48hIn == null) return 'safe'; // no data = assume no rain
@@ -146,7 +146,7 @@ export function riverWideActivityStatuses(input: RiverwideInput): RiverwideActiv
 
   if (activeCSOAdvisory) {
     swimStatus = 'deny';
-    swimReason = 'Active CSO overflow advisory — no swimming for 48 h';
+    swimReason = 'Active CSO overflow advisory — no swimming for 72 h';
   } else if (rain48hIn >= rw.swimming.rain48hTriggerIn) {
     swimStatus = 'deny';
     swimReason = `${rain48hIn.toFixed(1)}" rain in 48 h — bacterial contamination risk`;
@@ -423,7 +423,7 @@ export function combinedLocationStatus(
   // to danger metro-wide. CSO is excluded here and handled per-location in
   // step 4 — sewer overflows flow downstream, so a metro CSO doesn't make EVERY
   // location unsafe. Flagging unaffected spots produced the contradiction of a
-  // "no swimming for 48 h" header on cards that also read "No overflows
+  // "no swimming for 72 h" header on cards that also read "No overflows
   // upstream", and "no swimming" on non-swim sites. The top-of-page CsoBanner
   // still carries the metro-wide CSO warning, so this doesn't under-warn.
   const severeNonCso = advisories.find(
@@ -443,10 +443,10 @@ export function combinedLocationStatus(
   if (upstreamCsoCount > 0) {
     if (isSwimmingLocation) {
       status = worst(status, 'danger');
-      reason = 'Sewer overflow upstream — no swimming for 48 h';
+      reason = 'Sewer overflow upstream — no swimming for 72 h';
     } else {
       status = worst(status, 'caution');
-      reason = 'Sewer overflow upstream — avoid water contact for 48 h';
+      reason = 'Sewer overflow upstream — avoid water contact for 72 h';
     }
   }
 
@@ -454,7 +454,7 @@ export function combinedLocationStatus(
   const rainStatus = postRainSwimStatus(metro.precip48hIn);
   status = worst(status, rainStatus);
   if (rainStatus === 'caution' && status === 'caution') {
-    reason = `${(metro.precip48hIn ?? 0).toFixed(1)}" recent rain — 48 h swim hold`;
+    reason = `${(metro.precip48hIn ?? 0).toFixed(1)}" recent rain — 72 h swim hold`;
   }
 
   // 6. Water temperature
@@ -655,7 +655,7 @@ export interface SwimTodayInput {
   /** JRA water-quality bacterial advisory in effect right now. */
   bacterialAdvisoryActive: boolean;
   /** Active CSO advisory window covers today. */
-  csoActive48h: boolean;
+  csoActiveRecent: boolean;
   /** River is at or above flood stage. */
   floodStage: boolean;
   /**
@@ -683,7 +683,7 @@ export interface SwimTodayResult {
  *   1. flood stage    (physical hazard, overrides everything)
  *   2. high water     (gage above the swim-deny threshold — strong current)
  *   3. bacterial      (health hazard, water quality already failed)
- *   4. CSO 48h        (health hazard, contamination probable)
+ *   4. CSO window     (health hazard, contamination probable)
  *   5. cold water     (hypothermia / shock risk under 60°F)
  * Then:
  *   60 ≤ T < 70 → wade-only (too cold for swim, ok for ankle play)
@@ -706,8 +706,8 @@ export function swimToday(input: SwimTodayInput): SwimTodayResult {
   if (input.bacterialAdvisoryActive) {
     reasons.push('Bacterial water-quality advisory in effect.');
   }
-  if (input.csoActive48h) {
-    reasons.push('Sewer overflow in the past 48 hours — bacterial contamination likely.');
+  if (input.csoActiveRecent) {
+    reasons.push('Sewer overflow in the past 72 hours — bacterial contamination likely.');
   }
   if (input.waterTempF !== null && input.waterTempF < 60) {
     reasons.push(`Water is ${input.waterTempF.toFixed(0)}°F — too cold for safe immersion.`);

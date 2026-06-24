@@ -85,7 +85,7 @@ export async function getRichmondConditionsData(
 
   // ── 2. CSO + advisory state ───────────────────────────────────────────────
   const cso = await computeCsoState(date);
-  const csoActive48h =
+  const csoActiveRecent =
     cso.activelyDischarging.count > 0 || cso.advisoriesOnSelectedDate.count > 0;
 
   const { data: advisoriesRows } = await supabase
@@ -198,7 +198,7 @@ export async function getRichmondConditionsData(
   const swim = swimToday({
     waterTempF,
     bacterialAdvisoryActive,
-    csoActive48h,
+    csoActiveRecent,
     floodStage,
     gageFt: upriver.gageFt,
   });

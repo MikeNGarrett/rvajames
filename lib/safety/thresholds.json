@@ -17,7 +17,7 @@
   },
 
   "swim": {
-    "post_rain_hold_hours": 48,
+    "post_rain_hold_hours": 72,
     "post_rain_trigger_in_24h": 0.5,
     "ecoli_max_cfu_per_100ml": 235,
     "ecoli_unsafe_cfu_per_100ml": 1000,
@@ -26,7 +26,7 @@
   },
 
   "cso": {
-    "swim_hold_hours": 48
+    "swim_hold_hours": 72
   },
 
   "activities": {
