@@ -304,12 +304,31 @@ describe('selectAdvisoryBranch', () => {
     expect(branch).toBe('skip');
   });
 
-  it('returns "skip" when overflow=null (sensor data absent)', () => {
+  it('returns "inactive-window" when overflow=null but a recent occurrence is within the window', () => {
+    // overflow=null = EmNet reported no live current-state flag. A confirmed
+    // recent occurrence is still evidence of a real discharge, so surface it.
+    // (prod 2026-06-23: CSO 11/15/20 near Belle Isle had exactly this shape —
+    // null overflow + recent event — and were wrongly skipped.)
     const branch = selectAdvisoryBranch(
       { affectsJamesMainstem: true, overflow: null, csoLastOccurrence: recentOccurrence },
       WINDOW,
     );
-    expect(branch).toBe('skip');
+    expect(branch).toBe('inactive-window');
+  });
+
+  it('returns "skip" when overflow=null and there is no recent occurrence in the window', () => {
+    expect(
+      selectAdvisoryBranch(
+        { affectsJamesMainstem: true, overflow: null, csoLastOccurrence: null },
+        WINDOW,
+      ),
+    ).toBe('skip');
+    expect(
+      selectAdvisoryBranch(
+        { affectsJamesMainstem: true, overflow: null, csoLastOccurrence: staleOccurrence },
+        WINDOW,
+      ),
+    ).toBe('skip');
   });
 
   it('respects a custom windowHours — recent occurrence outside a narrow window → skip', () => {

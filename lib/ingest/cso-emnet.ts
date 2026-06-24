@@ -77,8 +77,9 @@ export interface EmNetSite {
  * Which advisory-ingest branch applies to a given EmNetSite.
  *
  *   'active-overflow' — overflow=true; extend existing advisory or create a new one.
- *   'inactive-window' — overflow=false, recent csoLastOccurrence; standard dedup insert.
- *   'skip'            — non-mainstem, overflow=null, or stale csoLastOccurrence.
+ *   'inactive-window' — not currently overflowing (overflow=false OR null) but a
+ *                       confirmed csoLastOccurrence within the window; dedup insert.
+ *   'skip'            — non-mainstem, or no recent csoLastOccurrence in the window.
  *
  * Pure function — exported for unit testing. The actual I/O lives in cso.ts.
  */
@@ -90,11 +91,15 @@ export function selectAdvisoryBranch(
 ): AdvisoryBranch {
   if (!site.affectsJamesMainstem) return 'skip';
   if (site.overflow === true) return 'active-overflow';
-  if (
-    site.overflow === false &&
-    site.csoLastOccurrence &&
-    isWithinWindow(site.csoLastOccurrence, windowHours)
-  ) {
+  // overflow is now false OR null (EmNet didn't report a live current-state
+  // flag). A confirmed csoLastOccurrence within the window is itself evidence
+  // of a real recent discharge — surface it regardless of the flag (bacterial
+  // impact persists 48h). Previously this required overflow===false, which
+  // dropped real events whenever the flag was null: in prod 2026-06-23, CSO
+  // 11/15/20 near Belle Isle had recent events but null overflow, so they were
+  // skipped, never became advisories, and Belle Isle wrongly read "No overflows
+  // upstream." Missing a real upstream overflow is worse than an extra advisory.
+  if (site.csoLastOccurrence && isWithinWindow(site.csoLastOccurrence, windowHours)) {
     return 'inactive-window';
   }
   return 'skip';
