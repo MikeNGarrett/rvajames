@@ -77,7 +77,10 @@ const STATUS_VISUAL: Record<ActivityChip['status'], {
   },
   deny: {
     symbol:    '✗',
-    className: 'bg-status-danger-subtle text-status-danger-fg',
+    // Solid danger (not -subtle) so the deny pill's background is distinct from
+    // the danger card it sits on (bg-status-danger-subtle) — otherwise the pill
+    // is invisible against the card and the white text has no contrast.
+    className: 'bg-status-danger text-status-danger-fg',
     ariaState: 'not allowed',
   },
 };
