@@ -382,12 +382,25 @@ describe('analysisCoverageComplete', () => {
     expect(analysisCoverageComplete(viz, inodes, results)).toBe(true);
   });
 
-  it('does NOT wait on sentinel-coord sites (e.g. CSO 6/16) that the join drops', () => {
-    // CSO 6 has -999 coords and never reports analysis-results; coverage is
-    // still complete once the only valid-coord site (CSO 20) is captured.
-    const viz = [vSite('CSO 20', 10), vSite('CSO 6', 99)];
-    const inodes = [goodInode('CSO 20'), sentinelInode('CSO 6')];
+  it('does NOT wait on sentinel-coord sites that have no coord override (join drops them)', () => {
+    // A modeled-only site with -999 coords and no override (e.g. a depth gauge)
+    // is dropped by the join, so coverage is complete once the only keepable
+    // site (CSO 20) is captured — even though the sentinel site never reports.
+    const viz = [vSite('CSO 20', 10), vSite('CSO 99 No Override', 99)];
+    const inodes = [goodInode('CSO 20'), sentinelInode('CSO 99 No Override')];
     const results = new Map([[10, result(10)]]);
     expect(analysisCoverageComplete(viz, inodes, results)).toBe(true);
+  });
+
+  it('DOES wait on override sites (CSO 6/16) even though they lack a valid-coord inode', () => {
+    // CSO 6 has -999 coords but an authoritative override, so the join keeps it
+    // and we must capture its overflow data. Coverage is incomplete until CSO 6's
+    // analysis-results arrive, then complete.
+    const viz = [vSite('CSO 20', 10), vSite('CSO 6', 281)];
+    const inodes = [goodInode('CSO 20'), sentinelInode('CSO 6')];
+    expect(analysisCoverageComplete(viz, inodes, new Map([[10, result(10)]]))).toBe(false);
+    expect(
+      analysisCoverageComplete(viz, inodes, new Map([[10, result(10)], [281, result(281)]])),
+    ).toBe(true);
   });
 });

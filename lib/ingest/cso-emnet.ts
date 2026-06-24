@@ -57,6 +57,24 @@ export const EMNET_URL =
 /** Water body name patterns that indicate James River mainstem (case-insensitive) */
 const JAMES_MAINSTEM_PATTERNS = ['james river', 'james'];
 
+/**
+ * Authoritative coordinates for CSO outfalls that EmNet reports as modeled-only
+ * (lat/lon = -999 sentinel, coord_x/coord_y = 0), which would otherwise be
+ * dropped by the join — leaving real overflow sites invisible. CSO 6 is the
+ * metro's largest outfall (Shockoe / ~14th St, ~80% of annual CSO volume), so
+ * its absence materially understated the metro picture.
+ *
+ * Source: EPA National CSO Outfall Inventory (ICIS-NPDES), permit VA0063177.
+ * EmNet's "CSO N" maps to EPA PERM_FEATURE_NMBR "0NN" — verified 2026-06-23 by
+ * matching ~20 EmNet-geolocated sites to EPA outfalls (all within ~50 m). CSO 6
+ * sits just east of CSO 7, consistent with both being either side of 14th St.
+ * Keyed by EmNet site name. Only applied when EmNet gives no usable coords.
+ */
+const OUTFALL_COORD_OVERRIDES: Record<string, { lat: number; lng: number }> = {
+  'CSO 6':  { lat: 37.5310, lng: -77.4318 },
+  'CSO 16': { lat: 37.5244, lng: -77.4617 },
+};
+
 // ── Public types ──────────────────────────────────────────────────────────────
 
 /** Normalized site — the shape returned by fetchEmnetSites() */
@@ -291,15 +309,23 @@ export function joinEmnetData(
 
   const sites: EmNetSite[] = [];
   for (const vSite of visualizationSites) {
+    // Resolve coordinates: prefer EmNet's physical inode; fall back to an
+    // authoritative override for outfalls EmNet only models (-999 sentinel).
     const inode = inodeByName.get(vSite.name);
-    if (!inode || inode.lat == null || inode.lon == null) {
-      // No matching physical inode with coordinates — skip.
-      continue;
-    }
-    if (!isValidRichmondCoord(inode.lat, inode.lon)) {
-      // Inode exists but has -999 sentinel or out-of-Richmond coords (likely
-      // a modeled-only site without a physical sensor). We can't anchor the
-      // upstream/downstream computation without real lat/lng, so skip.
+    const override = OUTFALL_COORD_OVERRIDES[vSite.name];
+    let lat: number;
+    let lng: number;
+    if (inode && inode.lat != null && inode.lon != null && isValidRichmondCoord(inode.lat, inode.lon)) {
+      lat = inode.lat;
+      lng = inode.lon;
+    } else if (override) {
+      // EmNet has no usable coords for this outfall (modeled-only). Use the
+      // authoritative coordinate so a real overflow site isn't silently dropped.
+      lat = override.lat;
+      lng = override.lng;
+    } else {
+      // No physical inode coords and no override — can't anchor the
+      // upstream/downstream computation, so skip (e.g. depth-only monitors).
       continue;
     }
 
@@ -316,8 +342,8 @@ export function joinEmnetData(
       // across EmNet's polling cycles.
       emnetId: String(vSite.analysis_config_id),
       name: vSite.name,
-      lat: inode.lat,
-      lng: inode.lon,
+      lat,
+      lng,
       bodies,
       siteType: vSite.site_type,
       affectsJamesMainstem: isJamesMainstem(bodies),
@@ -330,11 +356,12 @@ export function joinEmnetData(
 }
 
 /**
- * True once every visualization site we'll actually keep has its analysis-results
- * captured. "Keep" = the site has a valid Richmond-coord inode; sites with -999
- * sentinel coords (modeled-only, e.g. CSO 6/16) are dropped by the join anyway,
- * so we deliberately do NOT wait on analysis-results that will never arrive for
- * them — otherwise every scrape would burn the full timeout.
+ * True once every visualization site the join will keep has its analysis-results
+ * captured. "Keep" = the site has a valid Richmond-coord inode OR an authoritative
+ * coordinate override (CSO 6/16). Sites with neither (e.g. depth-only monitors)
+ * are dropped by the join anyway, so we deliberately do NOT wait on
+ * analysis-results that will never arrive for them — otherwise every scrape would
+ * burn the full timeout.
  *
  * Used by fetchEmnetSites to replace a fixed wait with poll-until-complete:
  * EmNet fires one /analysis-results/ call per site in waves, and a fixed wait
@@ -346,14 +373,16 @@ export function analysisCoverageComplete(
   inodes: EmNetInode[],
   analysisResultsByConfigId: Map<number, EmNetAnalysisResult>,
 ): boolean {
-  const needed = visualizationSites.filter((v) =>
-    inodes.some(
-      (i) =>
-        i.description === v.name &&
-        i.lat != null &&
-        i.lon != null &&
-        isValidRichmondCoord(i.lat, i.lon),
-    ),
+  const needed = visualizationSites.filter(
+    (v) =>
+      v.name in OUTFALL_COORD_OVERRIDES ||
+      inodes.some(
+        (i) =>
+          i.description === v.name &&
+          i.lat != null &&
+          i.lon != null &&
+          isValidRichmondCoord(i.lat, i.lon),
+      ),
   );
   if (needed.length === 0) return false;
   return needed.every((v) => analysisResultsByConfigId.has(v.analysis_config_id));
