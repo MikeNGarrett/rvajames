@@ -28,7 +28,7 @@
  */
 
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { LazyContent } from '@/components/ui/LazyContent';
 import {
   LOCATION_SLUG_PATTERN,
@@ -148,6 +148,28 @@ function MetroSummaryContent({
     LOCATION_SLUG_PATTERN.test(bet.location_slug),
   );
 
+  // Speculation rules: prefetch + prerender the best-bet location pages so they
+  // open instantly. MUST be injected via the DOM API (createElement +
+  // textContent + appendChild) — a React <script dangerouslySetInnerHTML> sets
+  // the content through the innerHTML setter, and Chrome IGNORES speculation
+  // rules inserted that way ("a speculation rule set was inserted into the
+  // document but will be ignored"). Keyed on the slug list so it only
+  // re-injects when the best bets actually change. Slugs are already
+  // LOCATION_SLUG_PATTERN-filtered above (SEC-4), so they're safe to interpolate.
+  const speculationKey = safeBets.map((b) => b.location_slug).join('|');
+  useEffect(() => {
+    if (!speculationKey) return;
+    const urls = speculationKey.split('|').map((slug) => `/locations/${slug}`);
+    const el = document.createElement('script');
+    el.type = 'speculationrules';
+    el.textContent = JSON.stringify({
+      prefetch:  [{ urls, eagerness: 'eager' }],
+      prerender: [{ urls, eagerness: 'moderate' }],
+    });
+    document.body.appendChild(el);
+    return () => { el.remove(); };
+  }, [speculationKey]);
+
   return (
     <>
       <p className={`text-base font-semibold text-text mb-2${mode === 'forecast' ? ' mt-2' : ''}`}>
@@ -206,31 +228,8 @@ function MetroSummaryContent({
       <p className="text-xs text-text-muted italic mt-3">
         AI-generated from USGS sensor data · use your own judgment on the water
       </p>
-
-      {/*
-       * Speculation rules: prefetch + prerender best-bet location pages so
-       * they load instantly when the user taps a best-bet link. After the
-       * migration these get injected into the DOM AFTER the AI fetch
-       * completes — the browser still honours them when added dynamically.
-       * guide: improve-next-page-load-performance
-       */}
-      {safeBets.length > 0 && (
-        <script
-          type="speculationrules"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              prefetch: [{
-                urls: safeBets.map((b) => `/locations/${b.location_slug}`),
-                eagerness: 'eager',
-              }],
-              prerender: [{
-                urls: safeBets.map((b) => `/locations/${b.location_slug}`),
-                eagerness: 'moderate',
-              }],
-            }),
-          }}
-        />
-      )}
+      {/* Speculation-rules prefetch/prerender is injected via the DOM API in the
+          useEffect above (not as a <script> here) so Chrome actually honours it. */}
     </>
   );
 }

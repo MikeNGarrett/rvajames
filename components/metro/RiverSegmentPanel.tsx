@@ -50,10 +50,9 @@ export function RiverSegmentPanel({ metroState }: Props) {
   const showGauge   = upriver.gageFt !== null;
   const showSpark   = recent72h.length >= 3;
 
-  // Speculation rules — target the 3 best bets slugs for prerender.
-  // Emitted as inline JSON in this deterministic Server Component.
-  // (Best bets themselves come from MetroSummaryPanel, but we emit the hook
-  //  here; the AI panel replaces the script if it has specific slugs.)
+  // Best-bet speculation-rules (prefetch/prerender) live in MetroSummaryPanel,
+  // injected via the DOM API once the AI best-bets resolve. This deterministic
+  // panel emits none.
 
   return (
     <section
