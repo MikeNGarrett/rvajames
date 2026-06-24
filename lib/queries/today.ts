@@ -438,19 +438,12 @@ async function getObservedTodayData(
   // _csoMapPopulated is the resolved tuple list; map it.
   const upstreamCsoMap = new Map<string, UpstreamCsoSignal | null>(_csoMapPopulated);
 
-  // Compute river-wide activity verdicts ONCE per page (not per location).
-  // Reused by each location's computeLocationActivities call below.
-  const activeCSOAdvisory       = advisoriesForRules.some((a) => a.kind === 'cso_overflow');
+  // Severe-weather is regional, so hasHighSeverityAdvisory is metro-wide. The
+  // CSO swim-hold, by contrast, is per-location: a location's swimming is only
+  // CSO-restricted when there's an active overflow UPSTREAM of it. So the
+  // river-wide verdicts are computed per location below (gage/temp identical;
+  // only the CSO gate varies) to keep the swim chip consistent with the card.
   const hasHighSeverityAdvisory = advisoriesForRules.some((a) => a.severity === 'high' || a.severity === 'extreme');
-  const riverwideVerdicts = upriverGageFt !== null
-    ? riverWideActivityStatuses({
-        upriverGageFt,
-        waterTempF: upriverWaterTempF ?? null,
-        rain48hIn: 0, // TODO: source from NWS precip when available; safe default per postRainSwimStatus
-        activeCSOAdvisory,
-        hasHighSeverityAdvisory,
-      })
-    : [];
 
   const summarized: LocationSummary[] = locations.map((loc) => {
     const opStatus = statusMap.get(loc.id) ?? null;
@@ -467,6 +460,16 @@ async function getObservedTodayData(
       upstreamCso,
       loc.tags,
     );
+
+    const riverwideVerdicts = upriverGageFt !== null
+      ? riverWideActivityStatuses({
+          upriverGageFt,
+          waterTempF: upriverWaterTempF ?? null,
+          rain48hIn: 0, // TODO: source from NWS precip when available
+          activeCSOAdvisory: (upstreamCso?.count ?? 0) > 0, // per-location
+          hasHighSeverityAdvisory,
+        })
+      : [];
 
     const activities = computeLocationActivities({
       locationActivities: activitiesByLocation.get(loc.id) ?? [],
@@ -571,20 +574,11 @@ async function getForecastTodayData(
   ]);
   const upstreamCsoMapForecast = new Map<string, UpstreamCsoSignal | null>(_csoMapPopulated);
 
-  // River-wide verdicts ONCE per page. Forecast mode has no water-temp
-  // (AHPS doesn't publish it), so temp-based caution branches default to
-  // safe — matches the existing combinedLocationStatus call below.
-  const activeCSOAdvisory       = advisoriesForRules.some((a) => a.kind === 'cso_overflow');
+  // Severe-weather is regional (metro-wide); the CSO swim-hold is per-location
+  // (gated on each location's upstream signal), so river-wide verdicts are
+  // computed per location below. Forecast mode has no water-temp (AHPS doesn't
+  // publish it), so temp-based caution branches default to safe.
   const hasHighSeverityAdvisory = advisoriesForRules.some((a) => a.severity === 'high' || a.severity === 'extreme');
-  const riverwideVerdicts = upriverGageFt !== null
-    ? riverWideActivityStatuses({
-        upriverGageFt,
-        waterTempF: null,
-        rain48hIn: 0,
-        activeCSOAdvisory,
-        hasHighSeverityAdvisory,
-      })
-    : [];
 
   const summarized: LocationSummary[] = locations.map((loc) => {
     const opStatus = statusMap.get(loc.id) ?? null;
@@ -605,6 +599,16 @@ async function getForecastTodayData(
       upstreamCso,
       loc.tags,
     );
+
+    const riverwideVerdicts = upriverGageFt !== null
+      ? riverWideActivityStatuses({
+          upriverGageFt,
+          waterTempF: null,
+          rain48hIn: 0,
+          activeCSOAdvisory: (upstreamCso?.count ?? 0) > 0, // per-location
+          hasHighSeverityAdvisory,
+        })
+      : [];
 
     const activities = computeLocationActivities({
       locationActivities: activitiesByLocation.get(loc.id) ?? [],

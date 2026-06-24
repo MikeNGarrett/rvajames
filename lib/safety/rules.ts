@@ -419,21 +419,35 @@ export function combinedLocationStatus(
     reason = `Gage ${metro.gageFt} ft — ${loc.flood_close_ft} ft closes this location`;
   }
 
-  // 3. High-severity advisory overrides to danger
-  const hasSevereAdvisory = advisories.some(
-    (a) => a.severity === 'high' || a.severity === 'extreme',
+  // 3. High-severity NON-CSO advisory (severe weather, water quality) overrides
+  // to danger metro-wide. CSO is excluded here and handled per-location in
+  // step 4 — sewer overflows flow downstream, so a metro CSO doesn't make EVERY
+  // location unsafe. Flagging unaffected spots produced the contradiction of a
+  // "no swimming for 48 h" header on cards that also read "No overflows
+  // upstream", and "no swimming" on non-swim sites. The top-of-page CsoBanner
+  // still carries the metro-wide CSO warning, so this doesn't under-warn.
+  const severeNonCso = advisories.find(
+    (a) => (a.severity === 'high' || a.severity === 'extreme') && a.kind !== 'cso_overflow',
   );
-  if (hasSevereAdvisory) {
+  if (severeNonCso) {
     status = 'danger';
-    const adv = advisories.find((a) => a.severity === 'high' || a.severity === 'extreme');
-    reason = adv ? adv.headline : 'Active high-severity advisory';
+    reason = severeNonCso.headline;
   }
 
-  // 4. CSO advisory
-  const csoStatus = csoAdvisoryStatus(advisories);
-  status = worst(status, csoStatus);
-  if (csoStatus === 'danger') {
-    reason = 'Active CSO overflow advisory — no swimming for 48 h';
+  // 4. CSO — per-location via the upstream signal, NOT the metro-wide advisory
+  // list. A location is only affected when an overflow is active UPSTREAM of it
+  // (contamination flows downstream). Swim spots → no-swimming (danger);
+  // non-swim river access → avoid water contact (caution).
+  const upstreamCsoCount = upstreamCso?.count ?? 0;
+  const isSwimmingLocation = locationTags?.includes('swimming') ?? false;
+  if (upstreamCsoCount > 0) {
+    if (isSwimmingLocation) {
+      status = worst(status, 'danger');
+      reason = 'Sewer overflow upstream — no swimming for 48 h';
+    } else {
+      status = worst(status, 'caution');
+      reason = 'Sewer overflow upstream — avoid water contact for 48 h';
+    }
   }
 
   // 5. Post-rain swim hold
@@ -454,16 +468,7 @@ export function combinedLocationStatus(
     }
   }
 
-  // 7. Upstream CSO override — swimming locations only.
-  // Escalates to 'caution' but cannot override 'danger' or 'closed'.
-  // Priority: closures > CSO > water-conditions (handled by applying after
-  // water rules but before the label derivation; closures are already returned
-  // early at the top of this function).
-  const isSwimmingLocation = locationTags?.includes('swimming') ?? false;
-  if (isSwimmingLocation && upstreamCso && upstreamCso.count > 0 && status === 'safe') {
-    status = 'caution';
-    reason = 'CSO upstream — bacterial levels likely elevated';
-  }
+  // (Upstream CSO is handled in step 4 above — per-location, swim vs non-swim.)
 
   // ── Restricted operational status: escalate to caution, prepend note ────
   if (operationalStatus?.kind === 'restricted') {

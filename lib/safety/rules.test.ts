@@ -390,13 +390,18 @@ describe('combinedLocationStatus', () => {
     ).toMatch(/12 ft closes this location/i);
   });
 
-  it('returns danger on active CSO advisory regardless of gage', () => {
+  it('a metro CSO advisory alone does NOT flag a location — only an upstream overflow does', () => {
+    // CSO is per-location now (it flows downstream); the metro-wide CsoBanner
+    // carries the blanket warning. With no upstream overflow, gage governs.
     const result = combinedLocationStatus(
       { gageFt: 2.5 },
       [{ kind: 'cso_overflow', severity: 'high', headline: 'CSO active' }],
       'belle-isle',
+      null,
+      { count: 0, mostRecentAt: null, outfalls: [] },
+      ['swimming'],
     );
-    expect(result.status).toBe('danger');
+    expect(result.status).toBe('safe');
   });
 
   it('escalates to danger on high-severity advisory', () => {
@@ -505,7 +510,7 @@ describe('combinedLocationStatus', () => {
     ],
   };
 
-  it('swimming location + upstreamCso.count > 0 → caution', () => {
+  it('swimming location + upstreamCso.count > 0 → danger (no swimming)', () => {
     const result = combinedLocationStatus(
       { gageFt: 3.5 },
       noAdvisories,
@@ -514,8 +519,8 @@ describe('combinedLocationStatus', () => {
       csoSignal,
       ['swimming', 'tubing'],
     );
-    expect(result.status).toBe('caution');
-    expect(result.reason).toMatch(/CSO upstream/i);
+    expect(result.status).toBe('danger');
+    expect(result.reason).toMatch(/sewer overflow upstream — no swimming/i);
   });
 
   it('swimming location + upstreamCso null → no override (safe)', () => {
@@ -530,7 +535,7 @@ describe('combinedLocationStatus', () => {
     expect(result.status).toBe('safe');
   });
 
-  it('non-swimming location (trail) + upstreamCso.count > 0 → no change', () => {
+  it('non-swimming location (trail) + upstreamCso.count > 0 → caution (avoid water contact)', () => {
     const result = combinedLocationStatus(
       { gageFt: 3.5 },
       noAdvisories,
@@ -539,7 +544,8 @@ describe('combinedLocationStatus', () => {
       csoSignal,
       ['hiking', 'trail'],
     );
-    expect(result.status).toBe('safe');
+    expect(result.status).toBe('caution');
+    expect(result.reason).toMatch(/avoid water contact/i);
   });
 
   it('closed location + upstreamCso.count > 0 → still closed (closures win)', () => {
