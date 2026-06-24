@@ -16,6 +16,7 @@ import {
   buildAdvisoryBody,
   joinEmnetData,
   selectAdvisoryBranch,
+  analysisCoverageComplete,
 } from './cso-emnet';
 
 // ── isJamesMainstem ────────────────────────────────────────────────────────────
@@ -340,5 +341,53 @@ describe('selectAdvisoryBranch', () => {
         1,
       ),
     ).toBe('skip');
+  });
+});
+
+// ── analysisCoverageComplete (poll-until-complete gate) ───────────────────────
+
+describe('analysisCoverageComplete', () => {
+  const vSite = (name: string, configId: number) => ({
+    name,
+    site_type: 'CSO',
+    bodies: '',
+    analysis_config_id: configId,
+  });
+  const goodInode = (name: string) => ({
+    id: 1, name: 'sensor', description: name, lat: 37.54, lon: -77.44,
+  });
+  const sentinelInode = (name: string) => ({
+    id: 2, name: 'sensor', description: name, lat: -999, lon: -999,
+  });
+  const result = (configId: number) => ({
+    analysis_configuration_id: configId,
+    analysis_results: { analysis_results: { cso_last_occurrence: null, cso_active_overflow: false } },
+  });
+
+  it('returns false while still loading (no viz sites yet)', () => {
+    expect(analysisCoverageComplete([], [], new Map())).toBe(false);
+  });
+
+  it('returns false when a valid-coord site is missing its analysis-results', () => {
+    const viz = [vSite('CSO 20', 10), vSite('CSO 21', 11)];
+    const inodes = [goodInode('CSO 20'), goodInode('CSO 21')];
+    const results = new Map([[10, result(10)]]); // CSO 21 (config 11) not captured yet
+    expect(analysisCoverageComplete(viz, inodes, results)).toBe(false);
+  });
+
+  it('returns true when all valid-coord sites have analysis-results', () => {
+    const viz = [vSite('CSO 20', 10), vSite('CSO 21', 11)];
+    const inodes = [goodInode('CSO 20'), goodInode('CSO 21')];
+    const results = new Map([[10, result(10)], [11, result(11)]]);
+    expect(analysisCoverageComplete(viz, inodes, results)).toBe(true);
+  });
+
+  it('does NOT wait on sentinel-coord sites (e.g. CSO 6/16) that the join drops', () => {
+    // CSO 6 has -999 coords and never reports analysis-results; coverage is
+    // still complete once the only valid-coord site (CSO 20) is captured.
+    const viz = [vSite('CSO 20', 10), vSite('CSO 6', 99)];
+    const inodes = [goodInode('CSO 20'), sentinelInode('CSO 6')];
+    const results = new Map([[10, result(10)]]);
+    expect(analysisCoverageComplete(viz, inodes, results)).toBe(true);
   });
 });

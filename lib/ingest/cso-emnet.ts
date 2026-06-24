@@ -329,6 +329,36 @@ export function joinEmnetData(
   return sites;
 }
 
+/**
+ * True once every visualization site we'll actually keep has its analysis-results
+ * captured. "Keep" = the site has a valid Richmond-coord inode; sites with -999
+ * sentinel coords (modeled-only, e.g. CSO 6/16) are dropped by the join anyway,
+ * so we deliberately do NOT wait on analysis-results that will never arrive for
+ * them — otherwise every scrape would burn the full timeout.
+ *
+ * Used by fetchEmnetSites to replace a fixed wait with poll-until-complete:
+ * EmNet fires one /analysis-results/ call per site in waves, and a fixed wait
+ * raced them (smoke tests captured only 11–15 of 22 sites per run), silently
+ * dropping real overflows. Returns false while still loading (no viz sites yet).
+ */
+export function analysisCoverageComplete(
+  visualizationSites: EmNetVisualizationSite[],
+  inodes: EmNetInode[],
+  analysisResultsByConfigId: Map<number, EmNetAnalysisResult>,
+): boolean {
+  const needed = visualizationSites.filter((v) =>
+    inodes.some(
+      (i) =>
+        i.description === v.name &&
+        i.lat != null &&
+        i.lon != null &&
+        isValidRichmondCoord(i.lat, i.lon),
+    ),
+  );
+  if (needed.length === 0) return false;
+  return needed.every((v) => analysisResultsByConfigId.has(v.analysis_config_id));
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 /**
@@ -419,10 +449,26 @@ export async function fetchEmnetSites(
     // ── Step 3: Navigate and wait for the page + initial polling to settle ─
     await page.goto(EMNET_URL, { waitUntil: 'networkidle2', timeout: 60_000 });
 
-    // After networkidle2, the app continues polling /analysis-results/ once
-    // per configured site. Wait a bit longer to capture the initial wave —
-    // smoke-tested at ~5s for Richmond's ~30 sites.
-    await new Promise<void>((r) => setTimeout(r, 5_000));
+    // After networkidle2 the app fires one /analysis-results/ call per site in
+    // waves. A fixed wait raced them (smoke tests captured only 11–15 of 22
+    // sites per run, non-deterministically — silently dropping real overflows
+    // like CSO 20/21/24). Poll until every valid-coord site has its
+    // analysis-results, capped at MAX_WAIT_MS so a never-reporting site can't
+    // hang the scrape. The per-site response handler keeps mutating the maps
+    // between polls, so coverage grows as we wait.
+    const MAX_WAIT_MS = 20_000;
+    const POLL_MS = 400;
+    const waitStart = Date.now();
+    while (Date.now() - waitStart < MAX_WAIT_MS) {
+      if (analysisCoverageComplete(visualizationSites, inodes, analysisResultsByConfigId)) {
+        break;
+      }
+      await new Promise<void>((r) => setTimeout(r, POLL_MS));
+    }
+    console.log(
+      `[cso-emnet] analysis-results wait settled after ${Date.now() - waitStart}ms — ` +
+      `${analysisResultsByConfigId.size} results captured for ${visualizationSites.length} viz sites`,
+    );
 
     // ── Step 4: Join the three captures into EmNetSite[] ───────────────────
     if (visualizationSites.length === 0) {
