@@ -158,6 +158,37 @@ export function isWithinWindow(
   return Date.now() - ts <= windowHours * 60 * 60 * 1000;
 }
 
+/**
+ * effective_to for a CSO advisory: `windowHours` after the actual discharge
+ * event, NOT relative to "now". Anchoring to the event means a persistently-true
+ * EmNet overflow flag can't extend the advisory past the real contamination
+ * window — the bump is idempotent and a stuck flag self-expires once the event
+ * ages out. (See the CSO 12 zombie-advisory incident, 2026-06-30.)
+ */
+export function advisoryEffectiveTo(csoLastOccurrence: string, windowHours: number): string {
+  return new Date(
+    new Date(csoLastOccurrence).getTime() + windowHours * 60 * 60 * 1000,
+  ).toISOString();
+}
+
+/**
+ * Resolve EmNet's `cso_active_overflow` flag into a trustworthy "discharging
+ * now" value for storage. EmNet's flag can stick `true` for weeks while the
+ * site's last actual occurrence stays frozen (observed on CSO 12). Treat an
+ * active flag as genuine only when its occurrence is recent (within the window)
+ * or absent; a `true` flag with a stale occurrence is a stuck flag → `false`.
+ * `false`/`null` pass through unchanged.
+ */
+export function resolveCurrentOverflow(
+  overflow: boolean | null,
+  csoLastOccurrence: string | null,
+  windowHours: number,
+): boolean | null {
+  if (overflow !== true) return overflow;
+  if (!csoLastOccurrence) return true;
+  return isWithinWindow(csoLastOccurrence, windowHours);
+}
+
 /** Short headline for an active CSO advisory */
 export function buildAdvisoryHeadline(outfallName: string): string {
   return `CSO discharge at ${outfallName}`;

@@ -47,6 +47,8 @@ import {
   buildAdvisoryHeadline,
   buildAdvisoryBody,
   selectAdvisoryBranch,
+  advisoryEffectiveTo,
+  resolveCurrentOverflow,
 } from './cso-emnet';
 
 /**
@@ -141,9 +143,12 @@ export async function runCsoIngestion(): Promise<RunResult> {
           site_type: site.siteType,
           affects_james_mainstem: site.affectsJamesMainstem,
           last_seen_at: now,
-          // Sub-goal 93: persist EmNet's cso_active_overflow flag so sub-goals
-          // 94/95 can distinguish "actively discharging" from "past 72h advisory."
-          current_overflow: site.overflow,
+          // Persist EmNet's cso_active_overflow flag so the metro summary can
+          // distinguish "actively discharging" from "past 72h advisory." Guard
+          // against EmNet's stuck-true flag (CSO 12, 2026-06-30): an active flag
+          // with a stale occurrence isn't a live discharge, so resolveCurrentOverflow
+          // stores false — otherwise the "actively discharging" count zombies too.
+          current_overflow: resolveCurrentOverflow(site.overflow, site.csoLastOccurrence, CSO_WINDOW_HOURS),
           current_overflow_observed_at: now,
         },
         { onConflict: 'emnet_id' },
@@ -181,7 +186,18 @@ export async function runCsoIngestion(): Promise<RunResult> {
       // advisories from past events are never extended again.
       const effectiveFrom = site.csoLastOccurrence ?? now;
       const sourceId      = buildSourceId(site.emnetId, effectiveFrom);
-      const newEffectiveTo = windowEndFromNow();
+      // Anchor effective_to to the actual discharge event + window, NOT now+window.
+      // EmNet's cso_active_overflow flag can stick "true" for weeks (observed on
+      // CSO 12 in prod 2026-06-30: flag true, csoLastOccurrence frozen at 06-14).
+      // A now+window bump re-extended that advisory every scrape → a 16-day zombie
+      // overflow. Anchoring to csoLastOccurrence makes the advisory expire `window`
+      // hours after the real event regardless of the flag, and makes the bump
+      // idempotent (a stuck flag with a stale occurrence recomputes to a past
+      // effective_to and self-expires). Fall back to now+window only when EmNet
+      // reports an active overflow with no occurrence timestamp at all.
+      const newEffectiveTo = site.csoLastOccurrence
+        ? advisoryEffectiveTo(site.csoLastOccurrence, CSO_WINDOW_HOURS)
+        : windowEndFromNow();
 
       const { data: existingAdvisory } = await supabase
         .from('advisories')
@@ -191,7 +207,7 @@ export async function runCsoIngestion(): Promise<RunResult> {
         .maybeSingle();
 
       if (existingAdvisory) {
-        // Same event continuing — bump its effective_to to now+72h.
+        // Same event continuing — refresh effective_to (occurrence + window).
         const { error: updateError } = await supabase
           .from('advisories')
           .update({ effective_to: newEffectiveTo })
@@ -237,9 +253,7 @@ export async function runCsoIngestion(): Promise<RunResult> {
       const source_id = buildSourceId(site.emnetId, site.csoLastOccurrence!);
       if (existingSourceIds.has(source_id)) continue;
 
-      const effectiveTo = new Date(
-        new Date(site.csoLastOccurrence!).getTime() + CSO_WINDOW_HOURS * 60 * 60 * 1000,
-      ).toISOString();
+      const effectiveTo = advisoryEffectiveTo(site.csoLastOccurrence!, CSO_WINDOW_HOURS);
 
       const { error: advError } = await supabase.from('advisories').insert({
         source: 'emnet_cso',

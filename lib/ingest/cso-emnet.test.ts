@@ -17,6 +17,8 @@ import {
   joinEmnetData,
   selectAdvisoryBranch,
   analysisCoverageComplete,
+  advisoryEffectiveTo,
+  resolveCurrentOverflow,
 } from './cso-emnet';
 
 // ── isJamesMainstem ────────────────────────────────────────────────────────────
@@ -402,5 +404,40 @@ describe('analysisCoverageComplete', () => {
     expect(
       analysisCoverageComplete(viz, inodes, new Map([[10, result(10)], [281, result(281)]])),
     ).toBe(true);
+  });
+});
+
+// ── advisoryEffectiveTo ───────────────────────────────────────────────────────
+
+describe('advisoryEffectiveTo', () => {
+  it('returns the occurrence plus the window, anchored to the event (not now)', () => {
+    // 2026-06-14T18:55-04:00 == 22:55Z; +72h == 2026-06-17T22:55Z
+    expect(advisoryEffectiveTo('2026-06-14T18:55:00-04:00', 72)).toBe('2026-06-17T22:55:00.000Z');
+  });
+  it('a stale occurrence yields a past effective_to (the CSO 12 self-heal)', () => {
+    // 16-day-old event + 72h window → effective_to long in the past → expired.
+    const stale = new Date(Date.now() - 16 * 24 * 3600_000).toISOString();
+    expect(new Date(advisoryEffectiveTo(stale, 72)).getTime()).toBeLessThan(Date.now());
+  });
+});
+
+// ── resolveCurrentOverflow (stuck-flag guard) ─────────────────────────────────
+
+describe('resolveCurrentOverflow', () => {
+  const recent = new Date(Date.now() - 2 * 3600_000).toISOString();   // 2h ago
+  const stale  = new Date(Date.now() - 16 * 24 * 3600_000).toISOString(); // 16d ago
+
+  it('true + recent occurrence → true (genuine live discharge)', () => {
+    expect(resolveCurrentOverflow(true, recent, 72)).toBe(true);
+  });
+  it('true + stale occurrence → false (stuck flag, the CSO 12 case)', () => {
+    expect(resolveCurrentOverflow(true, stale, 72)).toBe(false);
+  });
+  it('true + no occurrence → true (trust the flag when no timestamp)', () => {
+    expect(resolveCurrentOverflow(true, null, 72)).toBe(true);
+  });
+  it('false and null pass through unchanged', () => {
+    expect(resolveCurrentOverflow(false, recent, 72)).toBe(false);
+    expect(resolveCurrentOverflow(null, recent, 72)).toBeNull();
   });
 });
