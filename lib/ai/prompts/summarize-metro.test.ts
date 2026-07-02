@@ -39,7 +39,6 @@ const baseMetroInput: MetroSummaryInput = {
   daysOut: 0,
   rain48hIn: 0,
   activeCSOAdvisory: false,
-  hasHighSeverityAdvisory: false,
   activeClosures: [],
   // cso field omitted → no active overflows
 };

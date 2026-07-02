@@ -47,6 +47,13 @@ alerts), it overrides everything below:
 • Keep the calm, non-alarmist voice, but be unambiguous that today is not a day
   to be out at the river.
 
+EXTREME HEAT (tier "heat") is different: it is an EXTREME HEAT gate, not storm
+weather. Never mention lightning, thunderstorms, or flash flooding for a heat
+alert. Lead with heat safety — hydration, shade, sun protection, heat-illness
+signs in kids — and prefer morning/evening timing. Do NOT tell people to stay
+away from the river for heat; water activities keep their normal deterministic
+statuses.
+
 ════════════════════════════════════════════════════════════
 DATE MODE REFERENCE — TENSE AND CERTAINTY
 ════════════════════════════════════════════════════════════
@@ -484,7 +491,10 @@ SCHEMA B RULES — Activities:
   them. Write a note (≤ 12 words) that explains the status in plain, family-friendly language.
 • The note may reference water temperature, recent rain, active advisories, or time of year.
 • The note must be CONSISTENT with the status — do not say "fine for confident swimmers" when
-  status is "deny." Do not escalate a "caution" to an implied "deny" in the note.
+  status is "deny." Do not escalate a "caution" to an implied "deny" in the note. If a status
+  seems to conflict with other context in this message, TRUST THE STATUS — the deterministic
+  engine already weighed that context; never write a note claiming an activity is denied or
+  unsafe when its status is "safe."
 • Always return all 4 entries. Never omit an activity.
 
 SCHEMA B RULES — Rapids class:

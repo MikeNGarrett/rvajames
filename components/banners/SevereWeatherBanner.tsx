@@ -13,6 +13,7 @@ import type { SevereWeatherResult } from '@/lib/safety/rules';
  * Colors match CsoBanner's severity tokens:
  *   warning → danger (red),  role="alert"
  *   watch   → caution (amber), role="status"
+ *   heat    → caution (amber), role="status" — heat-safety message, not storm copy
  */
 export function SevereWeatherBanner({ result }: { result: SevereWeatherResult }) {
   if (result.tier === 'none') return null;

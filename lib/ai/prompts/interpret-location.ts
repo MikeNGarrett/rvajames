@@ -89,11 +89,11 @@ export interface InterpretLocationInput {
   dataAgeMinutes: number | null;
   activeAdvisoryHeadlines: string[];
   /**
-   * Deterministic severe-weather gate (NWS watches/warnings). When tier is
-   * 'watch'/'warning' the model must suppress activity recommendations — the
-   * shared system prompt enforces the override.
+   * Deterministic severe-weather gate (NWS alerts). 'watch'/'warning' (storm)
+   * suppresses activity recommendations; 'heat' leads with heat safety without
+   * suppressing water activities — heat is an exertion hazard, not a river one.
    */
-  severeWeather?: { tier: 'none' | 'watch' | 'warning'; message: string };
+  severeWeather?: { tier: 'none' | 'heat' | 'watch' | 'warning'; message: string };
   availableActivitySlugs: string[];
   /**
    * James River Watch bacterial data for this location's mapped station(s).
@@ -135,11 +135,19 @@ export function buildUserMessage(input: InterpretLocationInput): string {
     `Location: ${input.locationName} (${input.locationSlug})`,
     `Age context: ${input.ageBucket === 'none' ? 'General audience — no children (adult visitors only)' : `Youngest family member: ${input.ageBucket}`}`,
     '',
-    ...(input.severeWeather && input.severeWeather.tier !== 'none'
+    ...(input.severeWeather && (input.severeWeather.tier === 'watch' || input.severeWeather.tier === 'warning')
       ? [
           `--- SEVERE WEATHER (deterministic safety gate, tier: ${input.severeWeather.tier}) ---`,
           input.severeWeather.message,
           'DIRECTIVE: This overrides everything below. Do NOT recommend any activities at this location. Lead with this safety message; today is unsafe to be out near the river regardless of gage or temperature.',
+          '',
+        ]
+      : []),
+    ...(input.severeWeather && input.severeWeather.tier === 'heat'
+      ? [
+          '--- EXTREME HEAT (deterministic safety gate, tier: heat) ---',
+          input.severeWeather.message,
+          'DIRECTIVE: This is a heat alert, NOT storm weather — do not mention lightning, thunderstorms, or flash flooding. Weave in heat safety (hydration, shade, sun protection, watching kids for heat illness) and prefer morning/evening timing. Do NOT tell people to avoid this location — activities keep their normal statuses below.',
           '',
         ]
       : []),

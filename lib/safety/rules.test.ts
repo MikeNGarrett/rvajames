@@ -196,7 +196,7 @@ const baseInput = {
   waterTempF: 74,
   rain48hIn: 0,
   activeCSOAdvisory: false,
-  hasHighSeverityAdvisory: false,
+  severeWeather: 'none' as const,
 };
 
 describe('riverWideActivityStatuses', () => {
@@ -271,9 +271,26 @@ describe('riverWideActivityStatuses', () => {
     const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 3.5 });
     expect(result.find((r) => r.slug === 'hiking')?.status).toBe('safe');
   });
-  it('hiking: caution on high-severity advisory', () => {
-    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 3.5, hasHighSeverityAdvisory: true });
+  it('hiking: caution under a heat alert (water activities untouched)', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 3.5, severeWeather: 'heat' });
     expect(result.find((r) => r.slug === 'hiking')?.status).toBe('caution');
+    expect(result.find((r) => r.slug === 'hiking')?.baseReason).toMatch(/heat/i);
+    expect(result.find((r) => r.slug === 'swimming')?.status).toBe('safe');
+    expect(result.find((r) => r.slug === 'kayaking-whitewater')?.status).toBe('safe');
+  });
+
+  // ── Severe-weather overlay ──
+  it('storm warning: all four activities deny, chips can never contradict the banner', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 3.5, severeWeather: 'warning' });
+    for (const v of result) {
+      expect(v.status).toBe('deny');
+      expect(v.baseReason).toMatch(/severe weather/i);
+    }
+  });
+  it('storm watch: safe statuses escalate to caution, existing denies keep their reason', () => {
+    const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 6.0, severeWeather: 'watch' });
+    expect(result.find((r) => r.slug === 'swimming')?.status).toBe('deny'); // gage deny preserved
+    expect(result.find((r) => r.slug === 'hiking')?.status).toBe('caution'); // was safe → watch caution
   });
   it('hiking: deny above flood threshold (> 11 ft)', () => {
     const result = riverWideActivityStatuses({ ...baseInput, upriverGageFt: 12.0 });
@@ -411,6 +428,18 @@ describe('combinedLocationStatus', () => {
       'pony-pasture',
     );
     expect(result.status).toBe('danger');
+  });
+
+  it('a heat alert does NOT turn location cards red (heat is not a river hazard)', () => {
+    // Live incident 2026-07-02: an Extreme Heat Warning (general/high) painted
+    // every card danger with storm framing. Heat surfaces via the metro banner
+    // + hiking caution instead.
+    const result = combinedLocationStatus(
+      { gageFt: 3.0 },
+      [{ kind: 'general', severity: 'high', headline: 'Extreme Heat Warning issued July 2 until July 3 8:00PM EDT' }],
+      'pony-pasture',
+    );
+    expect(result.status).toBe('safe');
   });
 
   it('returns caution after significant rainfall', () => {
@@ -988,6 +1017,26 @@ describe('severeWeatherStatus', () => {
 
   it('extreme severity (e.g. tornado warning) → warning tier', () => {
     expect(severeWeatherStatus([{ kind: 'general', severity: 'extreme', headline: 'Tornado Warning' }]).tier).toBe('warning');
+  });
+
+  // ── Heat alerts (live incident 2026-07-02: heat drove the storm gate) ──
+  it('Extreme Heat Warning → heat tier, NOT the storm warning gate', () => {
+    const r = severeWeatherStatus([
+      { kind: 'general', severity: 'high', headline: 'Extreme Heat Warning issued July 2 at 2:31AM EDT until July 3 at 8:00PM EDT by NWS Wakefield VA' },
+    ]);
+    expect(r.tier).toBe('heat');
+    expect(r.message.toLowerCase()).toContain('heat');
+    expect(r.message.toLowerCase()).not.toContain('shelter');
+  });
+  it('Heat Advisory → heat tier', () => {
+    expect(severeWeatherStatus([{ kind: 'general', severity: 'high', headline: 'Heat Advisory until 8 PM EDT' }]).tier).toBe('heat');
+  });
+  it('heat + storm both active → storm gate wins', () => {
+    const r = severeWeatherStatus([
+      { kind: 'general', severity: 'high', headline: 'Extreme Heat Warning until 8 PM' },
+      { kind: 'general', severity: 'high', headline: 'Severe Thunderstorm Warning issued' },
+    ]);
+    expect(r.tier).toBe('warning');
   });
 
   it('warning outranks watch when both are active', () => {

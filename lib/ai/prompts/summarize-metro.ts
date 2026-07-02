@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { AgeBucket } from '@/lib/url-state';
 import type { MetroRiverState } from '@/lib/queries/river-segment';
-import { rapidsClass, riverWideActivityStatuses } from '@/lib/safety/rules';
+import { rapidsClass, riverWideActivityStatuses, type SevereWeatherTier } from '@/lib/safety/rules';
 
 // ─── Activity grid schema ─────────────────────────────────────────────────────
 
@@ -100,11 +100,13 @@ export interface MetroSummaryInput {
   metroState:              MetroRiverState;
   activeAdvisoryHeadlines: string[];
   /**
-   * Deterministic severe-weather gate (NWS watches/warnings) from
-   * severeWeatherStatus(). When tier is 'watch'/'warning' the model is directed
-   * to suppress activity recommendations and lead with the safety message.
+   * Deterministic severe-weather gate (NWS alerts) from severeWeatherStatus().
+   * 'watch'/'warning' (storm/flood) directs the model to suppress activity
+   * recommendations and lead with the safety message. 'heat' directs it to
+   * lead with heat-safety guidance WITHOUT suppressing water activities —
+   * heat is an exertion/hydration hazard, not a reason to avoid the river.
    */
-  severeWeather?:          { tier: 'none' | 'watch' | 'warning'; message: string };
+  severeWeather?:          { tier: SevereWeatherTier; message: string };
   airTempF:                number | null;
   /** 'observed' for today (live gauge data); 'forecast' for days +1..+3. */
   mode:                    'observed' | 'forecast';
@@ -115,7 +117,6 @@ export interface MetroSummaryInput {
   // Optional: pre-computed deterministic signals (injected in sub-goal 31)
   rain48hIn?:              number;
   activeCSOAdvisory?:      boolean;
-  hasHighSeverityAdvisory?: boolean;
   /**
    * Active operational closures / restrictions. Included in the user message
    * so the AI avoids recommending closed locations in best_bets_today.
@@ -141,7 +142,6 @@ export function buildMetroUserMessage(input: MetroSummaryInput): string {
   const upriverGageFt   = upriver.gageFt ?? 3.0;   // fallback to normal if unknown
   const rain48hIn       = input.rain48hIn ?? 0;
   const activeCSOAdvisory      = input.activeCSOAdvisory ?? false;
-  const hasHighSeverityAdvisory = input.hasHighSeverityAdvisory ?? false;
 
   const classResult    = rapidsClass(upriverGageFt);
   const activityBaseline = riverWideActivityStatuses({
@@ -149,7 +149,7 @@ export function buildMetroUserMessage(input: MetroSummaryInput): string {
     waterTempF:             upriver.waterTempF ?? null,
     rain48hIn,
     activeCSOAdvisory,
-    hasHighSeverityAdvisory,
+    severeWeather:          input.severeWeather?.tier ?? 'none',
   });
 
   const isForecast = input.mode === 'forecast';
@@ -167,11 +167,19 @@ export function buildMetroUserMessage(input: MetroSummaryInput): string {
         : `Youngest family member: ${input.ageBucket}`
     }`,
     '',
-    ...(input.severeWeather && input.severeWeather.tier !== 'none'
+    ...(input.severeWeather && (input.severeWeather.tier === 'watch' || input.severeWeather.tier === 'warning')
       ? [
           `--- SEVERE WEATHER (deterministic safety gate, tier: ${input.severeWeather.tier}) ---`,
           input.severeWeather.message,
           'DIRECTIVE: This overrides everything below. Do NOT recommend any outdoor or water activities or best-bet locations. Lead with this safety message and frame today as unsafe to be at the river regardless of gage or temperature.',
+          '',
+        ]
+      : []),
+    ...(input.severeWeather && input.severeWeather.tier === 'heat'
+      ? [
+          '--- EXTREME HEAT (deterministic safety gate, tier: heat) ---',
+          input.severeWeather.message,
+          'DIRECTIVE: This is a heat alert, NOT storm weather — do not mention lightning, thunderstorms, or flash flooding. Lead with heat safety: hydration, shade breaks, sun protection, and watching kids for heat illness. Do NOT tell people to avoid the river — water activities keep their normal statuses below. Recommend going early morning or evening and taking it easy on exertion (hiking, rock-hopping in full sun).',
           '',
         ]
       : []),

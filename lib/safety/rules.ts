@@ -126,7 +126,15 @@ export interface RiverwideInput {
   waterTempF:             number | null;
   rain48hIn:              number;
   activeCSOAdvisory:      boolean;
-  hasHighSeverityAdvisory: boolean;
+  /**
+   * Deterministic severe-weather tier from severeWeatherStatus(). Storm tiers
+   * gate ALL activities (warning → deny, watch → caution); 'heat' cautions
+   * only exertion (hiking) — heat is not a reason to stay out of the water.
+   * Replaces the old hasHighSeverityAdvisory boolean, which couldn't tell a
+   * thunderstorm from a heat wave (or from a CSO advisory) and produced
+   * "stay off the river" chips during an Extreme Heat Warning.
+   */
+  severeWeather: SevereWeatherTier;
 }
 
 /**
@@ -137,7 +145,7 @@ export interface RiverwideInput {
  * The AI copies slug + status verbatim and writes a note field; it does not derive them.
  */
 export function riverWideActivityStatuses(input: RiverwideInput): RiverwideActivityStatus[] {
-  const { upriverGageFt, waterTempF, rain48hIn, activeCSOAdvisory } = input;
+  const { upriverGageFt, waterTempF, rain48hIn, activeCSOAdvisory, severeWeather } = input;
   const rw = thresholds.riverWideActivities;
 
   // ── Swimming ──────────────────────────────────────────────────────────────
@@ -195,17 +203,42 @@ export function riverWideActivityStatuses(input: RiverwideInput): RiverwideActiv
   if (upriverGageFt > rw.hiking.denyMinGageFt) {
     hikeStatus = 'deny';
     hikeReason = `Gage ${upriverGageFt} ft — flood stage, riverside trails closed`;
-  } else if (input.hasHighSeverityAdvisory) {
-    hikeStatus = 'caution';
-    hikeReason = 'Active high-severity advisory — check trail conditions';
   }
 
-  return [
+  let verdicts: RiverwideActivityStatus[] = [
     { slug: 'swimming',            status: swimStatus,  baseReason: swimReason },
     { slug: 'rock-hopping',        status: rockStatus,  baseReason: rockReason },
     { slug: 'kayaking-whitewater', status: kayakStatus, baseReason: kayakReason },
     { slug: 'hiking',              status: hikeStatus,  baseReason: hikeReason },
   ];
+
+  // ── Severe-weather overlay ────────────────────────────────────────────────
+  // Applied last so the chips can never contradict the headline/banner gate.
+  // warning: physical hazard (lightning, flash flooding) — everything denied.
+  // watch:   conditions can turn fast — nothing better than caution.
+  // heat:    exertion hazard only — hiking cautioned, water activities keep
+  //          their water-quality/gage verdicts (a hot day is a river day).
+  if (severeWeather === 'warning') {
+    verdicts = verdicts.map((v) => ({
+      ...v,
+      status: 'deny',
+      baseReason: 'Severe weather warning — stay off the river and trails',
+    }));
+  } else if (severeWeather === 'watch') {
+    verdicts = verdicts.map((v) =>
+      v.status === 'safe'
+        ? { ...v, status: 'caution', baseReason: 'Severe weather watch — conditions can turn fast' }
+        : v,
+    );
+  } else if (severeWeather === 'heat') {
+    verdicts = verdicts.map((v) =>
+      v.slug === 'hiking' && v.status === 'safe'
+        ? { ...v, status: 'caution', baseReason: 'Extreme heat — hydrate, go early or late' }
+        : v,
+    );
+  }
+
+  return verdicts;
 }
 
 /**
@@ -426,8 +459,14 @@ export function combinedLocationStatus(
   // "no swimming for 72 h" header on cards that also read "No overflows
   // upstream", and "no swimming" on non-swim sites. The top-of-page CsoBanner
   // still carries the metro-wide CSO warning, so this doesn't under-warn.
+  // Heat alerts are also excluded: the hazard is heat illness, not the river —
+  // an Extreme Heat Warning shouldn't paint every location card red (observed
+  // live 2026-07-02). Heat surfaces via the metro heat banner + hiking caution.
   const severeNonCso = advisories.find(
-    (a) => (a.severity === 'high' || a.severity === 'extreme') && a.kind !== 'cso_overflow',
+    (a) =>
+      (a.severity === 'high' || a.severity === 'extreme') &&
+      a.kind !== 'cso_overflow' &&
+      !isHeatAlert(a.headline),
   );
   if (severeNonCso) {
     status = 'danger';
@@ -844,7 +883,7 @@ export function happinessIndex(input: HappinessIndexInput): HappinessIndexResult
 
 // ── Severe weather (NWS watches / warnings) ─────────────────────────────────
 
-export type SevereWeatherTier = 'none' | 'watch' | 'warning';
+export type SevereWeatherTier = 'none' | 'heat' | 'watch' | 'warning';
 
 export interface SevereWeatherAdvisoryInput {
   kind: string;
@@ -861,6 +900,20 @@ export interface SevereWeatherResult {
 }
 
 const FLOOD_ALERT_KINDS = new Set(['flood_warning', 'flood_watch', 'flood_advisory']);
+
+/**
+ * Heat-type NWS alerts (Extreme Heat Warning, Excessive Heat Warning/Watch,
+ * Heat Advisory) arrive as kind 'general' with high severity — the same shape
+ * as a severe-thunderstorm warning. They are NOT storm weather: the hazard is
+ * heat illness, not lightning or flash flooding, and a hot day is when people
+ * head TO the river. Observed live 2026-07-02: an Extreme Heat Warning drove
+ * "seek shelter, stay off the river" + lightning copy site-wide. These get the
+ * dedicated 'heat' tier (hydration/heat-illness messaging, exertion caution)
+ * instead of the storm gate.
+ */
+export function isHeatAlert(headline: string): boolean {
+  return /\b(?:extreme heat|excessive heat|heat advisory)\b/i.test(headline);
+}
 
 /**
  * Deterministic severe-weather gate from active NWS alerts. Like every other
@@ -883,12 +936,18 @@ export function severeWeatherStatus(
 ): SevereWeatherResult {
   const warnings: string[] = [];
   const watches: string[] = [];
+  const heat: string[] = [];
 
   for (const a of advisories) {
     const isFlood = FLOOD_ALERT_KINDS.has(a.kind);
     const isSevereGeneral =
       a.kind === 'general' && (a.severity === 'high' || a.severity === 'extreme');
     if (!isFlood && !isSevereGeneral) continue; // not a severe-weather alert
+
+    if (!isFlood && isHeatAlert(a.headline)) {
+      heat.push(a.headline);
+      continue; // heat is not storm weather — never the watch/warning gate
+    }
 
     const headline = a.headline.toLowerCase();
     const isWarning =
@@ -909,6 +968,14 @@ export function severeWeatherStatus(
       headlines: watches,
       message:
         'Severe weather watch in effect — conditions can turn dangerous fast. Not a good day for the river.',
+    };
+  }
+  if (heat.length > 0) {
+    return {
+      tier: 'heat',
+      headlines: heat,
+      message:
+        'Extreme heat today — hydrate, take shade breaks, and watch for heat illness. Water activities follow the normal water-quality guidance below.',
     };
   }
   return { tier: 'none', headlines: [], message: '' };

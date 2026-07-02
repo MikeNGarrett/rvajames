@@ -361,7 +361,6 @@ async function main() {
     daysOut:                 0,
     rain48hIn:               0,
     activeCSOAdvisory:       false,
-    hasHighSeverityAdvisory: false,
     activeClosures:          [],
     cso: {
       activelyDischarging:      { count: 0 },

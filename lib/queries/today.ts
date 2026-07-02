@@ -5,7 +5,7 @@ import { getActiveStatusMap } from './location-status';
 import { getForecast } from './forecast';
 import { getAllLatestWaterQualityReadings } from './water-quality';
 import type { NoaaAhpsForecastPoint, NoaaAhpsPayload } from '@/lib/ingest/noaa-ahps';
-import { combinedLocationStatus, riverWideActivityStatuses, type SafetyStatus } from '@/lib/safety/rules';
+import { combinedLocationStatus, riverWideActivityStatuses, severeWeatherStatus, type SafetyStatus } from '@/lib/safety/rules';
 import {
   computeLocationActivities,
   type LocationActivityVerdict,
@@ -244,11 +244,19 @@ export async function computeCsoState(dateStr: string): Promise<CsoState> {
   const { fromLt, toGt } = buildAdvisoryDateFilter(dateStr);
 
   const [{ data: dischargingRows }, { data: advisoryRows }] = await Promise.all([
+    // "Actively discharging" requires BOTH the EmNet flag AND an unexpired
+    // advisory for that outfall. The flag is a snapshot from the last cron
+    // (up to ~12h old) while advisories expire in real time — flag-only counts
+    // produced "4 overflows currently active" alongside cards correctly showing
+    // "no overflows upstream" (live incident 2026-07-02). Requiring the join
+    // makes flag-active a strict subset of advisory-active, so the metro copy
+    // and the per-location layer can never disagree.
     supabase
       .from('cso_outfalls')
-      .select('current_overflow_observed_at')
+      .select('current_overflow_observed_at, advisories!inner(id)')
       .eq('current_overflow', true)
-      .eq('affects_james_mainstem', true),
+      .eq('affects_james_mainstem', true)
+      .gt('advisories.effective_to', new Date().toISOString()),
     supabase
       .from('advisories')
       .select('effective_to, cso_outfalls!inner(affects_james_mainstem)')
@@ -439,12 +447,14 @@ async function getObservedTodayData(
   // _csoMapPopulated is the resolved tuple list; map it.
   const upstreamCsoMap = new Map<string, UpstreamCsoSignal | null>(_csoMapPopulated);
 
-  // Severe-weather is regional, so hasHighSeverityAdvisory is metro-wide. The
-  // CSO swim-hold, by contrast, is per-location: a location's swimming is only
-  // CSO-restricted when there's an active overflow UPSTREAM of it. So the
-  // river-wide verdicts are computed per location below (gage/temp identical;
-  // only the CSO gate varies) to keep the swim chip consistent with the card.
-  const hasHighSeverityAdvisory = advisoriesForRules.some((a) => a.severity === 'high' || a.severity === 'extreme');
+  // Severe-weather is regional, so the tier is metro-wide. The CSO swim-hold,
+  // by contrast, is per-location: a location's swimming is only CSO-restricted
+  // when there's an active overflow UPSTREAM of it. So the river-wide verdicts
+  // are computed per location below (gage/temp identical; only the CSO gate
+  // varies) to keep the swim chip consistent with the card. The tier (not a
+  // raw high-severity boolean) distinguishes storms from heat — a heat warning
+  // must not read as storm weather.
+  const severeWeatherTier = severeWeatherStatus(advisoriesForRules).tier;
 
   const summarized: LocationSummary[] = locations.map((loc) => {
     const opStatus = statusMap.get(loc.id) ?? null;
@@ -468,7 +478,7 @@ async function getObservedTodayData(
           waterTempF: upriverWaterTempF ?? null,
           rain48hIn: 0, // TODO: source from NWS precip when available
           activeCSOAdvisory: (upstreamCso?.count ?? 0) > 0, // per-location
-          hasHighSeverityAdvisory,
+          severeWeather: severeWeatherTier,
         })
       : [];
 
@@ -579,7 +589,7 @@ async function getForecastTodayData(
   // (gated on each location's upstream signal), so river-wide verdicts are
   // computed per location below. Forecast mode has no water-temp (AHPS doesn't
   // publish it), so temp-based caution branches default to safe.
-  const hasHighSeverityAdvisory = advisoriesForRules.some((a) => a.severity === 'high' || a.severity === 'extreme');
+  const severeWeatherTier = severeWeatherStatus(advisoriesForRules).tier;
 
   const summarized: LocationSummary[] = locations.map((loc) => {
     const opStatus = statusMap.get(loc.id) ?? null;
@@ -607,7 +617,7 @@ async function getForecastTodayData(
           waterTempF: null,
           rain48hIn: 0,
           activeCSOAdvisory: (upstreamCso?.count ?? 0) > 0, // per-location
-          hasHighSeverityAdvisory,
+          severeWeather: severeWeatherTier,
         })
       : [];
 

@@ -23,7 +23,7 @@ const rwSafe = riverWideActivityStatuses({
   waterTempF: 75,
   rain48hIn: 0,
   activeCSOAdvisory: false,
-  hasHighSeverityAdvisory: false,
+  severeWeather: 'none',
 });
 
 // And one at a higher-flow stage so swim/rock-hop escalate.
@@ -32,7 +32,7 @@ const rwElevated = riverWideActivityStatuses({
   waterTempF: 65,
   rain48hIn: 0,
   activeCSOAdvisory: false,
-  hasHighSeverityAdvisory: false,
+  severeWeather: 'none',
 });
 
 describe('computeLocationActivities', () => {

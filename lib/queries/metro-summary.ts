@@ -119,7 +119,6 @@ export async function getMetroSummary(
       daysOut,
       rain48hIn:             0,           // TODO: wire actual precip when NWS provides it
       activeCSOAdvisory,
-      hasHighSeverityAdvisory: hasHighSeverity,
       activeClosures,
       cso,
     },
