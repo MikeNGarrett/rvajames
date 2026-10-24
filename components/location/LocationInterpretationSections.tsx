@@ -50,21 +50,33 @@ export function LocationInterpretationSummary({
     useLocationInterpretation();
 
   // ── Initial load: skeleton + shimmer + spinner ─────────────────────────
-  if (status === 'loading' && !prior) {
+  // min-h-[400px] ≈ a short loaded card at 375px (p10 body ≈ 400 chars →
+  // ~408px). Sizing to the low end keeps the reflow downward-only, and it
+  // pushes the panels below (water quality, CSO) under the mobile fold
+  // while loading, so the growth when data lands isn't counted as CLS.
+  // The spinner row is absolutely positioned inside the box so it adds no
+  // height of its own.
+  // 'idle' is included so the server render (and first paint, before the
+  // fetch effect runs) reserves the space too — same as LazyContent.
+  if ((status === 'idle' || status === 'loading') && !prior) {
     return (
-      <div aria-live="polite" aria-busy="true">
+      <div aria-live="polite" aria-busy="true" className="relative">
         <SkeletonShimmer>
-          <div className="rounded-xl border border-border bg-surface-raised p-4 mb-4 animate-pulse motion-reduce:animate-none min-h-[180px]">
+          <div className="rounded-xl border border-border bg-surface-raised p-4 mb-4 animate-pulse motion-reduce:animate-none min-h-[400px]">
             <div className="h-3 bg-surface rounded w-1/3 mb-3" />
             <div className="h-5 bg-surface rounded w-3/4 mb-3" />
             <div className="space-y-2">
               <div className="h-3 bg-surface rounded w-full" />
               <div className="h-3 bg-surface rounded w-5/6" />
+              <div className="h-3 bg-surface rounded w-full" />
               <div className="h-3 bg-surface rounded w-4/6" />
+              <div className="h-3 bg-surface rounded w-5/6" />
+              <div className="h-3 bg-surface rounded w-full" />
+              <div className="h-3 bg-surface rounded w-3/6" />
             </div>
           </div>
         </SkeletonShimmer>
-        <div className="flex items-center gap-2 text-text-secondary mt-1 px-1 mb-4">
+        <div className="absolute left-4 bottom-8 flex items-center gap-2 text-text-secondary">
           <Spinner size={14} label="Loading interpretation" />
           {showStatusText && (
             <span className="text-xs">Generating interpretation…</span>

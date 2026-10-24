@@ -91,7 +91,9 @@ export function SwimTodayTile({ result, waterTempF }: Props) {
       )}
 
       {waterTempF !== null && (
-        <p className="text-xs text-text-muted">
+        // text-secondary, not text-muted: muted is only AA on white and drops
+        // to 4.18:1 on the danger-subtle tint (avoid state).
+        <p className="text-xs text-text-secondary">
           Water {waterTempF.toFixed(0)}°F
         </p>
       )}
