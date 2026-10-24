@@ -18,5 +18,14 @@ overrides:
   # paths (SOCKS5 ProxyAgent, cache interceptor) are unused and undici doesn't
   # run in the workerd isolate. form-data (GHSA-hmw2-7cc7-3qxx CRLF in multipart
   # field names): dev-scoped, not on any multipart path we build.
-  undici: ^7.28.0
+  undici: ^7.30.1
   form-data: ^4.0.6
+  # Security bumps (2026-10). glob (GHSA-5j98-mcp5-4vw2 CLI -c injection):
+  # build-time only via @node-minify/core, CLI never invoked. basic-ftp
+  # (GHSA-c475-qrg2-pj4r Client.list() ReDoS): reached only through
+  # @puppeteer/browsers' proxy-agent, which the Worker never loads (we use the
+  # BROWSER binding, never download a browser). extract-zip GHSA-jmr9-qjv8-65gv
+  # / GHSA-7pqw-9j4j-h8q3 has no patched release (2.0.1 is latest) — same
+  # unreachable @puppeteer/browsers path; accepted until upstream publishes.
+  glob@10: ^10.5.0
+  basic-ftp: ^6.2.3
